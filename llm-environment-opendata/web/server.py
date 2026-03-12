@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import json
+import re
 import sys
 from html import escape
 from http.server import BaseHTTPRequestHandler, HTTPServer
@@ -120,6 +121,140 @@ def format_value_display(value, unit_kind):
     return f"{formatted_value} {unit}".strip()
 
 
+def render_math_demo(result):
+    annual_llm = result["annual_llm"]
+    scope = result["feature_scope"]
+    assumptions = result.get("assumptions", [])
+    annual_uses = float(scope["annual_feature_uses"])
+    annual_requests = float(scope["annual_llm_requests"])
+    requests_per_use = float(scope["requests_per_feature"])
+    monthly_uses = float(scope["feature_uses_per_month"])
+    months_per_year = float(scope["months_per_year"])
+    per_request = result["per_request_llm"]
+    per_feature = result["per_feature_llm"]
+
+    return f"""
+    <section class="panel math-panel">
+      <div class="summary-header">
+        <div>
+          <div class="summary-kicker">Demonstration</div>
+          <h3>Detail du calcul</h3>
+        </div>
+        <div class="summary-badge">Mode mathematique</div>
+      </div>
+      <p class="summary-intro">Le calcul suit trois etapes: volume d'usage annuel, impact d'une requete LLM, puis annualisation a l'echelle de la fonctionnalite.</p>
+      <div class="assumptions-box">
+        <span class="math-label">Hypotheses retenues</span>
+        <ul class="assumptions-list">
+          {''.join(f'<li>{escape(item)}</li>' for item in assumptions)}
+        </ul>
+      </div>
+      <div class="math-steps">
+        <div class="math-step">
+          <span class="math-step-index">1</span>
+          <div>
+            <strong>Volume annuel de la fonctionnalite</strong>
+            <p>
+              <code>{int(monthly_uses):,}</code> usages/mois × <code>{int(months_per_year)}</code> mois
+              = <code>{int(annual_uses):,}</code> usages/an
+            </p>
+          </div>
+        </div>
+        <div class="math-step">
+          <span class="math-step-index">2</span>
+          <div>
+            <strong>Nombre annuel d'appels LLM</strong>
+            <p>
+              <code>{int(annual_uses):,}</code> usages/an × <code>{requests_per_use:g}</code> appel(s) LLM/usage
+              = <code>{int(annual_requests):,}</code> appels LLM/an
+            </p>
+          </div>
+        </div>
+      </div>
+      <div class="math-grid">
+        <div class="math-card">
+          <span class="math-label">Energie annuelle totale</span>
+          <div class="math-formula">
+            <code>{format_range_display(annual_llm['energy_wh'], 'energy')}</code>
+          </div>
+          <p class="math-detail">
+            Par requete LLM: <code>{format_range_display(per_request['energy_wh'], 'energy')}</code>
+          </p>
+          <p class="math-detail">
+            Par usage de la fonctionnalite: <code>{format_range_display(per_feature['energy_wh'], 'energy')}</code>
+          </p>
+          <p class="math-detail">
+            Impact annuel LLM: <code>{format_range_display(annual_llm['energy_wh'], 'energy')}</code>
+          </p>
+          <p class="math-total">
+            Total = impact annuel du LLM = <code>{format_range_display(annual_llm['energy_wh'], 'energy')}</code>
+          </p>
+        </div>
+        <div class="math-card">
+          <span class="math-label">Carbone annuel total</span>
+          <div class="math-formula">
+            <code>{format_range_display(annual_llm['carbon_gco2e'], 'carbon')}</code>
+          </div>
+          <p class="math-detail">
+            Par requete LLM: <code>{format_range_display(per_request['carbon_gco2e'], 'carbon')}</code>
+          </p>
+          <p class="math-detail">
+            Par usage de la fonctionnalite: <code>{format_range_display(per_feature['carbon_gco2e'], 'carbon')}</code>
+          </p>
+          <p class="math-detail">
+            Impact annuel LLM: <code>{format_range_display(annual_llm['carbon_gco2e'], 'carbon')}</code>
+          </p>
+          <p class="math-total">
+            Total = impact annuel du LLM = <code>{format_range_display(annual_llm['carbon_gco2e'], 'carbon')}</code>
+          </p>
+        </div>
+        <div class="math-card">
+          <span class="math-label">Eau annuelle totale</span>
+          <div class="math-formula">
+            <code>{format_range_display(annual_llm['water_ml'], 'water')}</code>
+          </div>
+          <p class="math-detail">
+            Par requete LLM: <code>{format_range_display(per_request['water_ml'], 'water')}</code>
+          </p>
+          <p class="math-detail">
+            Par usage de la fonctionnalite: <code>{format_range_display(per_feature['water_ml'], 'water')}</code>
+          </p>
+          <p class="math-detail">
+            Impact annuel LLM: <code>{format_range_display(annual_llm['water_ml'], 'water')}</code>
+          </p>
+          <p class="math-total">
+            Total = impact annuel du LLM = <code>{format_range_display(annual_llm['water_ml'], 'water')}</code>
+          </p>
+        </div>
+      </div>
+    </section>
+    """
+
+
+def render_summary_html(summary_text, factor_rows):
+    text = escape(summary_text or "")
+    source_map = {}
+    for index, row in enumerate(factor_rows or [], start=1):
+        source_map[f"SRC{index}"] = row
+
+    def replace_source_tag(match):
+        tag = match.group(1)
+        row = source_map.get(tag)
+        if not row:
+            return f"[{escape(tag)}]"
+        title = escape(
+            f"{row.get('citation', '')} | {row.get('metric_name', '')} | {row.get('source_locator', '')}"
+        )
+        href = escape(row.get("source_url", "#"), quote=True)
+        return (
+            f'<a class="source-tag" href="{href}" target="_blank" rel="noopener noreferrer" '
+            f'title="{title}">[{escape(tag)}]</a>'
+        )
+
+    html = re.sub(r"\[(SRC\d+)\]", replace_source_tag, text)
+    return html.replace("\n", "<br>")
+
+
 def factor_details(records, factor_ids):
     rows = []
     for factor_id in factor_ids:
@@ -153,6 +288,8 @@ def process_description(form):
         )
     parsed_payload, parser_notes, parser_meta = parse_application_description_with_openai(description)
     parser_meta["moderation"] = moderation
+    parsed_payload["software_components"] = []
+    parser_notes.append("L'estimation a ete restreinte aux consommations du LLM; les composants logiciels hors LLM ont ete exclus du calcul.")
     apply_overrides(parsed_payload, form)
     records = load_records()
     result = estimate_feature_externalities(records, parsed_payload)
@@ -175,23 +312,31 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
 
     result_block = ""
     if result:
-        annual = result["annual_total"]
-        overhead = result["software_overhead"]
+        annual = result["annual_llm"]
+        evidence = (parser_meta or {}).get("evidence", {})
+        method_label = {
+            "parametric_extrapolation": "Extrapolation parametrique",
+            "literature_proxy": "Proxy de litterature",
+        }.get(result.get("method"), "Methode non qualifiee")
+        model_profile = result.get("model_profile") or {}
+        country_mix = result.get("country_energy_mix") or {}
         result_block = f"""
         <section class="panel result hero-card">
           <h2>Evaluation environnementale</h2>
-          <p class="lead">EcoTrace LLM interprète le scénario d'usage, sélectionne les facteurs du corpus scientifique, puis calcule une estimation expliquée et traçable.</p>
-          <div class="evidence-callout">
-            <span class="evidence-label">Niveau de preuve</span>
-            <strong>{escape((parser_meta or {}).get('evidence', {}).get('label', 'Non qualifie'))}</strong>
-            <p>{escape((parser_meta or {}).get('evidence', {}).get('description', ''))}</p>
-          </div>
+          <p class="lead">Estimation fondee sur des indicateurs scientifiques sourcés et un calcul traceable.</p>
+          <p class="scope-note">Perimetre retenu: seules les consommations du LLM sont prises en compte. Les autres consommations du systeme logiciel, de l'infrastructure applicative et des services annexes sont exclues de cette estimation.</p>
+          <p class="meta-inline">Niveau de preuve: <strong>{escape(evidence.get('label', 'Non qualifie'))}</strong></p>
+          <p class="meta-inline">Methode: <strong>{escape(method_label)}</strong></p>
+          <p class="meta-inline">Modele de reference: <strong>{escape(model_profile.get('model_id', parsed_payload.get('model_id', 'non specifie')))}</strong>{' | Parametres actifs approx.: <strong>' + escape(model_profile.get('active_parameters_billion', '')) + 'B</strong>' if model_profile.get('active_parameters_billion') else ''}</p>
+          <p class="meta-inline">Mix electrique: <strong>{escape(country_mix.get('country_code', parsed_payload.get('country', 'non specifie')))}</strong>{' | ' + escape(country_mix.get('grid_carbon_intensity_gco2_per_kwh', '')) + ' gCO2e/kWh' if country_mix.get('grid_carbon_intensity_gco2_per_kwh') else ''}</p>
           <div class="metrics">
             <div class="metric"><span class="label">Energie annuelle totale</span><strong>{format_range_display(annual['energy_wh'], 'energy')}</strong></div>
             <div class="metric"><span class="label">Carbone annuel total</span><strong>{format_range_display(annual['carbon_gco2e'], 'carbon')}</strong></div>
             <div class="metric"><span class="label">Eau annuelle totale</span><strong>{format_range_display(annual['water_ml'], 'water')}</strong></div>
           </div>
         </section>
+
+        {render_math_demo(result)}
 
         <section class="panel summary-panel">
           <div class="summary-header">
@@ -202,47 +347,7 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
             <div class="summary-badge">Sources scientifiques</div>
           </div>
           <p class="summary-intro">Cette synthèse reformule le scénario interprété, les principaux facteurs retenus dans la littérature et la logique de calcul appliquée à ton cas d'usage.</p>
-          <div class="summary-body">{escape(summary_text or "")}</div>
-        </section>
-
-        <section class="panel table-panel">
-          <h3>Bilan logiciel détaillé</h3>
-          <div class="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Poste</th>
-                <th>Description</th>
-                <th>Energie / usage</th>
-                <th>Energie / an</th>
-                <th>Carbone / an</th>
-                <th>Eau / an</th>
-              </tr>
-            </thead>
-            <tbody>
-              {''.join(render_component_row(row) for row in overhead['components'])}
-            </tbody>
-          </table>
-          </div>
-        </section>
-
-        <section class="panel table-panel">
-          <h3>Sources mobilisées</h3>
-          <div class="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Facteur</th>
-                <th>Valeur</th>
-                <th>Source</th>
-                <th>Localisation</th>
-              </tr>
-            </thead>
-            <tbody>
-              {''.join(render_factor_row(row) for row in (factor_rows or []))}
-            </tbody>
-          </table>
-          </div>
+          <div class="summary-body">{render_summary_html(summary_text, factor_rows)}</div>
         </section>
         """
 
@@ -261,9 +366,7 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
       --line: #dee2e6;
       --accent: #0d6efd;
       --accent-soft: #e7f1ff;
-      --success-soft: #f1f8ff;
       --error: #dc3545;
-      --error-soft: #f8d7da;
       --shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.08);
     }}
     * {{ box-sizing: border-box; }}
@@ -273,33 +376,33 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
       color: var(--ink);
       background: var(--bg);
     }}
-    .wrap {{ max-width: 1140px; margin: 0 auto; padding: 32px 16px 56px; }}
-    .hero {{ margin-bottom: 24px; }}
+    .wrap {{ max-width: 960px; margin: 0 auto; padding: 24px 16px 40px; }}
+    .hero {{ margin-bottom: 16px; }}
     .eyebrow {{
       display: inline-block;
-      margin-bottom: 12px;
-      padding: 0.35rem 0.65rem;
+      margin-bottom: 8px;
+      padding: 0.25rem 0.55rem;
       border-radius: 999px;
       background: var(--accent-soft);
       color: var(--accent);
-      font-size: 0.78rem;
+      font-size: 0.74rem;
       font-weight: 600;
       letter-spacing: 0.02em;
     }}
-    h1 {{ margin: 0 0 12px; font-size: clamp(2rem, 4vw, 3rem); line-height: 1.15; font-weight: 700; }}
+    h1 {{ margin: 0 0 8px; font-size: clamp(1.8rem, 4vw, 2.5rem); line-height: 1.15; font-weight: 700; }}
     h2, h3 {{ margin: 0 0 0.75rem; font-weight: 700; }}
-    .subtitle {{ max-width: 820px; color: var(--muted); font-size: 1.02rem; line-height: 1.6; margin: 0; }}
+    .subtitle {{ max-width: 760px; color: var(--muted); font-size: 0.98rem; line-height: 1.55; margin: 0; }}
     .panel {{
       background: var(--paper);
       border: 1px solid var(--line);
       border-radius: 0.75rem;
-      padding: 1.25rem;
+      padding: 1rem 1.1rem;
       box-shadow: var(--shadow);
-      margin-bottom: 1.25rem;
+      margin-bottom: 1rem;
     }}
     .hero-card {{
       border-color: rgba(13,110,253,0.18);
-      background: linear-gradient(180deg, #ffffff, #fbfdff);
+      background: #ffffff;
     }}
     .alert-panel.error {{
       border-color: rgba(220,53,69,0.3);
@@ -366,38 +469,12 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
     .metrics {{
       display: grid;
       grid-template-columns: repeat(3, minmax(0, 1fr));
-      gap: 1rem;
-      margin-top: 1rem;
-    }}
-    .evidence-callout {{
-      margin-top: 1rem;
-      padding: 0.9rem 1rem;
-      border: 1px solid rgba(13,110,253,0.18);
-      border-radius: 0.75rem;
-      background: var(--accent-soft);
-    }}
-    .evidence-label {{
-      display: block;
-      margin-bottom: 0.35rem;
-      font-size: 0.8rem;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 0.03em;
-      color: var(--accent);
-    }}
-    .evidence-callout strong {{
-      display: block;
-      font-size: 1rem;
-      margin-bottom: 0.25rem;
-    }}
-    .evidence-callout p {{
-      margin: 0;
-      color: #495057;
-      line-height: 1.5;
+      gap: 0.75rem;
+      margin-top: 0.9rem;
     }}
     .metric {{
-      padding: 1rem;
-      border-radius: 0.75rem;
+      padding: 0.9rem;
+      border-radius: 0.65rem;
       background: #fff;
       border: 1px solid var(--line);
     }}
@@ -410,10 +487,24 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
       margin-bottom: 0.5rem;
     }}
     .metric strong {{
-      font-size: 1.25rem;
+      font-size: 1.12rem;
       line-height: 1.35;
     }}
     .lead {{ color: var(--muted); line-height: 1.6; margin: 0; }}
+    .scope-note {{
+      margin: 0.6rem 0 0;
+      padding: 0.7rem 0.85rem;
+      border-left: 3px solid var(--accent);
+      background: #f8fbff;
+      color: #495057;
+      font-size: 0.93rem;
+      line-height: 1.55;
+    }}
+    .meta-inline {{
+      margin: 0.45rem 0 0;
+      color: var(--muted);
+      font-size: 0.92rem;
+    }}
     .summary-panel {{
       border-color: rgba(13,110,253,0.18);
       background: var(--paper);
@@ -423,7 +514,7 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
       justify-content: space-between;
       gap: 1rem;
       align-items: center;
-      margin-bottom: 0.75rem;
+      margin-bottom: 0.5rem;
     }}
     .summary-kicker {{
       color: var(--accent);
@@ -444,57 +535,93 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
       font-weight: 600;
     }}
     .summary-intro {{
-      margin: 0 0 1rem;
+      margin: 0 0 0.85rem;
       color: var(--muted);
-      max-width: 76ch;
+      max-width: 72ch;
       line-height: 1.5;
+      font-size: 0.94rem;
     }}
     .summary-body {{
       border: 1px solid var(--line);
-      padding: 1rem 1.1rem;
+      padding: 0.9rem 1rem;
       background: #f8fbff;
       border-radius: 0.75rem;
-      white-space: pre-line;
-      line-height: 1.75;
-      font-size: 0.99rem;
+      line-height: 1.7;
+      font-size: 0.96rem;
     }}
-    pre {{
-      margin: 0;
-      white-space: pre-wrap;
-      word-break: break-word;
-      font-family: "SFMono-Regular", Consolas, monospace;
-      font-size: 0.88rem;
+    .source-tag {{
+      display: inline-block;
+      margin-left: 0.15rem;
+      padding: 0.05rem 0.35rem;
+      border-radius: 999px;
+      background: rgba(13,110,253,0.1);
+      color: var(--accent);
+      font-size: 0.8rem;
+      font-weight: 700;
+      text-decoration: none;
+      vertical-align: baseline;
     }}
-    .table-panel h3 {{ margin-bottom: 1rem; }}
-    .table-wrap {{
-      overflow-x: auto;
-      border: 1px solid var(--line);
-      border-radius: 0.75rem;
+    .source-tag:hover {{
+      background: rgba(13,110,253,0.18);
+      text-decoration: none;
     }}
-    table {{
-      width: 100%;
-      border-collapse: separate;
-      border-spacing: 0;
-      font-size: 0.95rem;
+    .math-panel {{
+      border-color: rgba(108,117,125,0.18);
       background: #fff;
     }}
-    th, td {{
-      text-align: left;
-      border-bottom: 1px solid var(--line);
-      padding: 0.9rem 0.85rem;
-      vertical-align: top;
+    .math-grid {{
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 0.75rem;
     }}
-    th {{
-      position: sticky;
-      top: 0;
+    .assumptions-box {{
+      margin-bottom: 0.85rem;
+      padding: 0.9rem;
+      border: 1px solid var(--line);
+      border-radius: 0.65rem;
       background: #f8f9fa;
-      font-size: 0.84rem;
+    }}
+    .assumptions-list {{
+      margin: 0;
+      padding-left: 1.15rem;
+      color: #495057;
+      line-height: 1.6;
+    }}
+    .assumptions-list li + li {{
+      margin-top: 0.35rem;
+    }}
+    .math-card {{
+      border: 1px solid var(--line);
+      border-radius: 0.65rem;
+      padding: 0.9rem;
+      background: #f8f9fa;
+    }}
+    .math-label {{
+      display: block;
+      margin-bottom: 0.5rem;
+      font-size: 0.82rem;
+      font-weight: 700;
       text-transform: uppercase;
       letter-spacing: 0.03em;
       color: #495057;
     }}
-    tbody tr:nth-child(even) td {{ background: #fcfdff; }}
-    tbody tr:last-child td {{ border-bottom: 0; }}
+    .math-formula {{
+      margin-bottom: 0.75rem;
+      font-size: 1.05rem;
+    }}
+    .math-formula code,
+    .math-card code {{
+      font-family: "SFMono-Regular", Consolas, monospace;
+      background: #fff;
+      border: 1px solid var(--line);
+      border-radius: 0.45rem;
+      padding: 0.2rem 0.4rem;
+    }}
+    .math-card p {{
+      margin: 0;
+      color: #495057;
+      line-height: 1.7;
+    }}
     a {{ color: var(--accent); text-decoration: none; }}
     a:hover {{ text-decoration: underline; }}
     @media (max-width: 900px) {{
@@ -508,7 +635,7 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
     <header class="hero">
       <div class="eyebrow">Projet {PROJECT_NAME}</div>
       <h1>Estimer l'impact environnemental d'une application utilisant des LLMs</h1>
-      <p class="subtitle">Décris ton application en langage naturel. EcoTrace LLM s'appuie sur l'état de l'art scientifique pour mobiliser des indicateurs environnementaux sourcés, construire un bilan logiciel par postes techniques, puis retourner une estimation expliquée avec sa méthode et ses références.</p>
+      <p class="subtitle">Décris ton application en langage naturel pour obtenir un resultat, sa demonstration mathematique et une synthese sourcée.</p>
     </header>
 
     <form class="panel" method="post" action="/" id="estimate-form">
@@ -536,32 +663,6 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
 </body>
 </html>
 """
-
-
-def render_factor_row(row):
-    return (
-        "<tr>"
-        f"<td>{escape(row['metric_name'])}</td>"
-        f"<td>{escape(row['metric_value'])} {escape(row['metric_unit'])}</td>"
-        f"<td><a href=\"{escape(row['source_url'])}\">{escape(row['citation'])}</a></td>"
-        f"<td>{escape(row['source_locator'])}</td>"
-        "</tr>"
-    )
-
-
-def render_component_row(row):
-    return (
-        "<tr>"
-        f"<td>{escape(row['component_type'])}</td>"
-        f"<td>{escape(row['description'])}</td>"
-        f"<td>{format_value_display(row['energy_wh_per_feature'], 'energy')}</td>"
-        f"<td>{format_value_display(row['annual_energy_wh'], 'energy')}</td>"
-        f"<td>{format_value_display(0.0 if row['annual_carbon_gco2e'] is None else row['annual_carbon_gco2e'], 'carbon')}</td>"
-        f"<td>{format_value_display(0.0 if row['annual_water_ml'] is None else row['annual_water_ml'], 'water')}</td>"
-        "</tr>"
-    )
-
-
 class Handler(BaseHTTPRequestHandler):
     def _write_html(self, html, status=200):
         body = html.encode("utf-8")

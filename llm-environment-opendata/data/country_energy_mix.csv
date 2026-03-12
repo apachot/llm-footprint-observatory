@@ -1,0 +1,6 @@
+country_code,country_name,year,grid_carbon_intensity_gco2_per_kwh,water_intensity_l_per_kwh,source_citation,notes
+FR,France,2024,40,0.4,"Project default screening factors","Low-carbon grid screening default."
+US,United States,2024,385,1.8,"Project default screening factors","Higher-carbon mixed grid screening default."
+DE,Germany,2024,380,1.2,"Project default screening factors","European fossil-renewable mixed grid screening default."
+GB,United Kingdom,2024,180,0.7,"Project default screening factors","Moderate-carbon screening default."
+CA,Canada,2024,120,1.0,"Project default screening factors","Hydro-dominant screening default."

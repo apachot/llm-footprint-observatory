@@ -265,14 +265,30 @@ def build_summary_messages(description, parsed_payload, result, factor_rows, par
         "You write concise academic-style summaries in French for an environmental LLM estimation tool. "
         "Explain which values were retained, how the calculation was performed, and what the main limitations are. "
         "Be explicit about sources and assumptions. "
+        "When you mention a quantified value or a specific factor from the literature, append one or more source tags "
+        "using the exact format [SRC1], [SRC2], etc. immediately after the relevant claim. "
         "Return plain French text only, no markdown title."
     )
+    source_refs = []
+    for index, row in enumerate(factor_rows, start=1):
+        source_refs.append(
+            {
+                "tag": f"SRC{index}",
+                "citation": row.get("citation"),
+                "metric_name": row.get("metric_name"),
+                "metric_value": row.get("metric_value"),
+                "metric_unit": row.get("metric_unit"),
+                "source_locator": row.get("source_locator"),
+                "source_url": row.get("source_url"),
+            }
+        )
     user_payload = {
         "description": description,
         "parser_meta": parser_meta,
         "parsed_payload": parsed_payload,
         "result": result,
         "selected_factors": factor_rows,
+        "source_refs": source_refs,
     }
     user = (
         "Produce a short French synthesis for the user after the evaluation. "
@@ -280,7 +296,11 @@ def build_summary_messages(description, parsed_payload, result, factor_rows, par
         "1) the scenario retained, "
         "2) the main values retained from the literature, "
         "3) the method of calculation, "
-        "4) the main uncertainties and limits.\n\n"
+        "4) the main uncertainties and limits. "
+        "If result.method is parametric_extrapolation, explicitly explain that the estimate uses a model profile, "
+        "country electricity mix defaults when available, and parameter-based extrapolation rules. "
+        "If parser_meta contains an evidence object, mention its label in the explanation. "
+        "Every quantified value taken from the literature must be followed by at least one source tag from source_refs.\n\n"
         f"Input data:\n{json.dumps(user_payload, ensure_ascii=False, indent=2)}"
     )
     return [

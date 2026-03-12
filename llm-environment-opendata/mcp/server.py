@@ -7,7 +7,19 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from core.estimator import compute_stats, estimate_externalities, estimate_feature_externalities, get_record, list_sources, load_records
+from core.estimator import (
+    compute_stats,
+    estimate_externalities,
+    estimate_feature_externalities,
+    get_country_mix,
+    get_model_profile,
+    get_record,
+    list_sources,
+    load_country_energy_mix,
+    load_extrapolation_rules,
+    load_models,
+    load_records,
+)
 
 
 def tool_definitions():
@@ -46,6 +58,39 @@ def tool_definitions():
             "inputSchema": {"type": "object", "properties": {}},
         },
         {
+            "name": "list_models",
+            "description": "List model profiles available for parameter-based extrapolation.",
+            "inputSchema": {"type": "object", "properties": {}},
+        },
+        {
+            "name": "get_model_profile",
+            "description": "Get one model profile by model identifier.",
+            "inputSchema": {
+                "type": "object",
+                "required": ["model_id"],
+                "properties": {"model_id": {"type": "string"}},
+            },
+        },
+        {
+            "name": "list_country_energy_mix",
+            "description": "List country-level default electricity carbon and water intensity factors.",
+            "inputSchema": {"type": "object", "properties": {}},
+        },
+        {
+            "name": "get_country_energy_mix",
+            "description": "Get one country-level default electricity mix profile.",
+            "inputSchema": {
+                "type": "object",
+                "required": ["country_code"],
+                "properties": {"country_code": {"type": "string"}},
+            },
+        },
+        {
+            "name": "list_extrapolation_rules",
+            "description": "List parameter-based extrapolation rules used by the estimator.",
+            "inputSchema": {"type": "object", "properties": {}},
+        },
+        {
             "name": "estimate_externalities",
             "description": "Estimate prompt- or scenario-level environmental externalities for an LLM use case.",
             "inputSchema": {
@@ -60,6 +105,7 @@ def tool_definitions():
                     "output_tokens": {"type": "number"},
                     "requests_count": {"type": "number"},
                     "country": {"type": "string"},
+                    "estimated_active_parameters_billion": {"type": "number"},
                     "grid_carbon_intensity_gco2_per_kwh": {"type": "number"},
                     "water_intensity_l_per_kwh": {"type": "number"},
                 },
@@ -81,6 +127,7 @@ def tool_definitions():
                     "requests_per_feature": {"type": "number"},
                     "feature_uses_per_month": {"type": "number"},
                     "months_per_year": {"type": "number"},
+                    "estimated_active_parameters_billion": {"type": "number"},
                     "software_overhead_wh_per_feature": {"type": "number"},
                     "country": {"type": "string"},
                     "grid_carbon_intensity_gco2_per_kwh": {"type": "number"},
@@ -118,6 +165,21 @@ def handle_call(name, arguments):
 
     if name == "list_sources":
         return make_text_payload({"sources": list_sources(records)})
+
+    if name == "list_models":
+        return make_text_payload({"models": load_models()})
+
+    if name == "get_model_profile":
+        return make_text_payload({"model_profile": get_model_profile(model_id=arguments["model_id"])})
+
+    if name == "list_country_energy_mix":
+        return make_text_payload({"country_energy_mix": load_country_energy_mix()})
+
+    if name == "get_country_energy_mix":
+        return make_text_payload({"country_energy_mix": get_country_mix(arguments["country_code"])})
+
+    if name == "list_extrapolation_rules":
+        return make_text_payload({"extrapolation_rules": load_extrapolation_rules()})
 
     if name == "estimate_externalities":
         return make_text_payload(estimate_externalities(records, arguments))

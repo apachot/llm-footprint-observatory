@@ -1,0 +1,7 @@
+model_id,provider,aliases,active_parameters_billion,total_parameters_billion,parameter_confidence,parameter_source,notes
+gemma-2b-it,google,"gemma2b|gemma-2b|gemma 2b it|gemma-2b-it",2,2,high,"Ren et al. (2024) model scope","Open model used as low-parameter inference anchor."
+llama-3-70b,meta,"llama3-70b|llama-3-70b|llama 3 70b|llama3 70b",70,70,high,"Ren et al. (2024) model scope","Open model used as high-parameter inference anchor."
+bloom-176b,bigscience,"bloom176b|bloom-176b|bloom 176b",176,176,high,"Luccioni et al. (2023)","Open training anchor."
+llama-3.1-405b,meta,"llama3.1405b|llama-3.1-405b|llama 3.1 405b|llama405b",405,405,high,"Meta (2024) model card","Open training anchor."
+gpt-4o-mini,openai,"gpt4omini|gpt-4omini|gpt 4o mini|gpt-4o-mini",8,8,low,"Internal approximate profile for extrapolation","Approximate active-parameter profile used only for screening-level extrapolation."
+gpt-4.1-mini,openai,"gpt41mini|gpt-4.1-mini|gpt 4.1 mini",8,8,low,"Internal approximate profile for extrapolation","Approximate active-parameter profile used only for screening-level extrapolation."

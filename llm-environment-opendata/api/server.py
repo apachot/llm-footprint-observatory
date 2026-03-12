@@ -11,12 +11,20 @@ if str(ROOT) not in sys.path:
 
 from core.estimator import (
     DATASET_PATH,
+    COUNTRY_MIX_PATH,
+    EXTRAPOLATION_RULES_PATH,
+    MODELS_PATH,
     compute_stats,
     estimate_externalities,
     estimate_feature_externalities,
     filter_records,
     get_record,
+    get_country_mix,
+    get_model_profile,
     list_sources,
+    load_country_energy_mix,
+    load_extrapolation_rules,
+    load_models,
     load_records,
 )
 
@@ -36,7 +44,15 @@ class Handler(BaseHTTPRequestHandler):
         records = load_records()
 
         if path == "/health":
-            self._write_json({"status": "ok", "dataset": str(DATASET_PATH)})
+            self._write_json(
+                {
+                    "status": "ok",
+                    "dataset": str(DATASET_PATH),
+                    "models": str(MODELS_PATH),
+                    "country_mix": str(COUNTRY_MIX_PATH),
+                    "extrapolation_rules": str(EXTRAPOLATION_RULES_PATH),
+                }
+            )
             return
 
         if path == "/records":
@@ -57,6 +73,36 @@ class Handler(BaseHTTPRequestHandler):
             self._write_json({"sources": list_sources(records)})
             return
 
+        if path == "/models":
+            self._write_json({"models": load_models()})
+            return
+
+        if path.startswith("/models/"):
+            model_id = path.split("/", 2)[2]
+            profile = get_model_profile(model_id=model_id)
+            if profile:
+                self._write_json(profile)
+                return
+            self._write_json({"error": "model not found", "model_id": model_id}, status=404)
+            return
+
+        if path == "/energy-mix":
+            self._write_json({"country_energy_mix": load_country_energy_mix()})
+            return
+
+        if path.startswith("/energy-mix/"):
+            country_code = path.split("/", 2)[2]
+            country_mix = get_country_mix(country_code)
+            if country_mix:
+                self._write_json(country_mix)
+                return
+            self._write_json({"error": "country mix not found", "country_code": country_code}, status=404)
+            return
+
+        if path == "/extrapolation-rules":
+            self._write_json({"extrapolation_rules": load_extrapolation_rules()})
+            return
+
         if path == "/stats":
             self._write_json(compute_stats(records))
             return
@@ -69,6 +115,11 @@ class Handler(BaseHTTPRequestHandler):
                     "/records",
                     "/records/<record_id>",
                     "/sources",
+                    "/models",
+                    "/models/<model_id>",
+                    "/energy-mix",
+                    "/energy-mix/<country_code>",
+                    "/extrapolation-rules",
                     "/stats",
                     "POST /estimate",
                     "POST /estimate_feature",

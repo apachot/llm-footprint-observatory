@@ -6,6 +6,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 DATASET_PATH = ROOT / "data" / "records.csv"
 METADATA_PATH = ROOT / "data" / "record_metadata.csv"
+MODELS_PATH = ROOT / "data" / "models.csv"
+COUNTRY_MIX_PATH = ROOT / "data" / "country_energy_mix.csv"
+EXTRAPOLATION_RULES_PATH = ROOT / "data" / "extrapolation_rules.csv"
 
 REFERENCE_PROMPT_TOKENS = 1550.0
 
@@ -18,6 +21,21 @@ def load_records():
 def load_record_metadata():
     with METADATA_PATH.open("r", encoding="utf-8", newline="") as handle:
         return {row["record_id"]: row for row in csv.DictReader(handle)}
+
+
+def load_models():
+    with MODELS_PATH.open("r", encoding="utf-8", newline="") as handle:
+        return [row for row in csv.DictReader(handle)]
+
+
+def load_country_energy_mix():
+    with COUNTRY_MIX_PATH.open("r", encoding="utf-8", newline="") as handle:
+        return [row for row in csv.DictReader(handle)]
+
+
+def load_extrapolation_rules():
+    with EXTRAPOLATION_RULES_PATH.open("r", encoding="utf-8", newline="") as handle:
+        return [row for row in csv.DictReader(handle)]
 
 
 def normalize_record(record, metadata):
@@ -150,13 +168,245 @@ def get_record(records, record_id):
     return None
 
 
+def normalize_identifier(value):
+    if not value:
+        return ""
+    normalized = str(value).strip().lower()
+    for char in (" ", "-", "_", ".", ",", ":", ";", "/", "(", ")"):
+        normalized = normalized.replace(char, "")
+    return normalized
+
+
+def get_model_profile(model_id=None, provider=None, estimated_active_parameters_billion=None):
+    if estimated_active_parameters_billion not in (None, ""):
+        return {
+            "model_id": model_id or "user-estimated-model",
+            "provider": provider or "unknown",
+            "active_parameters_billion": str(estimated_active_parameters_billion),
+            "parameter_confidence": "user_provided",
+            "parameter_source": "user_input",
+            "matching_strategy": "user_input",
+        }
+
+    normalized_model = normalize_identifier(model_id)
+    normalized_provider = normalize_identifier(provider)
+    if not normalized_model and not normalized_provider:
+        return None
+
+    for profile in load_models():
+        aliases = [normalize_identifier(profile.get("model_id"))]
+        aliases.extend(normalize_identifier(part) for part in profile.get("aliases", "").split("|") if part.strip())
+        if normalized_model and normalized_model in aliases:
+            result = dict(profile)
+            result["matching_strategy"] = "model_id"
+            return result
+
+    for profile in load_models():
+        if normalized_provider and normalize_identifier(profile.get("provider")) == normalized_provider:
+            result = dict(profile)
+            result["matching_strategy"] = "provider_family"
+            return result
+
+    return None
+
+
+def get_country_mix(country_code):
+    normalized = normalize_identifier(country_code)
+    if not normalized:
+        return None
+    for row in load_country_energy_mix():
+        if normalize_identifier(row.get("country_code")) == normalized or normalize_identifier(row.get("country_name")) == normalized:
+            return row
+    return None
+
+
+def get_extrapolation_rule(metric_kind):
+    for row in load_extrapolation_rules():
+        if row.get("metric_kind") == metric_kind:
+            return row
+    return None
+
+
+def get_record_by_prefix(records, prefix):
+    for record in records:
+        if record["record_id"].startswith(prefix):
+            return record
+    return None
+
+
+def infer_parametric_request_estimate(records, payload, grid_carbon_intensity, water_intensity):
+    model_profile = get_model_profile(
+        model_id=payload.get("model_id"),
+        provider=payload.get("provider"),
+        estimated_active_parameters_billion=payload.get("estimated_active_parameters_billion"),
+    )
+    if not model_profile:
+        return None
+
+    try:
+        target_params = to_float(model_profile.get("active_parameters_billion"), default=None)
+    except ValueError:
+        return None
+    if target_params is None:
+        return None
+
+    requests_count = to_float(payload.get("requests_count", 1.0), default=1.0)
+    input_tokens = to_float(payload.get("input_tokens", 0.0), default=0.0)
+    output_tokens = to_float(payload.get("output_tokens", 0.0), default=0.0)
+    total_tokens = input_tokens + output_tokens
+
+    energy_rule = get_extrapolation_rule("energy")
+    carbon_rule = get_extrapolation_rule("carbon")
+    water_rule = get_extrapolation_rule("water")
+    if not energy_rule:
+        return None
+
+    reference_tokens = to_float(energy_rule.get("reference_tokens"), default=750.0)
+    token_ratio = clamp((total_tokens / reference_tokens) if total_tokens > 0 else (REFERENCE_PROMPT_TOKENS / reference_tokens), 0.25, 6.0)
+
+    anchors = [
+        {
+            "profile": get_model_profile("gemma-2b-it"),
+            "energy_record": get_record(records, "ren2024_gemma2b_energy"),
+            "carbon_record": get_record(records, "ren2024_gemma2b_carbon"),
+            "water_record": get_record(records, "ren2024_gemma2b_water"),
+        },
+        {
+            "profile": get_model_profile("llama-3-70b"),
+            "energy_record": get_record(records, "ren2024_llama70b_energy"),
+            "carbon_record": get_record(records, "ren2024_llama70b_carbon"),
+            "water_record": get_record(records, "ren2024_llama70b_water"),
+        },
+    ]
+    anchors = [item for item in anchors if item["profile"]]
+    if len(anchors) < 2:
+        return None
+
+    assumptions = [
+        f"Parametric extrapolation enabled for target model {model_profile.get('model_id')} ({target_params:g}B active parameters)",
+        f"Reference inference scaling derived from Ren et al. 2024 with page-level measurements at {reference_tokens:g} tokens",
+    ]
+    if total_tokens > 0:
+        assumptions.append(f"Token scaling applied relative to {reference_tokens:g} tokens per reference page")
+    else:
+        assumptions.append(f"No token counts provided; default prompt size approximated from {int(REFERENCE_PROMPT_TOKENS)} tokens")
+
+    selected_factors = []
+    results = {}
+
+    for metric_kind, rule, unit_kind, scale_factor in (
+        ("energy", energy_rule, "energy_wh", 1000.0),
+        ("carbon", carbon_rule, "carbon_gco2e", 1.0),
+        ("water", water_rule, "water_ml", 1000.0),
+    ):
+        if not rule:
+            continue
+        central_exp = to_float(rule.get("exponent_central"), default=1.0)
+        low_exp = to_float(rule.get("exponent_low"), default=central_exp)
+        high_exp = to_float(rule.get("exponent_high"), default=central_exp)
+        anchor_values = []
+        selected_record_ids = []
+        for anchor in anchors:
+            record = anchor[f"{metric_kind}_record"]
+            profile = anchor["profile"]
+            if not record or not profile:
+                continue
+            anchor_params = to_float(profile.get("active_parameters_billion"), default=None)
+            if anchor_params in (None, 0):
+                continue
+            metric_value = to_float(record["metric_value"], default=None)
+            if metric_value is None:
+                continue
+            ratio = target_params / anchor_params
+            low_value = metric_value * (ratio ** low_exp) * token_ratio * requests_count * scale_factor
+            central_value = metric_value * (ratio ** central_exp) * token_ratio * requests_count * scale_factor
+            high_value = metric_value * (ratio ** high_exp) * token_ratio * requests_count * scale_factor
+            anchor_values.append((low_value, central_value, high_value))
+            selected_record_ids.append(record["record_id"])
+        if not anchor_values:
+            continue
+        lows = [item[0] for item in anchor_values]
+        centrals = [item[1] for item in anchor_values]
+        highs = [item[2] for item in anchor_values]
+        results[unit_kind] = rounded_range(min(lows), sum(centrals) / len(centrals), max(highs))
+        selected_factors.extend(selected_record_ids)
+
+    if grid_carbon_intensity is not None and "energy_wh" in results and "carbon_gco2e" in results:
+        energy = results["energy_wh"]
+        derived_central = wh_to_gco2e(energy["central"], grid_carbon_intensity)
+        derived_high = wh_to_gco2e(energy["high"], grid_carbon_intensity)
+        results["carbon_gco2e"] = rounded_range(
+            min(results["carbon_gco2e"]["low"], derived_central),
+            derived_central,
+            max(results["carbon_gco2e"]["high"], derived_high),
+        )
+        assumptions.append("Carbon contextualized using country electricity carbon intensity")
+
+    if water_intensity is not None and "energy_wh" in results and "water_ml" in results:
+        energy = results["energy_wh"]
+        derived_central = wh_to_liters(energy["central"], water_intensity) * 1000.0
+        derived_high = wh_to_liters(energy["high"], water_intensity) * 1000.0
+        results["water_ml"] = rounded_range(
+            min(results["water_ml"]["low"], derived_central),
+            derived_central,
+            max(results["water_ml"]["high"], derived_high),
+        )
+        assumptions.append("Water contextualized using country electricity water intensity")
+
+    return {
+        "model_profile": model_profile,
+        "results": results,
+        "selected_factors": dedupe(selected_factors),
+        "assumptions": assumptions,
+        "method": "parametric_extrapolation",
+        "rule_ids": [row.get("rule_id") for row in load_extrapolation_rules()],
+    }
+
+
 def estimate_externalities(records, payload):
     request_type = payload.get("request_type", "chat_generation")
     requests_count = to_float(payload.get("requests_count", 1.0), default=1.0)
     input_tokens = to_float(payload.get("input_tokens", 0.0), default=0.0)
     output_tokens = to_float(payload.get("output_tokens", 0.0), default=0.0)
+    country_mix = get_country_mix(payload.get("country"))
     grid_carbon_intensity = to_float(payload.get("grid_carbon_intensity_gco2_per_kwh"), default=None)
     water_intensity = to_float(payload.get("water_intensity_l_per_kwh"), default=None)
+    if grid_carbon_intensity is None and country_mix:
+        grid_carbon_intensity = to_float(country_mix.get("grid_carbon_intensity_gco2_per_kwh"), default=None)
+    if water_intensity is None and country_mix:
+        water_intensity = to_float(country_mix.get("water_intensity_l_per_kwh"), default=None)
+
+    extrapolated = infer_parametric_request_estimate(records, payload, grid_carbon_intensity, water_intensity)
+    if extrapolated and extrapolated.get("results"):
+        assumptions = list(extrapolated["assumptions"])
+        assumptions.append(f"Request type classified as {request_type}")
+        if country_mix:
+            assumptions.append(
+                f"Country mix fallback applied for {country_mix.get('country_code')} ({country_mix.get('source_citation')})"
+            )
+        return {
+            "scenario_id": payload.get("scenario_id", "unspecified"),
+            "estimate_level": "request" if requests_count == 1 else "scenario",
+            "inputs": {
+                "provider": payload.get("provider"),
+                "model_id": payload.get("model_id"),
+                "deployment_mode": payload.get("deployment_mode"),
+                "request_type": request_type,
+                "input_tokens": input_tokens,
+                "output_tokens": output_tokens,
+                "requests_count": requests_count,
+                "country": payload.get("country"),
+            },
+            "results": extrapolated["results"],
+            "selected_factors": extrapolated["selected_factors"],
+            "assumptions": assumptions,
+            "uncertainty_level": "high",
+            "applicability_note": "Screening-level estimate based on parametric extrapolation from literature factors; not suitable as-is for audited declarations.",
+            "method": extrapolated["method"],
+            "model_profile": extrapolated["model_profile"],
+            "country_energy_mix": country_mix,
+            "extrapolation_rules": extrapolated["rule_ids"],
+        }
 
     token_ratio = compute_token_ratio(input_tokens, output_tokens)
     assumptions = []
@@ -168,6 +418,10 @@ def estimate_externalities(records, payload):
         assumptions.append("No token counts provided; literature factors used without prompt-size scaling")
 
     assumptions.append(f"Request type classified as {request_type}")
+    if country_mix:
+        assumptions.append(
+            f"Country mix fallback applied for {country_mix.get('country_code')} ({country_mix.get('source_citation')})"
+        )
 
     prompt_energy = get_record(records, "elsworth2025_prompt_energy")
     prompt_carbon = get_record(records, "elsworth2025_prompt_carbon")
@@ -241,6 +495,14 @@ def estimate_externalities(records, payload):
         "assumptions": assumptions,
         "uncertainty_level": uncertainty_level,
         "applicability_note": applicability_note,
+        "method": "literature_proxy",
+        "model_profile": get_model_profile(
+            model_id=payload.get("model_id"),
+            provider=payload.get("provider"),
+            estimated_active_parameters_billion=payload.get("estimated_active_parameters_billion"),
+        ),
+        "country_energy_mix": country_mix,
+        "extrapolation_rules": [],
     }
 
 
@@ -249,6 +511,7 @@ def estimate_feature_externalities(records, payload):
         "scenario_id": payload.get("scenario_id", "feature-estimate"),
         "provider": payload.get("provider"),
         "model_id": payload.get("model_id"),
+        "estimated_active_parameters_billion": payload.get("estimated_active_parameters_billion"),
         "deployment_mode": payload.get("deployment_mode"),
         "request_type": payload.get("request_type", "chat_generation"),
         "input_tokens": payload.get("input_tokens", 0.0),
@@ -335,6 +598,10 @@ def estimate_feature_externalities(records, payload):
         "assumptions": assumptions,
         "uncertainty_level": "high",
         "applicability_note": "Feature-level annualization for screening and eco-design, not an audited footprint statement.",
+        "method": per_request.get("method", "literature_proxy"),
+        "model_profile": per_request.get("model_profile"),
+        "country_energy_mix": per_request.get("country_energy_mix"),
+        "extrapolation_rules": per_request.get("extrapolation_rules", []),
     }
 
 
