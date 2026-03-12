@@ -293,6 +293,7 @@ def infer_parametric_request_estimate(records, payload, grid_carbon_intensity, w
 
     selected_factors = []
     results = {}
+    extrapolation_details = {}
 
     for metric_kind, rule, unit_kind, scale_factor in (
         ("energy", energy_rule, "energy_wh", 1000.0),
@@ -306,6 +307,7 @@ def infer_parametric_request_estimate(records, payload, grid_carbon_intensity, w
         high_exp = to_float(rule.get("exponent_high"), default=central_exp)
         anchor_values = []
         selected_record_ids = []
+        detail_rows = []
         for anchor in anchors:
             record = anchor[f"{metric_kind}_record"]
             profile = anchor["profile"]
@@ -318,11 +320,30 @@ def infer_parametric_request_estimate(records, payload, grid_carbon_intensity, w
             if metric_value is None:
                 continue
             ratio = target_params / anchor_params
-            low_value = metric_value * (ratio ** low_exp) * token_ratio * requests_count * scale_factor
-            central_value = metric_value * (ratio ** central_exp) * token_ratio * requests_count * scale_factor
-            high_value = metric_value * (ratio ** high_exp) * token_ratio * requests_count * scale_factor
+            low_factor = (ratio ** low_exp) * token_ratio * requests_count
+            central_factor = (ratio ** central_exp) * token_ratio * requests_count
+            high_factor = (ratio ** high_exp) * token_ratio * requests_count
+            low_value = metric_value * low_factor * scale_factor
+            central_value = metric_value * central_factor * scale_factor
+            high_value = metric_value * high_factor * scale_factor
             anchor_values.append((low_value, central_value, high_value))
             selected_record_ids.append(record["record_id"])
+            detail_rows.append(
+                {
+                    "record_id": record["record_id"],
+                    "source_model": profile.get("model_id"),
+                    "source_active_parameters_billion": anchor_params,
+                    "source_value": metric_value,
+                    "source_unit": record.get("metric_unit"),
+                    "parameter_ratio": round(ratio, 6),
+                    "factor_low": round(low_factor, 6),
+                    "factor_central": round(central_factor, 6),
+                    "factor_high": round(high_factor, 6),
+                    "extrapolated_value_low": round(low_value, 6),
+                    "extrapolated_value_central": round(central_value, 6),
+                    "extrapolated_value_high": round(high_value, 6),
+                }
+            )
         if not anchor_values:
             continue
         lows = [item[0] for item in anchor_values]
@@ -330,6 +351,14 @@ def infer_parametric_request_estimate(records, payload, grid_carbon_intensity, w
         highs = [item[2] for item in anchor_values]
         results[unit_kind] = rounded_range(min(lows), sum(centrals) / len(centrals), max(highs))
         selected_factors.extend(selected_record_ids)
+        extrapolation_details[unit_kind] = {
+            "reference_tokens": reference_tokens,
+            "token_ratio": round(token_ratio, 6),
+            "exponent_low": low_exp,
+            "exponent_central": central_exp,
+            "exponent_high": high_exp,
+            "anchors": detail_rows,
+        }
 
     if grid_carbon_intensity is not None and "energy_wh" in results and "carbon_gco2e" in results:
         energy = results["energy_wh"]
@@ -360,6 +389,7 @@ def infer_parametric_request_estimate(records, payload, grid_carbon_intensity, w
         "assumptions": assumptions,
         "method": "parametric_extrapolation",
         "rule_ids": [row.get("rule_id") for row in load_extrapolation_rules()],
+        "extrapolation_details": extrapolation_details,
     }
 
 
@@ -406,6 +436,7 @@ def estimate_externalities(records, payload):
             "model_profile": extrapolated["model_profile"],
             "country_energy_mix": country_mix,
             "extrapolation_rules": extrapolated["rule_ids"],
+            "extrapolation_details": extrapolated.get("extrapolation_details", {}),
         }
 
     token_ratio = compute_token_ratio(input_tokens, output_tokens)
@@ -503,6 +534,7 @@ def estimate_externalities(records, payload):
         ),
         "country_energy_mix": country_mix,
         "extrapolation_rules": [],
+        "extrapolation_details": {},
     }
 
 
@@ -602,6 +634,7 @@ def estimate_feature_externalities(records, payload):
         "model_profile": per_request.get("model_profile"),
         "country_energy_mix": per_request.get("country_energy_mix"),
         "extrapolation_rules": per_request.get("extrapolation_rules", []),
+        "extrapolation_details": per_request.get("extrapolation_details", {}),
     }
 
 

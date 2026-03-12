@@ -191,6 +191,48 @@ def render_sourced_value(value_text, rows):
     )
 
 
+def render_extrapolation_details(result, metric_label, source_rows):
+    if result.get("method") != "parametric_extrapolation":
+        return ""
+    unit_key = {
+        "energy": "energy_wh",
+        "carbon": "carbon_gco2e",
+        "water": "water_ml",
+    }.get(metric_label)
+    detail = ((result.get("per_request_llm") or {}) and (result.get("extrapolation_details") or {}).get(unit_key)) or {}
+    row_lookup = {row.get("record_id"): row for row in source_rows or []}
+    detail_lines = []
+    for anchor in detail.get("anchors", []):
+        source_value = anchor.get("source_value")
+        source_unit = anchor.get("source_unit", "")
+        factor_value = anchor.get("factor_central")
+        extrapolated_value = anchor.get("extrapolated_value_central")
+        if source_value is None or factor_value is None or extrapolated_value is None:
+            continue
+        row = row_lookup.get(anchor.get("record_id"))
+        citation_link = ""
+        if row:
+            title = escape(
+                f"{row.get('citation', '')} | {row.get('metric_name', '')} | {row.get('source_locator', '')}"
+            )
+            href = escape(row.get("source_url", "#"), quote=True)
+            citation_link = (
+                f' <a class="inline-ref" href="{href}" target="_blank" rel="noopener noreferrer" title="{title}">'
+                f'{escape(row.get("citation", "source"))}</a>'
+            )
+        formatted_source = f"{source_value} {source_unit}".strip()
+        formatted_extrapolated = format_value_display(extrapolated_value, metric_label if metric_label != "carbon" else "carbon")
+        detail_lines.append(
+            f"<li><strong>{escape(anchor.get('source_model', 'modele source'))}</strong> : valeur d'origine "
+            f"<code>{escape(formatted_source)}</code>{citation_link} × facteur applique <code>{factor_value:.3f}</code> "
+            f"= valeur extrapolee <code>{escape(formatted_extrapolated)}</code></li>"
+        )
+
+    if not detail_lines:
+        return ""
+    return f'<ul class="extrapolation-list">{"".join(detail_lines)}</ul>'
+
+
 def render_math_demo(result, factor_rows):
     annual_llm = result["annual_llm"]
     scope = result["feature_scope"]
@@ -262,6 +304,7 @@ def render_math_demo(result, factor_rows):
           <div class="math-formula">
             {render_sourced_value(format_range_display(annual_llm['energy_wh'], 'energy'), energy_rows)}
           </div>
+          {render_extrapolation_details(result, "energy", energy_rows)}
           <p class="math-detail">
             Impact estime pour une requete LLM:
             {render_sourced_value(format_range_display(per_request['energy_wh'], 'energy'), energy_rows)}
@@ -286,6 +329,7 @@ def render_math_demo(result, factor_rows):
           <div class="math-formula">
             {render_sourced_value(format_range_display(annual_llm['carbon_gco2e'], 'carbon'), carbon_rows)}
           </div>
+          {render_extrapolation_details(result, "carbon", carbon_rows)}
           <p class="math-detail">
             Impact estime pour une requete LLM:
             {render_sourced_value(format_range_display(per_request['carbon_gco2e'], 'carbon'), carbon_rows)}
@@ -310,6 +354,7 @@ def render_math_demo(result, factor_rows):
           <div class="math-formula">
             {render_sourced_value(format_range_display(annual_llm['water_ml'], 'water'), water_rows)}
           </div>
+          {render_extrapolation_details(result, "water", water_rows)}
           <p class="math-detail">
             Impact estime pour une requete LLM:
             {render_sourced_value(format_range_display(per_request['water_ml'], 'water'), water_rows)}
@@ -478,8 +523,6 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
           </div>
         </section>
 
-        {render_math_demo(result, factor_rows)}
-
         <section class="panel summary-panel">
           <div class="summary-header">
             <div>
@@ -491,6 +534,8 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
           <p class="summary-intro">Cette synthèse reformule le scénario interprété, les principaux facteurs retenus dans la littérature et la logique de calcul appliquée à ton cas d'usage.</p>
           <div class="summary-body">{render_summary_html(summary_text, factor_rows)}</div>
         </section>
+
+        {render_math_demo(result, factor_rows)}
 
         {render_reference_catalog(factor_rows)}
         """
@@ -825,6 +870,16 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
       margin: 0;
       color: #495057;
       line-height: 1.7;
+    }}
+    .extrapolation-list {{
+      margin: 0 0 0.75rem;
+      padding-left: 1.2rem;
+      color: #495057;
+      line-height: 1.6;
+      font-size: 0.92rem;
+    }}
+    .extrapolation-list li + li {{
+      margin-top: 0.35rem;
     }}
     a {{ color: var(--accent); text-decoration: none; }}
     a:hover {{ text-decoration: underline; }}
