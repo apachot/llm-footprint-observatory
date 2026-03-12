@@ -121,6 +121,32 @@ def format_value_display(value, unit_kind):
     return f"{formatted_value} {unit}".strip()
 
 
+def format_count(value):
+    return f"{int(round(float(value))):,}".replace(",", " ")
+
+
+def humanize_assumption(text):
+    value = str(text)
+    replacements = {
+        "Parametric extrapolation enabled for target model": "Extrapolation parametrique appliquee au modele cible",
+        "Reference inference scaling derived from Ren et al. 2024 with page-level measurements at": "Mise a l'echelle fondee sur Ren et al. (2024), a partir de mesures par page de",
+        "Token scaling applied relative to": "Ajustement realise en fonction du volume de tokens, avec une reference de",
+        "Carbon contextualized using country electricity carbon intensity": "Les emissions carbone sont ajustées avec l'intensite carbone du mix electrique du pays retenu.",
+        "Water contextualized using country electricity water intensity": "La consommation d'eau est ajustée avec l'intensite hydrique du mix electrique retenu.",
+        "Request type classified as": "Type d'usage interprete comme",
+        "Country mix fallback applied for": "Mix electrique par defaut applique pour",
+        "LLM request(s) per feature use": "appel(s) au LLM par usage de la fonctionnalite",
+        "feature uses per year": "usages annuels de la fonctionnalite",
+    }
+    for source, target in replacements.items():
+        if source in value:
+            value = value.replace(source, target)
+    value = value.replace("750 tokens", "750 tokens")
+    value = value.replace("12.0", "12")
+    value = value.replace("1.0", "1")
+    return value
+
+
 def render_math_demo(result):
     annual_llm = result["annual_llm"]
     scope = result["feature_scope"]
@@ -140,33 +166,45 @@ def render_math_demo(result):
           <div class="summary-kicker">Demonstration</div>
           <h3>Detail du calcul</h3>
         </div>
-        <div class="summary-badge">Mode mathematique</div>
+        <div class="summary-badge">Lecture pas a pas</div>
       </div>
-      <p class="summary-intro">Le calcul suit trois etapes: volume d'usage annuel, impact d'une requete LLM, puis annualisation a l'echelle de la fonctionnalite.</p>
+      <p class="summary-intro">Le calcul part d'un impact unitaire par requete, puis le projette sur ton volume d'usage annuel. Le bloc ci-dessous montre cette logique et les hypotheses retenues pour l'extrapolation.</p>
       <div class="assumptions-box">
         <span class="math-label">Hypotheses retenues</span>
         <ul class="assumptions-list">
-          {''.join(f'<li>{escape(item)}</li>' for item in assumptions)}
+          {''.join(f'<li>{escape(humanize_assumption(item))}</li>' for item in assumptions)}
         </ul>
       </div>
       <div class="math-steps">
         <div class="math-step">
           <span class="math-step-index">1</span>
           <div>
-            <strong>Volume annuel de la fonctionnalite</strong>
+            <strong>Calculer le volume annuel d'usage</strong>
             <p>
-              <code>{int(monthly_uses):,}</code> usages/mois × <code>{int(months_per_year)}</code> mois
-              = <code>{int(annual_uses):,}</code> usages/an
+              On part de <code>{format_count(monthly_uses)}</code> usages par mois.
+              En le multipliant par <code>{format_count(months_per_year)}</code> mois,
+              on obtient <code>{format_count(annual_uses)}</code> usages par an.
             </p>
           </div>
         </div>
         <div class="math-step">
           <span class="math-step-index">2</span>
           <div>
-            <strong>Nombre annuel d'appels LLM</strong>
+            <strong>Calculer le nombre annuel d'appels au LLM</strong>
             <p>
-              <code>{int(annual_uses):,}</code> usages/an × <code>{requests_per_use:g}</code> appel(s) LLM/usage
-              = <code>{int(annual_requests):,}</code> appels LLM/an
+              Chaque usage mobilise <code>{requests_per_use:g}</code> appel(s) au LLM.
+              Donc <code>{format_count(annual_uses)}</code> usages par an
+              correspondent a <code>{format_count(annual_requests)}</code> appels LLM par an.
+            </p>
+          </div>
+        </div>
+        <div class="math-step">
+          <span class="math-step-index">3</span>
+          <div>
+            <strong>Projeter l'impact unitaire a l'annee</strong>
+            <p>
+              On applique les facteurs estimes par requete au volume annuel d'appels LLM
+              pour obtenir une fourchette annuelle d'energie, de carbone et d'eau.
             </p>
           </div>
         </div>
@@ -178,16 +216,22 @@ def render_math_demo(result):
             <code>{format_range_display(annual_llm['energy_wh'], 'energy')}</code>
           </div>
           <p class="math-detail">
-            Par requete LLM: <code>{format_range_display(per_request['energy_wh'], 'energy')}</code>
+            Impact estime pour une requete LLM:
+            <code>{format_range_display(per_request['energy_wh'], 'energy')}</code>
           </p>
           <p class="math-detail">
-            Par usage de la fonctionnalite: <code>{format_range_display(per_feature['energy_wh'], 'energy')}</code>
+            Impact estime pour un usage de la fonctionnalite:
+            <code>{format_range_display(per_feature['energy_wh'], 'energy')}</code>
           </p>
           <p class="math-detail">
-            Impact annuel LLM: <code>{format_range_display(annual_llm['energy_wh'], 'energy')}</code>
+            En projetant cette valeur sur
+            <code>{format_count(annual_requests)}</code> appels par an,
+            on obtient:
+            <code>{format_range_display(annual_llm['energy_wh'], 'energy')}</code>
           </p>
           <p class="math-total">
-            Total = impact annuel du LLM = <code>{format_range_display(annual_llm['energy_wh'], 'energy')}</code>
+            Resultat retenu pour l'energie annuelle du LLM:
+            <code>{format_range_display(annual_llm['energy_wh'], 'energy')}</code>
           </p>
         </div>
         <div class="math-card">
@@ -196,16 +240,22 @@ def render_math_demo(result):
             <code>{format_range_display(annual_llm['carbon_gco2e'], 'carbon')}</code>
           </div>
           <p class="math-detail">
-            Par requete LLM: <code>{format_range_display(per_request['carbon_gco2e'], 'carbon')}</code>
+            Impact estime pour une requete LLM:
+            <code>{format_range_display(per_request['carbon_gco2e'], 'carbon')}</code>
           </p>
           <p class="math-detail">
-            Par usage de la fonctionnalite: <code>{format_range_display(per_feature['carbon_gco2e'], 'carbon')}</code>
+            Impact estime pour un usage de la fonctionnalite:
+            <code>{format_range_display(per_feature['carbon_gco2e'], 'carbon')}</code>
           </p>
           <p class="math-detail">
-            Impact annuel LLM: <code>{format_range_display(annual_llm['carbon_gco2e'], 'carbon')}</code>
+            En projetant cette valeur sur
+            <code>{format_count(annual_requests)}</code> appels par an,
+            on obtient:
+            <code>{format_range_display(annual_llm['carbon_gco2e'], 'carbon')}</code>
           </p>
           <p class="math-total">
-            Total = impact annuel du LLM = <code>{format_range_display(annual_llm['carbon_gco2e'], 'carbon')}</code>
+            Resultat retenu pour le carbone annuel du LLM:
+            <code>{format_range_display(annual_llm['carbon_gco2e'], 'carbon')}</code>
           </p>
         </div>
         <div class="math-card">
@@ -214,16 +264,22 @@ def render_math_demo(result):
             <code>{format_range_display(annual_llm['water_ml'], 'water')}</code>
           </div>
           <p class="math-detail">
-            Par requete LLM: <code>{format_range_display(per_request['water_ml'], 'water')}</code>
+            Impact estime pour une requete LLM:
+            <code>{format_range_display(per_request['water_ml'], 'water')}</code>
           </p>
           <p class="math-detail">
-            Par usage de la fonctionnalite: <code>{format_range_display(per_feature['water_ml'], 'water')}</code>
+            Impact estime pour un usage de la fonctionnalite:
+            <code>{format_range_display(per_feature['water_ml'], 'water')}</code>
           </p>
           <p class="math-detail">
-            Impact annuel LLM: <code>{format_range_display(annual_llm['water_ml'], 'water')}</code>
+            En projetant cette valeur sur
+            <code>{format_count(annual_requests)}</code> appels par an,
+            on obtient:
+            <code>{format_range_display(annual_llm['water_ml'], 'water')}</code>
           </p>
           <p class="math-total">
-            Total = impact annuel du LLM = <code>{format_range_display(annual_llm['water_ml'], 'water')}</code>
+            Resultat retenu pour l'eau annuelle du LLM:
+            <code>{format_range_display(annual_llm['water_ml'], 'water')}</code>
           </p>
         </div>
       </div>
@@ -253,6 +309,45 @@ def render_summary_html(summary_text, factor_rows):
 
     html = re.sub(r"\[(SRC\d+)\]", replace_source_tag, text)
     return html.replace("\n", "<br>")
+
+
+def render_reference_catalog(factor_rows):
+    items = []
+    for index, row in enumerate(factor_rows or [], start=1):
+        items.append(
+            f"""
+            <article class="reference-item">
+              <div class="reference-head">
+                <span class="reference-tag">SRC{index}</span>
+                <a href="{escape(row.get('source_url', '#'), quote=True)}" target="_blank" rel="noopener noreferrer">{escape(row.get('citation', 'Source'))}</a>
+              </div>
+              <p class="reference-metric">
+                <strong>{escape(row.get('metric_name', 'Metric'))}</strong> :
+                {escape(str(row.get('metric_value', '')))} {escape(row.get('metric_unit', ''))}
+              </p>
+              <p class="reference-locator">Localisation : {escape(row.get('source_locator', 'non précisée'))}</p>
+            </article>
+            """
+        )
+
+    if not items:
+        return ""
+
+    return f"""
+    <section class="panel reference-panel">
+      <div class="summary-header">
+        <div>
+          <div class="summary-kicker">Referentiel</div>
+          <h3>Donnees mobilisees dans la litterature scientifique</h3>
+        </div>
+        <div class="summary-badge">Sources utilisees</div>
+      </div>
+      <p class="summary-intro">Ce bloc recense les donnees scientifiques effectivement utilisees dans le calcul ou dans l'encadrement de l'estimation. Chaque entree reprend la valeur, l'unite, la citation et la localisation dans la source.</p>
+      <div class="reference-list">
+        {''.join(items)}
+      </div>
+    </section>
+    """
 
 
 def factor_details(records, factor_ids):
@@ -349,6 +444,8 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
           <p class="summary-intro">Cette synthèse reformule le scénario interprété, les principaux facteurs retenus dans la littérature et la logique de calcul appliquée à ton cas d'usage.</p>
           <div class="summary-body">{render_summary_html(summary_text, factor_rows)}</div>
         </section>
+
+        {render_reference_catalog(factor_rows)}
         """
 
     return f"""<!doctype html>
@@ -548,6 +645,46 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
       border-radius: 0.75rem;
       line-height: 1.7;
       font-size: 0.96rem;
+    }}
+    .reference-panel {{
+      border-color: rgba(13,110,253,0.14);
+    }}
+    .reference-list {{
+      display: grid;
+      gap: 0.75rem;
+    }}
+    .reference-item {{
+      border: 1px solid var(--line);
+      border-radius: 0.65rem;
+      padding: 0.9rem;
+      background: #fbfcfe;
+    }}
+    .reference-head {{
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      margin-bottom: 0.45rem;
+      flex-wrap: wrap;
+    }}
+    .reference-tag {{
+      display: inline-block;
+      padding: 0.15rem 0.45rem;
+      border-radius: 999px;
+      background: var(--accent-soft);
+      color: var(--accent);
+      font-size: 0.76rem;
+      font-weight: 700;
+    }}
+    .reference-metric,
+    .reference-locator {{
+      margin: 0;
+      color: #495057;
+      line-height: 1.55;
+      font-size: 0.94rem;
+    }}
+    .reference-locator {{
+      margin-top: 0.3rem;
+      color: var(--muted);
     }}
     .source-tag {{
       display: inline-block;
