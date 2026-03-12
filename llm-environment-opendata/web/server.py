@@ -403,26 +403,27 @@ def render_summary_html(summary_text, factor_rows):
     return html.replace("\n", "<br>")
 
 
-def render_reference_catalog(factor_rows):
-    items = []
-    for index, row in enumerate(factor_rows or [], start=1):
-        items.append(
-            f"""
-            <article class="reference-item">
-              <div class="reference-head">
-                <span class="reference-tag">SRC{index}</span>
-                <a href="{escape(row.get('source_url', '#'), quote=True)}" target="_blank" rel="noopener noreferrer">{escape(row.get('citation', 'Source'))}</a>
-              </div>
-              <p class="reference-metric">
-                <strong>{escape(row.get('metric_name', 'Metric'))}</strong> :
-                {escape(str(row.get('metric_value', '')))} {escape(row.get('metric_unit', ''))}
-              </p>
-              <p class="reference-locator">Localisation : {escape(row.get('source_locator', 'non précisée'))}</p>
-            </article>
-            """
+def build_literature_catalog_rows():
+    rows = []
+    for record in load_records():
+        source_url = str(record.get("source_url", ""))
+        if "iea.org" in source_url or "publicpower.org" in source_url:
+            continue
+        rows.append(
+            {
+                "data_type": f"{record.get('phase', '')} / {record.get('metric_name', '')}",
+                "metric_value": f"{record.get('metric_value', '')} {record.get('metric_unit', '')}".strip(),
+                "citation": record.get("citation", ""),
+                "source_locator": record.get("source_locator", ""),
+                "source_url": record.get("source_url", "#"),
+            }
         )
+    return rows
 
-    if not items:
+
+def render_reference_catalog():
+    rows = build_literature_catalog_rows()
+    if not rows:
         return ""
 
     return f"""
@@ -430,13 +431,31 @@ def render_reference_catalog(factor_rows):
       <div class="summary-header">
         <div>
           <div class="summary-kicker">Referentiel</div>
-          <h3>Donnees mobilisees dans la litterature scientifique</h3>
+          <h3>44 indicateurs issus de la litterature scientifique</h3>
         </div>
-        <div class="summary-badge">Sources utilisees</div>
+        <div class="summary-badge">Tableau de reference</div>
       </div>
-      <p class="summary-intro">Ce bloc recense les donnees scientifiques effectivement utilisees dans le calcul ou dans l'encadrement de l'estimation. Chaque entree reprend la valeur, l'unite, la citation et la localisation dans la source.</p>
-      <div class="reference-list">
-        {''.join(items)}
+      <p class="summary-intro">Ce tableau presente les indicateurs quantifies extraits du corpus scientifique mobilise par le projet. Les sources institutionnelles hors litterature scientifique directe ont ete exclues de ce referentiel.</p>
+      <div class="reference-table-wrap">
+        <table class="reference-table">
+          <thead>
+            <tr>
+              <th>Type de donnée</th>
+              <th>Valeur</th>
+              <th>Citation</th>
+            </tr>
+          </thead>
+          <tbody>
+            {''.join(
+                f"<tr>"
+                f"<td>{escape(row['data_type'])}</td>"
+                f"<td>{escape(row['metric_value'])}</td>"
+                f"<td><a href=\"{escape(row['source_url'], quote=True)}\" target=\"_blank\" rel=\"noopener noreferrer\" title=\"{escape(row['source_locator'])}\">{escape(row['citation'])}</a></td>"
+                f"</tr>"
+                for row in rows
+            )}
+          </tbody>
+        </table>
       </div>
     </section>
     """
@@ -537,7 +556,7 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
 
         {render_math_demo(result, factor_rows)}
 
-        {render_reference_catalog(factor_rows)}
+        {render_reference_catalog()}
         """
 
     return f"""<!doctype html>
@@ -741,42 +760,33 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
     .reference-panel {{
       border-color: rgba(13,110,253,0.14);
     }}
-    .reference-list {{
-      display: grid;
-      gap: 0.75rem;
-    }}
-    .reference-item {{
+    .reference-table-wrap {{
+      overflow-x: auto;
       border: 1px solid var(--line);
       border-radius: 0.65rem;
-      padding: 0.9rem;
-      background: #fbfcfe;
+      background: #fff;
     }}
-    .reference-head {{
-      display: flex;
-      align-items: center;
-      gap: 0.6rem;
-      margin-bottom: 0.45rem;
-      flex-wrap: wrap;
-    }}
-    .reference-tag {{
-      display: inline-block;
-      padding: 0.15rem 0.45rem;
-      border-radius: 999px;
-      background: var(--accent-soft);
-      color: var(--accent);
-      font-size: 0.76rem;
-      font-weight: 700;
-    }}
-    .reference-metric,
-    .reference-locator {{
-      margin: 0;
-      color: #495057;
-      line-height: 1.55;
+    .reference-table {{
+      width: 100%;
+      border-collapse: collapse;
       font-size: 0.94rem;
     }}
-    .reference-locator {{
-      margin-top: 0.3rem;
-      color: var(--muted);
+    .reference-table th,
+    .reference-table td {{
+      padding: 0.75rem 0.85rem;
+      border-bottom: 1px solid var(--line);
+      text-align: left;
+      vertical-align: top;
+    }}
+    .reference-table th {{
+      background: #f8f9fa;
+      font-size: 0.82rem;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+      color: #495057;
+    }}
+    .reference-table tbody tr:last-child td {{
+      border-bottom: 0;
     }}
     .source-tag {{
       display: inline-block;
