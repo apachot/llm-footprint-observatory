@@ -416,76 +416,76 @@ def render_math_demo(result, factor_rows):
         <div class="math-card">
           <span class="math-label">Energie annuelle totale</span>
           <div class="math-formula">
-            {render_sourced_value(format_range_display(annual_llm['energy_wh'], 'energy'), energy_rows)}
+            <code>{escape(format_range_display(annual_llm['energy_wh'], 'energy'))}</code>
           </div>
           {render_extrapolation_details(result, "energy", energy_rows)}
           <p class="math-detail">
             Impact estime pour une requete LLM:
-            {render_sourced_value(format_range_display(per_request['energy_wh'], 'energy'), energy_rows)}
+            <code>{escape(format_range_display(per_request['energy_wh'], 'energy'))}</code>
           </p>
           <p class="math-detail">
             Impact estime pour un usage de la fonctionnalite:
-            {render_sourced_value(format_range_display(per_feature['energy_wh'], 'energy'), energy_rows)}
+            <code>{escape(format_range_display(per_feature['energy_wh'], 'energy'))}</code>
           </p>
           <p class="math-detail">
             En projetant cette valeur sur
             <code>{format_count(annual_requests)}</code> appels par an,
             on obtient:
-            {render_sourced_value(format_range_display(annual_llm['energy_wh'], 'energy'), energy_rows)}
+            <code>{escape(format_range_display(annual_llm['energy_wh'], 'energy'))}</code>
           </p>
           <p class="math-total">
             Resultat retenu pour l'energie annuelle du LLM:
-            {render_sourced_value(format_range_display(annual_llm['energy_wh'], 'energy'), energy_rows)}
+            <code>{escape(format_range_display(annual_llm['energy_wh'], 'energy'))}</code>
           </p>
         </div>
         <div class="math-card">
           <span class="math-label">Carbone annuel total</span>
           <div class="math-formula">
-            {render_sourced_value(format_range_display(annual_llm['carbon_gco2e'], 'carbon'), carbon_rows)}
+            <code>{escape(format_range_display(annual_llm['carbon_gco2e'], 'carbon'))}</code>
           </div>
           {render_extrapolation_details(result, "carbon", carbon_rows)}
           <p class="math-detail">
             Impact estime pour une requete LLM:
-            {render_sourced_value(format_range_display(per_request['carbon_gco2e'], 'carbon'), carbon_rows)}
+            <code>{escape(format_range_display(per_request['carbon_gco2e'], 'carbon'))}</code>
           </p>
           <p class="math-detail">
             Impact estime pour un usage de la fonctionnalite:
-            {render_sourced_value(format_range_display(per_feature['carbon_gco2e'], 'carbon'), carbon_rows)}
+            <code>{escape(format_range_display(per_feature['carbon_gco2e'], 'carbon'))}</code>
           </p>
           <p class="math-detail">
             En projetant cette valeur sur
             <code>{format_count(annual_requests)}</code> appels par an,
             on obtient:
-            {render_sourced_value(format_range_display(annual_llm['carbon_gco2e'], 'carbon'), carbon_rows)}
+            <code>{escape(format_range_display(annual_llm['carbon_gco2e'], 'carbon'))}</code>
           </p>
           <p class="math-total">
             Resultat retenu pour le carbone annuel du LLM:
-            {render_sourced_value(format_range_display(annual_llm['carbon_gco2e'], 'carbon'), carbon_rows)}
+            <code>{escape(format_range_display(annual_llm['carbon_gco2e'], 'carbon'))}</code>
           </p>
         </div>
         <div class="math-card">
           <span class="math-label">Eau annuelle totale</span>
           <div class="math-formula">
-            {render_sourced_value(format_range_display(annual_llm['water_ml'], 'water'), water_rows)}
+            <code>{escape(format_range_display(annual_llm['water_ml'], 'water'))}</code>
           </div>
           {render_extrapolation_details(result, "water", water_rows)}
           <p class="math-detail">
             Impact estime pour une requete LLM:
-            {render_sourced_value(format_range_display(per_request['water_ml'], 'water'), water_rows)}
+            <code>{escape(format_range_display(per_request['water_ml'], 'water'))}</code>
           </p>
           <p class="math-detail">
             Impact estime pour un usage de la fonctionnalite:
-            {render_sourced_value(format_range_display(per_feature['water_ml'], 'water'), water_rows)}
+            <code>{escape(format_range_display(per_feature['water_ml'], 'water'))}</code>
           </p>
           <p class="math-detail">
             En projetant cette valeur sur
             <code>{format_count(annual_requests)}</code> appels par an,
             on obtient:
-            {render_sourced_value(format_range_display(annual_llm['water_ml'], 'water'), water_rows)}
+            <code>{escape(format_range_display(annual_llm['water_ml'], 'water'))}</code>
           </p>
           <p class="math-total">
             Resultat retenu pour l'eau annuelle du LLM:
-            {render_sourced_value(format_range_display(annual_llm['water_ml'], 'water'), water_rows)}
+            <code>{escape(format_range_display(annual_llm['water_ml'], 'water'))}</code>
           </p>
         </div>
       </div>
