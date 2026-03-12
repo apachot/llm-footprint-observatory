@@ -250,7 +250,7 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
     <header class="hero">
       <div class="eyebrow">Projet {PROJECT_NAME}</div>
       <h1>Estimer l'impact environnemental d'une application utilisant des LLMs</h1>
-      <p class="subtitle">Décris ton application en langage naturel. EcoTrace LLM délègue l'interprétation du scénario à un modèle OpenAI, sélectionne les facteurs environnementaux issus de la littérature scientifique, construit un bilan logiciel par postes techniques, puis retourne une estimation expliquée avec sa méthode et ses sources.</p>
+      <p class="subtitle">Décris ton application en langage naturel. EcoTrace LLM s'appuie sur l'état de l'art scientifique pour mobiliser des indicateurs environnementaux sourcés, construire un bilan logiciel par postes techniques, puis retourner une estimation expliquée avec sa méthode et ses références.</p>
     </header>
 
     <form class="panel" method="post" action="/">
