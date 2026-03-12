@@ -6,6 +6,7 @@
 \usepackage{geometry}
 \usepackage{hyperref}
 \usepackage{microtype}
+\usepackage{amsmath}
 \usepackage{tabularx}
 \usepackage{array}
 
@@ -153,6 +154,64 @@ One of the central use cases of the project is the following question: ``Here is
 The current method follows four simple steps. First, the use case is classified into a relevant family, such as \emph{prompt-level inference} or \emph{query-level inference}. Second, the most appropriate factors are selected from the literature, prioritizing production measurements over report-level estimates. Third, these factors are adjusted to context when the user provides an electricity-mix carbon intensity or a water intensity. Fourth, the results are aggregated at the software-feature level and then over monthly or annual horizons.
 
 The project therefore implements an explicit distinction between observed and derived values. For example, 0.24 Wh/prompt reported by Google \cite{elsworth2025} remains an observed reference value. By contrast, converting that value into a carbon estimate contextualized to a French electricity mix is a derived value and should be labeled accordingly.
+
+\subsection{Final Calculation Equations}
+Let $T_{in}$ and $T_{out}$ denote the input and output token counts for one LLM interaction, and let $T_{ref}=1550$ be the reference prompt size currently used by the implementation. The first adjustment is a token-scaling ratio:
+\begin{equation}
+r_{tok}=\mathrm{clamp}\left(\frac{T_{in}+T_{out}}{T_{ref}}, 0.25, 4.0\right).
+\end{equation}
+
+If $E_{prompt}$ is the literature-based energy factor in Wh per prompt and $n_{req}$ is the number of LLM requests considered in the scenario, the request-level energy estimate is:
+\begin{equation}
+E_{req}^{central}=E_{prompt}\times r_{tok}\times n_{req}.
+\end{equation}
+In the current implementation, the lower bound is set equal to this central value, while the upper bound uses a more conservative query-level factor $E_{query}^{high}$ from the literature:
+\begin{align}
+E_{req}^{low} &= E_{req}^{central},\\
+E_{req}^{high} &= E_{query}^{high}\times r_{tok}\times n_{req}.
+\end{align}
+
+Carbon and water are then computed either from direct literature factors or from contextualized energy conversion. Let $CI$ be the electricity carbon intensity in gCO$_2$e/kWh and $WI$ the water intensity in L/kWh. The derived conversions are:
+\begin{align}
+C(E) &= \frac{E}{1000}\times CI,\\
+W(E) &= \frac{E}{1000}\times WI \times 1000.
+\end{align}
+The factor 1000 in the last equation converts liters into milliliters. In practice, the estimator preserves the published prompt-level carbon and water factors as observed anchors, then expands the range with the contextualized values:
+\begin{align}
+C_{req}^{central} &= C\!\left(E_{req}^{central}\right),\\
+C_{req}^{low} &= \min\!\left(C_{lit},\, C\!\left(E_{req}^{central}\right)\right),\\
+C_{req}^{high} &= \max\!\left(C_{lit},\, C\!\left(E_{req}^{high}\right)\right),\\
+W_{req}^{central} &= \max\!\left(W_{lit},\, W\!\left(E_{req}^{central}\right)\right),\\
+W_{req}^{low} &= \min\!\left(W_{lit},\, W\!\left(E_{req}^{central}\right)\right),\\
+W_{req}^{high} &= \max\!\left(W_{lit},\, W\!\left(E_{req}^{high}\right)\right),
+\end{align}
+where $C_{lit}$ and $W_{lit}$ are the direct prompt-level carbon and water factors extracted from the literature.
+
+At the software-feature level, let $n_f$ be the number of LLM requests per feature use, $u_m$ the monthly number of feature uses, and $m_y$ the number of months per year. Annualized feature uses and annualized LLM requests are:
+\begin{align}
+U_{year} &= u_m \times m_y,\\
+N_{LLM,year} &= U_{year}\times n_f.
+\end{align}
+The annual direct LLM impact is obtained by scaling the per-request range:
+\begin{align}
+E_{LLM,year} &= E_{req}\times N_{LLM,year},\\
+C_{LLM,year} &= C_{req}\times N_{LLM,year},\\
+W_{LLM,year} &= W_{req}\times N_{LLM,year}.
+\end{align}
+
+Finally, let $s_i$ denote the software overhead in Wh per feature use for technical component $i$. The annual overhead of each component is:
+\begin{align}
+E_{i,year}^{soft} &= s_i \times U_{year},\\
+C_{i,year}^{soft} &= C\!\left(E_{i,year}^{soft}\right),\\
+W_{i,year}^{soft} &= W\!\left(E_{i,year}^{soft}\right),
+\end{align}
+and the total annual software overhead is the sum over all components. The final annual result returned by the tool is therefore:
+\begin{align}
+E_{total,year} &= E_{LLM,year} + \sum_i E_{i,year}^{soft},\\
+C_{total,year} &= C_{LLM,year} + \sum_i C_{i,year}^{soft},\\
+W_{total,year} &= W_{LLM,year} + \sum_i W_{i,year}^{soft}.
+\end{align}
+These equations formalize the current implementation of the API and MCP estimator and clarify the distinction between source-backed factors and derived contextualized values.
 
 \section{Research Questions}
 The transition from evidence base to operational estimation leads to four research questions:
