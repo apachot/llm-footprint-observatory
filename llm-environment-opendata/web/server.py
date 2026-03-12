@@ -147,7 +147,51 @@ def humanize_assumption(text):
     return value
 
 
-def render_math_demo(result):
+def matching_factor_rows(factor_rows, keywords):
+    matches = []
+    lowered_keywords = [keyword.lower() for keyword in keywords]
+    for row in factor_rows or []:
+        haystack = " ".join(
+            [
+                str(row.get("metric_name", "")),
+                str(row.get("metric_unit", "")),
+                str(row.get("citation", "")),
+                str(row.get("source_locator", "")),
+            ]
+        ).lower()
+        if any(keyword in haystack for keyword in lowered_keywords):
+            matches.append(row)
+    return matches
+
+
+def render_source_refs(rows):
+    refs = []
+    for index, row in enumerate(rows, start=1):
+        title = escape(
+            f"{row.get('citation', '')} | {row.get('metric_name', '')} | {row.get('source_locator', '')}"
+        )
+        href = escape(row.get("source_url", "#"), quote=True)
+        refs.append(
+            f'<a class="inline-ref" href="{href}" target="_blank" rel="noopener noreferrer" title="{title}">SRC{index}</a>'
+        )
+    return " ".join(refs)
+
+
+def render_sourced_value(value_text, rows):
+    if not rows:
+        return f"<code>{escape(value_text)}</code>"
+    title = " | ".join(
+        f"{row.get('citation', '')} - {row.get('metric_name', '')} - {row.get('source_locator', '')}" for row in rows
+    )
+    return (
+        f'<span class="sourced-value" title="{escape(title)}">'
+        f'<code>{escape(value_text)}</code>'
+        f'{render_source_refs(rows)}'
+        f"</span>"
+    )
+
+
+def render_math_demo(result, factor_rows):
     annual_llm = result["annual_llm"]
     scope = result["feature_scope"]
     assumptions = result.get("assumptions", [])
@@ -158,6 +202,9 @@ def render_math_demo(result):
     months_per_year = float(scope["months_per_year"])
     per_request = result["per_request_llm"]
     per_feature = result["per_feature_llm"]
+    energy_rows = matching_factor_rows(factor_rows, ["energy", "wh"])
+    carbon_rows = matching_factor_rows(factor_rows, ["carbon", "emission", "gco2"])
+    water_rows = matching_factor_rows(factor_rows, ["water", "ml", "liter", "litre"])
 
     return f"""
     <section class="panel math-panel">
@@ -213,73 +260,73 @@ def render_math_demo(result):
         <div class="math-card">
           <span class="math-label">Energie annuelle totale</span>
           <div class="math-formula">
-            <code>{format_range_display(annual_llm['energy_wh'], 'energy')}</code>
+            {render_sourced_value(format_range_display(annual_llm['energy_wh'], 'energy'), energy_rows)}
           </div>
           <p class="math-detail">
             Impact estime pour une requete LLM:
-            <code>{format_range_display(per_request['energy_wh'], 'energy')}</code>
+            {render_sourced_value(format_range_display(per_request['energy_wh'], 'energy'), energy_rows)}
           </p>
           <p class="math-detail">
             Impact estime pour un usage de la fonctionnalite:
-            <code>{format_range_display(per_feature['energy_wh'], 'energy')}</code>
+            {render_sourced_value(format_range_display(per_feature['energy_wh'], 'energy'), energy_rows)}
           </p>
           <p class="math-detail">
             En projetant cette valeur sur
             <code>{format_count(annual_requests)}</code> appels par an,
             on obtient:
-            <code>{format_range_display(annual_llm['energy_wh'], 'energy')}</code>
+            {render_sourced_value(format_range_display(annual_llm['energy_wh'], 'energy'), energy_rows)}
           </p>
           <p class="math-total">
             Resultat retenu pour l'energie annuelle du LLM:
-            <code>{format_range_display(annual_llm['energy_wh'], 'energy')}</code>
+            {render_sourced_value(format_range_display(annual_llm['energy_wh'], 'energy'), energy_rows)}
           </p>
         </div>
         <div class="math-card">
           <span class="math-label">Carbone annuel total</span>
           <div class="math-formula">
-            <code>{format_range_display(annual_llm['carbon_gco2e'], 'carbon')}</code>
+            {render_sourced_value(format_range_display(annual_llm['carbon_gco2e'], 'carbon'), carbon_rows)}
           </div>
           <p class="math-detail">
             Impact estime pour une requete LLM:
-            <code>{format_range_display(per_request['carbon_gco2e'], 'carbon')}</code>
+            {render_sourced_value(format_range_display(per_request['carbon_gco2e'], 'carbon'), carbon_rows)}
           </p>
           <p class="math-detail">
             Impact estime pour un usage de la fonctionnalite:
-            <code>{format_range_display(per_feature['carbon_gco2e'], 'carbon')}</code>
+            {render_sourced_value(format_range_display(per_feature['carbon_gco2e'], 'carbon'), carbon_rows)}
           </p>
           <p class="math-detail">
             En projetant cette valeur sur
             <code>{format_count(annual_requests)}</code> appels par an,
             on obtient:
-            <code>{format_range_display(annual_llm['carbon_gco2e'], 'carbon')}</code>
+            {render_sourced_value(format_range_display(annual_llm['carbon_gco2e'], 'carbon'), carbon_rows)}
           </p>
           <p class="math-total">
             Resultat retenu pour le carbone annuel du LLM:
-            <code>{format_range_display(annual_llm['carbon_gco2e'], 'carbon')}</code>
+            {render_sourced_value(format_range_display(annual_llm['carbon_gco2e'], 'carbon'), carbon_rows)}
           </p>
         </div>
         <div class="math-card">
           <span class="math-label">Eau annuelle totale</span>
           <div class="math-formula">
-            <code>{format_range_display(annual_llm['water_ml'], 'water')}</code>
+            {render_sourced_value(format_range_display(annual_llm['water_ml'], 'water'), water_rows)}
           </div>
           <p class="math-detail">
             Impact estime pour une requete LLM:
-            <code>{format_range_display(per_request['water_ml'], 'water')}</code>
+            {render_sourced_value(format_range_display(per_request['water_ml'], 'water'), water_rows)}
           </p>
           <p class="math-detail">
             Impact estime pour un usage de la fonctionnalite:
-            <code>{format_range_display(per_feature['water_ml'], 'water')}</code>
+            {render_sourced_value(format_range_display(per_feature['water_ml'], 'water'), water_rows)}
           </p>
           <p class="math-detail">
             En projetant cette valeur sur
             <code>{format_count(annual_requests)}</code> appels par an,
             on obtient:
-            <code>{format_range_display(annual_llm['water_ml'], 'water')}</code>
+            {render_sourced_value(format_range_display(annual_llm['water_ml'], 'water'), water_rows)}
           </p>
           <p class="math-total">
             Resultat retenu pour l'eau annuelle du LLM:
-            <code>{format_range_display(annual_llm['water_ml'], 'water')}</code>
+            {render_sourced_value(format_range_display(annual_llm['water_ml'], 'water'), water_rows)}
           </p>
         </div>
       </div>
@@ -431,7 +478,7 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
           </div>
         </section>
 
-        {render_math_demo(result)}
+        {render_math_demo(result, factor_rows)}
 
         <section class="panel summary-panel">
           <div class="summary-header">
@@ -753,6 +800,26 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
       border: 1px solid var(--line);
       border-radius: 0.45rem;
       padding: 0.2rem 0.4rem;
+    }}
+    .sourced-value {{
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      flex-wrap: wrap;
+    }}
+    .inline-ref {{
+      display: inline-block;
+      padding: 0.1rem 0.38rem;
+      border-radius: 999px;
+      background: rgba(13,110,253,0.1);
+      color: var(--accent);
+      font-size: 0.74rem;
+      font-weight: 700;
+      text-decoration: none;
+    }}
+    .inline-ref:hover {{
+      background: rgba(13,110,253,0.18);
+      text-decoration: none;
     }}
     .math-card p {{
       margin: 0;
