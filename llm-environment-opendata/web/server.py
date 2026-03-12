@@ -595,6 +595,8 @@ def factor_details(records, factor_ids):
             continue
         rows.append(
             {
+                "record_id": record["record_id"],
+                "study_key": record.get("study_key", ""),
                 "metric_name": record["metric_name"],
                 "metric_value": record["metric_value"],
                 "metric_unit": record["metric_unit"],
@@ -642,6 +644,7 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
         </section>
         """
 
+    reference_block = render_reference_catalog()
     result_block = ""
     if result:
         annual = result["annual_llm"]
@@ -681,8 +684,6 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
         </section>
 
         {render_math_demo(result, factor_rows)}
-
-        {render_reference_catalog()}
         """
 
     return f"""<!doctype html>
@@ -1054,6 +1055,7 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
     </form>
     {error_block}
     {result_block}
+    {reference_block}
   </main>
   <script>
     const estimateForm = document.getElementById('estimate-form');
