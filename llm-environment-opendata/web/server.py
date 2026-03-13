@@ -3,6 +3,7 @@ from datetime import datetime
 import json
 import re
 import sys
+from email.utils import formatdate
 from functools import lru_cache
 from html import escape
 from http.server import BaseHTTPRequestHandler, HTTPServer
@@ -21,6 +22,7 @@ from core.estimator import (
     estimate_feature_externalities,
     get_record,
     load_country_energy_mix,
+    load_market_models,
     load_models,
     load_records,
     wh_to_gco2e,
@@ -34,11 +36,172 @@ from core.openai_parser import (
 )
 
 
-PROJECT_NAME = "EcoTrace LLM"
+PROJECT_NAME = "LLM Environment Open Data"
 BIB_PATH = ROOT.parent / "llm-environment-opendata-paper" / "references_llm_environment_opendata.bib"
 ANALYSIS_LOG_PATH = ROOT / "data" / "analysis_runs.json"
+PAPER_TEX_PATH = ROOT.parent / "llm-environment-opendata-paper" / "llm_environment_opendata_paper.tex"
+PAPER_PDF_PATH = ROOT.parent / "llm-environment-opendata-paper" / "llm_environment_opendata_paper.pdf"
 REFERENCE_PAGE_TOKENS = 750.0
 DEFAULT_PROMPT_TOKENS = 1550.0
+PROJECT_PAPER_BIBTEX = """@misc{llm_environment_open_data_2026,
+  title = {An Open Tool for Exploring and Estimating the Environmental Footprint of Large Language Models: Dataset, Observatory, API, MCP Server, and Web Interface},
+  author = {Pachot, Arnault and Petit, Thierry},
+  year = {2026},
+  month = mar,
+  note = {Working paper},
+  url = {https://github.com/apachot/Publications-scientifiques}
+}"""
+SITE_CONTEXT_REFERENCES = [
+    {
+        "key": "brysbaert2019",
+        "category": "Méthodologie d'usage",
+        "citation": "Brysbaert, M. (2019). How many words do we read per minute? A review and meta-analysis of reading rate. Journal of Memory and Language, 109, 104047. https://www.sciencedirect.com/science/article/pii/S0749596X19300786",
+        "url": "https://www.sciencedirect.com/science/article/pii/S0749596X19300786",
+    },
+    {
+        "key": "icct2025cars",
+        "category": "Repère de comparaison",
+        "citation": "International Council on Clean Transportation. (2025). Life-cycle greenhouse gas emissions from passenger cars in the European Union: A 2025 update and key factors to consider. https://theicct.org/publication/electric-cars-life-cycle-analysis-emissions-europe-jul25/",
+        "url": "https://theicct.org/publication/electric-cars-life-cycle-analysis-emissions-europe-jul25/",
+    },
+    {
+        "key": "gosslingklower2026aviation",
+        "category": "Repère de comparaison",
+        "citation": "Gössling, S., Klöwer, M., Leitão, J. C., Hirsch, S., Brockhagen, D., & Humpe, A. (2026). Large carbon dioxide emissions avoidance potential in improved commercial air transport efficiency. Communications Earth & Environment, 7, 13. https://www.nature.com/articles/s43247-025-03069-4",
+        "url": "https://www.nature.com/articles/s43247-025-03069-4",
+    },
+    {
+        "key": "purdue_extension_energy",
+        "category": "Repère de comparaison",
+        "citation": "Carroll, N. J., & Kruse, J. (n.d.). Energy investigators 2: Facilitator’s guide. Purdue Extension. https://www.extension.purdue.edu/extmedia/4H/4-H-1015-W.pdf",
+        "url": "https://www.extension.purdue.edu/extmedia/4H/4-H-1015-W.pdf",
+    },
+    {
+        "key": "inc2019serviceeau",
+        "category": "Repère de comparaison",
+        "citation": "Institut national de la consommation. (2019, October 31). Le service de l'eau. https://www.inc-conso.fr/content/le-service-de-leau",
+        "url": "https://www.inc-conso.fr/content/le-service-de-leau",
+    },
+    {
+        "key": "inc2016salledebains",
+        "category": "Repère de comparaison",
+        "citation": "Institut national de la consommation. (2016, March 21). L'eau du robinet dans la salle de bains. https://www.inc-conso.fr/content/leau-du-robinet-dans-la-salle-de-bains",
+        "url": "https://www.inc-conso.fr/content/leau-du-robinet-dans-la-salle-de-bains",
+    },
+    {
+        "key": "anses2020eau",
+        "category": "Repère de comparaison",
+        "citation": "Anses. (2020, September 18). Eau en bouteille ou eau du robinet : bonnes pratiques de consommation. https://www.anses.fr/fr/content/eau-de-boisson-bonnes-pratiques-de-consommation",
+        "url": "https://www.anses.fr/fr/content/eau-de-boisson-bonnes-pratiques-de-consommation",
+    },
+    {
+        "key": "ademe2026eau",
+        "category": "Repère de comparaison",
+        "citation": "ADEME. (n.d.). 10 conseils pour faire des économies d’eau à la maison. Agir pour la transition écologique. https://agirpourlatransition.ademe.fr/particuliers/maison/economies-denergie-deau/comment-reduire-consommation-facture-deau",
+        "url": "https://agirpourlatransition.ademe.fr/particuliers/maison/economies-denergie-deau/comment-reduire-consommation-facture-deau",
+    },
+    {
+        "key": "rte2022bilan",
+        "category": "Repère de comparaison",
+        "citation": "RTE. (2022, February 25). Bilan électrique 2021 - Une production d’électricité assurée à plus de 92% par des sources n’émettant pas de gaz à effet de serre. https://www.rte-france.com/actualites/bilan-electrique-2021",
+        "url": "https://www.rte-france.com/actualites/bilan-electrique-2021",
+    },
+    {
+        "key": "macknick2011water",
+        "category": "Méthodologie eau-électricité",
+        "citation": "Macknick, J., Newmark, R., Heath, G., & Hallett, K. C. (2011). A review of operational water consumption and withdrawal factors for electricity generating technologies. Environmental Research Letters, 7(4), 045802. https://iopscience.iop.org/article/10.1088/1748-9326/7/4/045802",
+        "url": "https://iopscience.iop.org/article/10.1088/1748-9326/7/4/045802",
+    },
+    {
+        "key": "meldrum2013water",
+        "category": "Méthodologie eau-électricité",
+        "citation": "Meldrum, J., Nettles-Anderson, S., Heath, G., & Macknick, J. (2013). Life cycle water use for electricity generation: A review and harmonization of literature estimates. Environmental Research Letters, 8(1), 015031. https://iopscience.iop.org/article/10.1088/1748-9326/8/1/015031",
+        "url": "https://iopscience.iop.org/article/10.1088/1748-9326/8/1/015031",
+    },
+]
+
+REAL_WORLD_INDICATOR_ROWS = [
+    {
+        "domain": "Energy",
+        "indicator": "Fluorescent lamp for 1 hour",
+        "value": "9,3 Wh",
+        "citation": "Carroll, N. J., & Kruse, J. (n.d.). Energy investigators 2: Facilitator’s guide. Purdue Extension. https://www.extension.purdue.edu/extmedia/4H/4-H-1015-W.pdf",
+        "locator": "Purdue Extension guide used for household-use examples; extraction still to be normalized more precisely.",
+        "url": "https://www.extension.purdue.edu/extmedia/4H/4-H-1015-W.pdf",
+    },
+    {
+        "domain": "Energy",
+        "indicator": "Laptop for 1 hour",
+        "value": "32 Wh",
+        "citation": "Carroll, N. J., & Kruse, J. (n.d.). Energy investigators 2: Facilitator’s guide. Purdue Extension. https://www.extension.purdue.edu/extmedia/4H/4-H-1015-W.pdf",
+        "locator": "Purdue Extension guide used for household-use examples; extraction still to be normalized more precisely.",
+        "url": "https://www.extension.purdue.edu/extmedia/4H/4-H-1015-W.pdf",
+    },
+    {
+        "domain": "Energy",
+        "indicator": "Electric space heater for 1 hour",
+        "value": "1.5 kWh",
+        "citation": "Project calculation convention.",
+        "locator": "Nominal power assumption fixed at 1,500 W, i.e. 1.5 kWh for 1 hour.",
+        "url": "",
+    },
+    {
+        "domain": "Energy",
+        "indicator": "10,000 French households over one year of domestic use",
+        "value": "25 GWh",
+        "citation": "RTE. (2022, February 25). Bilan électrique 2021 - Une production d’électricité assurée à plus de 92% par des sources n’émettant pas de gaz à effet de serre. https://www.rte-france.com/actualites/bilan-electrique-2021",
+        "locator": "Project convention based on an average consumption of 2,500 kWh/year per household; comparison value made explicit in the training-chart note.",
+        "url": "https://www.rte-france.com/actualites/bilan-electrique-2021",
+    },
+    {
+        "domain": "Carbon",
+        "indicator": "Average internal-combustion car",
+        "value": "235 gCO2e/km",
+        "citation": "International Council on Clean Transportation. (2025). Life-cycle greenhouse gas emissions from passenger cars in the European Union: A 2025 update and key factors to consider. https://theicct.org/publication/electric-cars-life-cycle-analysis-emissions-europe-jul25/",
+        "locator": "Key findings ; Figure 1 ; gasoline ICEV running on the average blend of fossil gasoline and ethanol estimated at 235 gCO2e/km.",
+        "url": "https://theicct.org/publication/electric-cars-life-cycle-analysis-emissions-europe-jul25/",
+    },
+    {
+        "domain": "Carbon",
+        "indicator": "Average full commercial flight (derived value)",
+        "value": "≈ 21.1 tCO2 per flight",
+        "citation": "Gössling, S., Klöwer, M., Leitão, J. C., Hirsch, S., Brockhagen, D., & Humpe, A. (2026). Large carbon dioxide emissions avoidance potential in improved commercial air transport efficiency. Communications Earth & Environment, 7, 13. https://www.nature.com/articles/s43247-025-03069-4",
+        "locator": "Results, “Emissions and efficiency”: 27,451,887 flights in 2023 causing 577,968,750 tCO2 emissions; the site then derives an average per flight.",
+        "url": "https://www.nature.com/articles/s43247-025-03069-4",
+    },
+    {
+        "domain": "Water",
+        "indicator": "Shower",
+        "value": "9 L/min",
+        "citation": "ADEME. (n.d.). La Clef Verte. Agir pour la transition écologique. https://agirpourlatransition.ademe.fr/particuliers/mieux-consommer/mieux-choisir/labels-environnementaux/hebergement/gite-chambre-hotes-la-clef-verte",
+        "locator": "Mandatory criteria: “100% of showers: 9 liters/minute”.",
+        "url": "https://agirpourlatransition.ademe.fr/particuliers/mieux-consommer/mieux-choisir/labels-environnementaux/hebergement/gite-chambre-hotes-la-clef-verte",
+    },
+    {
+        "domain": "Water",
+        "indicator": "4 to 5 minute shower",
+        "value": "30 to 80 L",
+        "citation": "Institut national de la consommation. (2016, March 21). L'eau du robinet dans la salle de bains. https://www.inc-conso.fr/content/leau-du-robinet-dans-la-salle-de-bains",
+        "locator": "Section “1 - Prefer alternating showers and baths”: “A 4 to 5 minute shower consumes 30 to 80 liters of water”.",
+        "url": "https://www.inc-conso.fr/content/leau-du-robinet-dans-la-salle-de-bains",
+    },
+    {
+        "domain": "Water",
+        "indicator": "Bath",
+        "value": "150 to 200 L",
+        "citation": "Institut national de la consommation. (2016, March 21). L'eau du robinet dans la salle de bains. https://www.inc-conso.fr/content/leau-du-robinet-dans-la-salle-de-bains",
+        "locator": "Section “1 - Prefer alternating showers and baths”: “a bath 150 to 200 liters”.",
+        "url": "https://www.inc-conso.fr/content/leau-du-robinet-dans-la-salle-de-bains",
+    },
+    {
+        "domain": "Water",
+        "indicator": "Average daily water consumption per person in France",
+        "value": "148 L/day",
+        "citation": "ADEME. (n.d.). Nos conseils pour économiser l'eau à la maison. Agir pour la transition écologique. https://agirpourlatransition.ademe.fr/particuliers/maison/economies-denergie-deau/comment-reduire-consommation-facture-deau",
+        "locator": "Section “Did you know?”: “On average, in France, we consume 148 liters of water per person each day.”",
+        "url": "https://agirpourlatransition.ademe.fr/particuliers/maison/economies-denergie-deau/comment-reduire-consommation-facture-deau",
+    },
+]
 
 
 def normalize_model_label(value):
@@ -171,6 +334,23 @@ def format_reference_parameters(value):
     return raw
 
 
+def is_estimated_parameter_status(value):
+    return str(value or "").strip().lower() == "estimated"
+
+
+def format_parameter_billions(value, estimated=False):
+    raw = str(value or "").strip()
+    if not raw:
+        return "n.d."
+    suffix = "*" if estimated else ""
+    return f"{raw}B{suffix}"
+
+
+def obfuscate_email(value):
+    text = str(value or "").strip()
+    return "".join(f"&#{ord(char)};" for char in text)
+
+
 def html_id_attr(value):
     if not value:
         return ""
@@ -193,8 +373,8 @@ def classify_evidence_level(parsed_payload, factor_rows):
     if not normalized_model or normalized_model in {"unknown", "generic"}:
         return {
             "level": "proxy_scientifique",
-            "label": "Proxy scientifique",
-            "description": "L'estimation repose sur des facteurs de littérature applicables a une famille d'usages, sans mesure attribuable a un modele cible specifique.",
+            "label": "Scientific proxy",
+            "description": "The estimate relies on literature factors applicable to a family of uses, without a measurement attributable to one specific target model.",
         }
 
     direct_match = False
@@ -225,19 +405,19 @@ def classify_evidence_level(parsed_payload, factor_rows):
     if direct_match:
         return {
             "level": "mesure_directe",
-            "label": "Mesure directe",
-            "description": "Au moins un facteur selectionne correspond explicitement au modele mentionne dans la demande.",
+            "label": "Direct measurement",
+            "description": "At least one selected factor explicitly matches the model mentioned in the request.",
         }
     if family_match:
         return {
             "level": "proxy_scientifique",
-            "label": "Proxy scientifique",
-            "description": "Les facteurs retenus sont proches de la famille de service ou du fournisseur mentionne, mais ne constituent pas une mesure directe du modele cible.",
+            "label": "Scientific proxy",
+            "description": "The retained factors are close to the service family or provider mentioned, but do not constitute a direct measurement of the target model.",
         }
     return {
         "level": "extrapolation",
         "label": "Extrapolation",
-        "description": "Aucune mesure directe du modele cible n'est disponible dans le corpus mobilise; l'estimation est derivee de facteurs de reference et d'ajustements de contexte.",
+        "description": "No direct measurement of the target model is available in the corpus used; the estimate is derived from reference factors and contextual adjustments.",
     }
 
 
@@ -331,29 +511,32 @@ def format_count(value):
 def humanize_assumption(text):
     value = str(text)
     replacements = {
-        "Parametric extrapolation enabled for target model": "Extrapolation parametrique appliquee au modele cible",
-        "Reference inference scaling derived from Ren et al. 2024 with page-level measurements at": "Mise a l'echelle fondee sur Ren et al. (2024), a partir de mesures par page de",
-        "Token scaling applied relative to": "Ajustement realise en fonction du volume de tokens, avec une reference de",
-        "Carbon contextualized using country electricity carbon intensity": "Les emissions carbone sont ajustées avec l'intensite carbone du mix electrique du pays retenu.",
-        "Water contextualized using country electricity water intensity": "La consommation d'eau est ajustée avec l'intensite hydrique du mix electrique retenu.",
-        "Request type classified as": "Type d'usage interprete comme",
-        "Country mix fallback applied for": "Mix electrique par defaut applique pour",
-        "Carbon and water recalculated with the publisher-country mix for": "Le calcul carbone/eau utilise le mix electrique du pays de l'editeur pour",
-        "because the model is treated as a proprietary hosted service": "car le modele est traite comme un service proprietaire heberge.",
-        "Carbon and water recalculated with the project country mix for": "Le calcul carbone/eau utilise le mix electrique du pays du projet pour",
-        "because the model is treated as open-weight or self-hosted": "car le modele est traite comme open weight ou auto-heberge.",
-        "Page-based method anchored on the nearest available source model in parameter count:": "La methode par page retient comme ancrage le modele le plus proche en nombre de parametres :",
-        "Final central result uses the prompt-based method only because no empirical prompt-to-page conversion is available and the target model is treated as a hosted proprietary service": "Le resultat central final utilise uniquement la methode par prompt, car aucune conversion empirique prompt-vers-page n'est disponible et le modele cible est traite comme un service proprietaire heberge.",
-        "Final central result uses the page-based method only because no empirical prompt-to-page conversion is available and the target model is treated as open-weight or self-hosted": "Le resultat central final utilise uniquement la methode par page, car aucune conversion empirique prompt-vers-page n'est disponible et le modele cible est traite comme open weight ou auto-heberge.",
-        "Final central result averages the available inference methods": "Le resultat central final moyenne les methodes d'inference disponibles.",
-        "Unified inference model calibrated from the nearest literature energy anchor after harmonizing the observed value to Wh per request": "Le modele d'inference utilise l'ancrage energetique de la litterature le plus proche, harmonise en Wh par requete.",
-        "Nearest calibration anchor:": "Ancrage de calibration le plus proche :",
-        "LLM request(s) per feature use": "appel(s) au LLM par usage de la fonctionnalite",
-        "feature uses per year": "usages annuels de la fonctionnalite",
-        "A page calibration is computed from the mean Wh per parameter observed in page-generation inference records": "La methode par page est calculee a partir de la moyenne des intensites energetiques Wh/parametre observees dans les publications par page.",
-        "Page-family annualization uses generated page equivalents, with": "L'annualisation de la methode par page repose sur des pages equivalentes generees, avec",
-        "tokens per reference page when no explicit page count is provided": "tokens par page de reference lorsqu'aucun nombre de pages n'est fourni.",
-        "Page-family method marked as not applicable for this scenario by the parser": "La methode par page a ete jugee non pertinente pour ce scenario par l'interpretation du cas d'usage.",
+        "Parametric extrapolation enabled for target model": "Parametric extrapolation applied to the target model",
+        "Reference inference scaling derived from Ren et al. 2024 with page-level measurements at": "Scaling derived from Ren et al. (2024), using page-level measurements at",
+        "Token scaling applied relative to": "Token scaling applied relative to",
+        "Energy is treated as the primary quantity; carbon and water are derived from the electricity mix of the retained country": "Energy is the primary quantity, and carbon is contextualized with the retained electricity mix.",
+        "Carbon contextualized using country electricity carbon intensity": "Carbon emissions are adjusted using the retained country's electricity carbon intensity.",
+        "Carbon adjusted using provided electricity carbon intensity": "Carbon emissions are recalculated using the provided electricity carbon intensity.",
+        "Water contextualized using country electricity water intensity": "Electricity water intensity remains part of the method context but is not shown in the personalized result.",
+        "Water adjusted using provided electricity water intensity": "Provided electricity water intensity remains part of the method context but is not shown in the personalized result.",
+        "Request type classified as": "Request type classified as",
+        "Country mix fallback applied for": "Default electricity mix applied for",
+        "Carbon and water recalculated with the publisher-country mix for": "Carbon is recalculated using the publisher-country electricity mix for",
+        "because the model is treated as a proprietary hosted service": "because the model is treated as a hosted proprietary service.",
+        "Carbon and water recalculated with the project country mix for": "Carbon is recalculated using the project-country electricity mix for",
+        "because the model is treated as open-weight or self-hosted": "because the model is treated as open-weight or self-hosted.",
+        "Page-based method anchored on the nearest available source model in parameter count:": "Page-based method anchored on the nearest available source model by parameter count:",
+        "Final central result uses the prompt-based method only because no empirical prompt-to-page conversion is available and the target model is treated as a hosted proprietary service": "The final central result uses only the prompt-based method because no empirical prompt-to-page conversion is available and the target model is treated as a hosted proprietary service.",
+        "Final central result uses the page-based method only because no empirical prompt-to-page conversion is available and the target model is treated as open-weight or self-hosted": "The final central result uses only the page-based method because no empirical prompt-to-page conversion is available and the target model is treated as open-weight or self-hosted.",
+        "Final central result averages the available inference methods": "The final central result averages the available inference methods.",
+        "Unified inference model calibrated from the nearest literature energy anchor after harmonizing the observed value to Wh per request": "Unified inference model calibrated from the nearest literature energy anchor after harmonizing the observed value to Wh per request.",
+        "Nearest calibration anchor:": "Nearest calibration anchor:",
+        "LLM request(s) per feature use": "LLM request(s) per feature use",
+        "feature uses per year": "feature uses per year",
+        "A page calibration is computed from the mean Wh per parameter observed in page-generation inference records": "A page calibration is computed from the mean Wh per parameter observed in page-generation inference records.",
+        "Page-family annualization uses generated page equivalents, with": "Page-family annualization uses generated page equivalents, with",
+        "tokens per reference page when no explicit page count is provided": "tokens per reference page when no explicit page count is provided.",
+        "Page-family method marked as not applicable for this scenario by the parser": "The page-family method was marked as not applicable for this scenario by the parser.",
     }
     for source, target in replacements.items():
         if source in value:
@@ -450,9 +633,9 @@ def render_extrapolation_details(result, metric_label, source_rows):
         formatted_source = f"{source_value} {source_unit}".strip()
         formatted_extrapolated = format_value_display(extrapolated_value, metric_label if metric_label != "carbon" else "carbon")
         detail_lines.append(
-            f"<li><strong>{escape(anchor.get('source_model', 'modele source'))}</strong> : valeur d'origine "
-            f"<code>{escape(formatted_source)}</code>{citation_link} × facteur applique <code>{factor_value:.3f}</code> "
-            f"= valeur extrapolee <code>{escape(formatted_extrapolated)}</code></li>"
+            f"<li><strong>{escape(anchor.get('source_model', 'source model'))}</strong>: source value "
+            f"<code>{escape(formatted_source)}</code>{citation_link} x applied factor <code>{factor_value:.3f}</code> "
+            f"= extrapolated value <code>{escape(formatted_extrapolated)}</code></li>"
         )
 
     if not detail_lines:
@@ -483,7 +666,7 @@ def render_metric_detail(result, factor_rows, metric_label, title):
     <details class="metric-detail">
       <summary class="metric-detail-toggle">
         <span class="metric-detail-icon" aria-hidden="true">+</span>
-        <span>Voir le détail du calcul</span>
+        <span>See calculation details</span>
       </summary>
       <div class="metric-detail-body">
         <p class="math-detail">
@@ -492,16 +675,16 @@ def render_metric_detail(result, factor_rows, metric_label, title):
         </p>
         {render_extrapolation_details(result, metric_label, source_rows)}
         <p class="math-detail">
-          Impact estime pour une requete LLM :
+          Estimated impact per LLM request:
           <code>{escape(format_range_display(per_request[unit_key], metric_label))}</code>
         </p>
         <p class="math-detail">
-          Impact estime pour un usage de la fonctionnalite :
+          Estimated impact per feature use:
           <code>{escape(format_range_display(per_feature[unit_key], metric_label))}</code>
         </p>
         <p class="math-detail">
-          En projetant cette valeur sur <code>{format_count(annual_requests)}</code> appels par an,
-          on obtient <code>{escape(format_range_display(annual_llm[unit_key], metric_label))}</code>.
+          Projected across <code>{format_count(annual_requests)}</code> calls per year,
+          this gives <code>{escape(format_range_display(annual_llm[unit_key], metric_label))}</code>.
         </p>
       </div>
     </details>
@@ -514,12 +697,26 @@ def render_assumptions_summary(result):
         return ""
     return f"""
     <div class="assumptions-box assumptions-box-compact">
-      <span class="math-label">Hypotheses retenues</span>
+      <span class="math-label">Retained assumptions</span>
       <ul class="assumptions-list">
         {''.join(f'<li>{escape(humanize_assumption(item))}</li>' for item in assumptions)}
       </ul>
     </div>
     """
+
+
+def translate_method_text(value):
+    text = str(value or "")
+    replacements = {
+        "Moyenne Wh/prompt|requête": "Average Wh/prompt|request",
+        "Moyenne Wh/page": "Average Wh/page",
+        "Moyenne des intensités énergétiques Wh/paramètre calibrées sur les ancrages prompt/requête.": "Average Wh/parameter energy intensities calibrated on prompt/request anchors.",
+        "Moyenne des intensités énergétiques Wh/paramètre calibrées sur les ancrages page.": "Average Wh/parameter energy intensities calibrated on page anchors.",
+        "Wh/prompt|requête": "Wh/prompt|request",
+    }
+    for source, target in replacements.items():
+        text = text.replace(source, target)
+    return text
 
 
 def format_scalar(value, decimals=3):
@@ -598,9 +795,8 @@ def build_method_modal_body(method):
     token_ratio = method.get("token_ratio")
     page_ratio = method.get("page_ratio")
     target_mix = method.get("target_mix") or {}
-    target_country = target_mix.get("country_name") or method.get("target_country") or "non spécifié"
+    target_country = target_mix.get("country_name") or method.get("target_country") or "not specified"
     target_carbon = method.get("target_grid_carbon_intensity")
-    target_water = method.get("target_water_intensity")
     detail = method.get("detail", {})
     factor_rows = method.get("factor_rows") or []
     row_by_id = {row.get("record_id"): row for row in factor_rows}
@@ -615,33 +811,33 @@ def build_method_modal_body(method):
         token_source_note = detail.get("token_source_note")
         annual_multiplier = detail.get("annual_multiplier", annual_requests)
         annualization_sentence = (
-            f"<p>Le volume annuel d'appels est calculé par :</p>"
+            f"<p>The annual call volume is calculated as:</p>"
             f"<p>\\["
             f"N_{{appels/an}} = {format_count(feature_uses_per_month)} \\times {format_scalar(months_per_year, 0)} \\times {format_scalar(requests_per_feature, 0)} = {format_count(annual_requests)}"
             f"\\]</p>"
         )
         if family == "page":
-            source_note = "issus de la description utilisateur" if token_source_note in {"user_tokens", "parser_page_equivalent", "output_tokens"} else "valeur par défaut du projet"
+            source_note = "derived from the user description" if token_source_note in {"user_tokens", "parser_page_equivalent", "output_tokens"} else "project default value"
             annualization_sentence += (
-                f"<p>Pour la famille <code>Wh/page</code>, le moteur convertit ensuite les sorties en pages équivalentes :</p>"
+                f"<p>For the <code>Wh/page</code> family, the engine then converts outputs into page equivalents:</p>"
                 f"<p>\\["
                 f"P_{{eq/appel}} = \\frac{{{format_scalar(standard_request.get('output_tokens', 0), 0)}}}{{{format_scalar(reference_page_tokens, 0)}}} = {format_scalar(pages_per_request_equivalent, 3)}"
                 f"\\]</p>"
-                f"<p>Cette conversion repose sur {source_note}.</p>"
+                f"<p>This conversion is based on {source_note}.</p>"
                 f"<p>\\["
                 f"P_{{eq/an}} = {format_count(annual_requests)} \\times {format_scalar(pages_per_request_equivalent, 3)} = {format_count(annual_page_equivalents)}"
                 f"\\]</p>"
             )
         else:
             annualization_sentence += (
-                "<p>Dans la famille <code>Wh/prompt|requête</code>, une requête LLM correspond directement à une unité d'inférence. "
-                "L'annualisation repose donc sur le nombre d'appels LLM par an.</p>"
+                "<p>In the <code>Wh/prompt|request</code> family, one LLM request directly corresponds to one inference unit. "
+                "Annualization therefore relies on the number of LLM calls per year.</p>"
             )
         sections.append(
             f"""
             <div class="method-modal-section">
-              <div class="math-label">1. Données d'entrée du scénario</div>
-              <p>Le scénario interprété retient <code>{format_scalar(standard_request.get('input_tokens', 0), 0)}</code> tokens en entrée et <code>{format_scalar(standard_request.get('output_tokens', 0), 0)}</code> tokens en sortie par appel.</p>
+              <div class="math-label">1. Scenario input data</div>
+              <p>The interpreted scenario uses <code>{format_scalar(standard_request.get('input_tokens', 0), 0)}</code> input tokens and <code>{format_scalar(standard_request.get('output_tokens', 0), 0)}</code> output tokens per call.</p>
               {annualization_sentence}
             </div>
             """
@@ -654,13 +850,13 @@ def build_method_modal_body(method):
                 f"""
                 <li>
                   <p><strong>{escape(anchor.get('source_model', 'source'))}</strong> {ref}</p>
-                  <p>Valeur observée dans la littérature : <code>{escape(anchor.get('source_energy', 'n.d.'))}</code> {ref}</p>
-                  <p>Nombre de paramètres source : <code>{format_scalar(anchor.get('source_params'))}B</code>. Nombre de paramètres cible : <code>{format_scalar(anchor.get('target_params'))}B</code>.</p>
-                  <p>Facteur paramétrique appliqué :</p>
+                  <p>Observed literature value: <code>{escape(anchor.get('source_energy', 'n.d.'))}</code> {ref}</p>
+                  <p>Source parameter count: <code>{format_scalar(anchor.get('source_params'))}B</code>. Target parameter count: <code>{format_scalar(anchor.get('target_params'))}B</code>.</p>
+                  <p>Applied parameter factor:</p>
                   <p>\\[
                   r_P = \\frac{{P_t}}{{P_s}} = \\frac{{{format_scalar(anchor.get('target_params'))}}}{{{format_scalar(anchor.get('source_params'))}}} = {format_scalar(anchor.get('parameter_factor'), 4)}
                   \\]</p>
-                  <p>Énergie extrapolée pour une unité d'inférence :</p>
+                  <p>Extrapolated energy for one inference unit:</p>
                   <p>\\[
                   E_t = E_s \\times r_P = {escape(anchor.get('source_energy', 'n.d.'))} \\times {format_scalar(anchor.get('parameter_factor'), 4)} = {escape(format_range_display(anchor.get('per_request_energy', {'low':0,'high':0}), 'energy'))}
                   \\]</p>
@@ -670,29 +866,27 @@ def build_method_modal_body(method):
         sections.append(
             f"""
             <div class="method-modal-section">
-              <div class="math-label">2. Ancrages de littérature et extrapolation</div>
-              <p>La méthode part des valeurs énergétiques publiées dans la littérature pour la famille <code>{escape(detail.get('unit_basis', 'Wh'))}</code>, puis applique une mise à l'échelle par le nombre de paramètres.</p>
+              <div class="math-label">2. Literature anchors and extrapolation</div>
+              <p>The method starts from literature energy values published for the <code>{escape(detail.get('unit_basis', 'Wh'))}</code> family, then applies scaling by parameter count.</p>
               <ul class="extrapolation-list">{''.join(anchor_lines) or '<li>n.d.</li>'}</ul>
-              <p>Lorsque plusieurs ancrages existent dans la même famille, le moteur calcule ensuite une moyenne des intensités énergétiques par milliard de paramètres pour obtenir la valeur centrale affichée dans le bloc résultat.</p>
+              <p>When several anchors exist in the same family, the engine computes an average energy intensity per billion parameters to obtain the central value shown in the result block.</p>
             </div>
             """
         )
         sections.append(
             f"""
             <div class="method-modal-section">
-              <div class="math-label">3. Dérivation CO2 et eau à partir du mix pays</div>
-              <p>Le carbone et l'eau ne sont pas repris tels quels depuis la littérature. Ils sont dérivés de l'énergie extrapolée avec le mix électrique du pays retenu, ici <strong>{escape(target_country)}</strong>.</p>
+              <div class="math-label">3. Carbon derivation from the country mix</div>
+              <p>Carbon is not reused directly from the literature. It is derived from extrapolated energy using the retained country electricity mix, here <strong>{escape(target_country)}</strong>.</p>
               <p>\\[
               CO2_{{unitaire}} = \\frac{{E_{{unitaire}}}}{{1000}} \\times CI_c
-              \\qquad
-              Water_{{unitaire}} = \\frac{{E_{{unitaire}}}}{{1000}} \\times WI_c \\times 1000
               \\]</p>
-              <p>Avec \\(CI_c = {format_scalar(target_carbon)}\\ \\text{{gCO2e/kWh}}\\) et \\(WI_c = {format_scalar(target_water)}\\ \\text{{L/kWh}}\\).</p>
-              <p>Le résultat unitaire retenu pour cette méthode conduit ensuite aux valeurs annualisées suivantes : énergie <code>{escape(method['energy'])}</code>, carbone <code>{escape(method['carbon'])}</code>, eau <code>{escape(method['water'])}</code>.</p>
+              <p>Avec \\(CI_c = {format_scalar(target_carbon)}\\ \\text{{gCO2e/kWh}}\\).</p>
+              <p>The unit result retained for this method then leads to the following annualized values: energy <code>{escape(method['energy'])}</code> and carbon <code>{escape(method['carbon'])}</code>.</p>
             </div>
             <div class="method-modal-section">
-              <div class="math-label">4. Annualisation finale</div>
-              <p>La projection annuelle finale repose sur <code>{format_count(annual_multiplier)}</code> unité(s) d'inférence par an.</p>
+              <div class="math-label">4. Final annualization</div>
+              <p>The final annual projection is based on <code>{format_count(annual_multiplier)}</code> inference unit(s) per year.</p>
               <p>\\[
               Impact_{{annuel}} = Impact_{{unitaire}} \\times N_{{annuel}}
               \\]</p>
@@ -704,9 +898,9 @@ def build_method_modal_body(method):
     sections.append(
         f"""
         <div class="method-modal-section">
-          <div class="math-label">1. Annualisation des appels</div>
-          <p><code>{format_count(feature_uses_per_month)}</code> usages/mois × <code>{format_scalar(months_per_year, 0)}</code> mois = <code>{format_count(annual_feature_uses)}</code> usages/an</p>
-          <p><code>{format_count(annual_feature_uses)}</code> usages/an × <code>{format_scalar(requests_per_feature, 0)}</code> appel(s) LLM/usage = <code>{format_count(annual_requests)}</code> appels LLM/an</p>
+          <div class="math-label">1. Call annualization</div>
+          <p><code>{format_count(feature_uses_per_month)}</code> uses/month × <code>{format_scalar(months_per_year, 0)}</code> months = <code>{format_count(annual_feature_uses)}</code> uses/year</p>
+          <p><code>{format_count(annual_feature_uses)}</code> uses/year × <code>{format_scalar(requests_per_feature, 0)}</code> LLM call(s)/use = <code>{format_count(annual_requests)}</code> LLM calls/year</p>
         </div>
         """
     )
@@ -719,32 +913,25 @@ def build_method_modal_body(method):
         carbon_note = ""
         if anchor.get("source_carbon_intensity") is not None and target_carbon is not None:
             carbon_note = (
-                f" intensité source ≈ \\({format_scalar(anchor['source_carbon_intensity'])}\\ \\text{{gCO2e/kWh}}\\) "
-                f"remplacée par \\({format_scalar(target_carbon)}\\ \\text{{gCO2e/kWh}}\\)"
-            )
-        water_note = ""
-        if anchor.get("source_water_intensity") is not None and target_water is not None:
-            water_note = (
-                f" intensité source ≈ \\({format_scalar(anchor['source_water_intensity'])}\\ \\text{{L/kWh}}\\) "
-                f"remplacée par \\({format_scalar(target_water)}\\ \\text{{L/kWh}}\\)"
+                f" source intensity ≈ \\({format_scalar(anchor['source_carbon_intensity'])}\\ \\text{{gCO2e/kWh}}\\) "
+                f"replaced by \\({format_scalar(target_carbon)}\\ \\text{{gCO2e/kWh}}\\)"
             )
         anchor_lines.append(
             f"""
             <li>
               <strong>{escape(anchor.get('source_model', 'source'))}</strong> ({escape(anchor.get('source_country', 'n.d.'))}) :
-              énergie publiée <code>{escape(anchor.get('source_energy', 'n.d.'))}</code>,
-              ratio appliqué <code>{format_scalar(ratio_value)}</code>,
-              énergie par requête <code>{escape(format_range_display(anchor.get('per_request_energy', {'low':0,'high':0}), 'energy'))}</code>,
-              carbone par requête <code>{escape(format_range_display(anchor.get('per_request_carbon', {'low':0,'high':0}), 'carbon'))}</code> ({carbon_note.strip() or 'mix cible appliqué'}),
-              eau par requête <code>{escape(format_range_display(anchor.get('per_request_water', {'low':0,'high':0}), 'water'))}</code> ({water_note.strip() or 'mix cible appliqué'}).
+              published energy <code>{escape(anchor.get('source_energy', 'n.d.'))}</code>,
+              applied ratio <code>{format_scalar(ratio_value)}</code>,
+              energy per request <code>{escape(format_range_display(anchor.get('per_request_energy', {'low':0,'high':0}), 'energy'))}</code>,
+              carbon per request <code>{escape(format_range_display(anchor.get('per_request_carbon', {'low':0,'high':0}), 'carbon'))}</code> ({carbon_note.strip() or 'target mix applied'}).
             </li>
             """
         )
     sections.append(
         f"""
         <div class="method-modal-section">
-          <div class="math-label">2. Méthode des multiples sur les indicateurs {escape(unit_basis)}</div>
-          <p>Chaque indicateur scientifique disponible dans cette famille d'unités est recalculé pour le scénario cible. Quand plusieurs ancrages existent, la méthode retient d'abord le modèle le plus proche en nombre de paramètres, puis construit la valeur centrale sur cet ancrage sélectionné.</p>
+          <div class="math-label">2. Multiples method on {escape(unit_basis)} indicators</div>
+          <p>Each scientific indicator available in this unit family is recalculated for the target scenario. When several anchors exist, the method first retains the closest model by parameter count, then builds the central value from that selected anchor.</p>
           <ul class="extrapolation-list">{''.join(anchor_lines) or '<li>n.d.</li>'}</ul>
         </div>
         """
@@ -752,10 +939,9 @@ def build_method_modal_body(method):
     sections.append(
         f"""
         <div class="method-modal-section">
-          <div class="math-label">3. Moyenne et annualisation</div>
-          <p>Énergie annuelle retenue : moyenne des indicateurs recalculés × <code>{format_count(annual_requests)}</code> appels/an = <code>{escape(method['energy'])}</code>.</p>
-          <p>Carbone annuel retenu : moyenne des indicateurs recalculés pour <strong>{escape(target_country)}</strong> = <code>{escape(method['carbon'])}</code>.</p>
-          <p>Eau annuelle retenue : moyenne des indicateurs recalculés pour <strong>{escape(target_country)}</strong> = <code>{escape(method['water'])}</code>.</p>
+          <div class="math-label">3. Averaging and annualization</div>
+          <p>Retained annual energy: average of recalculated indicators × <code>{format_count(annual_requests)}</code> calls/year = <code>{escape(method['energy'])}</code>.</p>
+          <p>Retained annual carbon: average of recalculated indicators for <strong>{escape(target_country)}</strong> = <code>{escape(method['carbon'])}</code>.</p>
         </div>
         """
     )
@@ -774,18 +960,15 @@ def build_method_comparisons(records, parsed_payload, result):
     target_mix = result.get("country_energy_mix") or {}
     target_country = target_mix.get("country_name") or parsed_payload.get("country")
     target_carbon = target_mix.get("grid_carbon_intensity_gco2_per_kwh") or parsed_payload.get("grid_carbon_intensity_gco2_per_kwh")
-    target_water = target_mix.get("water_intensity_l_per_kwh") or parsed_payload.get("water_intensity_l_per_kwh")
-
     for method in result.get("method_results", []):
         rows = factor_details(records, method.get("record_ids", []))
         detail = dict(method.get("detail", {}))
         methods.append(
             {
-                "label": method.get("label", "Méthode"),
-                "basis": method.get("basis", ""),
+                "label": translate_method_text(method.get("label", "Method")),
+                "basis": translate_method_text(method.get("basis", "")),
                 "energy": format_result_card_display(method["annual_energy_wh"], "energy"),
                 "carbon": format_result_card_display(method["annual_carbon_gco2e"], "carbon"),
-                "water": format_result_card_display(method["annual_water_ml"], "water"),
                 "refs": render_source_refs(rows),
                 "factor_rows": rows,
                 "annual_requests": annual_requests,
@@ -797,7 +980,6 @@ def build_method_comparisons(records, parsed_payload, result):
                 "page_ratio": (method.get("detail") or {}).get("page_ratio"),
                 "target_country": target_country,
                 "target_grid_carbon_intensity": float(target_carbon) if target_carbon not in (None, "") else None,
-                "target_water_intensity": float(target_water) if target_water not in (None, "") else None,
                 "target_mix": target_mix,
                 "detail": detail,
             }
@@ -813,7 +995,7 @@ def render_method_comparisons(methods):
         <article class="result-method-card">
           <div class="result-method-head">
             <div>
-              <div class="result-method-kicker">Résultat</div>
+              <div class="result-method-kicker">Result</div>
               <h4>{escape(method['label'])}</h4>
             </div>
             <div class="result-method-refs">{method['refs']}</div>
@@ -821,16 +1003,12 @@ def render_method_comparisons(methods):
           <p class="result-method-basis">{escape(method['basis'])}</p>
           <div class="result-method-metrics">
             <div class="result-method-metric">
-              <span class="result-method-label">Énergie annuelle</span>
+              <span class="result-method-label">Annual energy</span>
               <strong>{escape(method['energy'])}</strong>
             </div>
             <div class="result-method-metric">
-              <span class="result-method-label">Carbone annuel</span>
+              <span class="result-method-label">Annual carbon</span>
               <strong>{escape(method['carbon'])}</strong>
-            </div>
-            <div class="result-method-metric">
-              <span class="result-method-label">Eau annuelle</span>
-              <strong>{escape(method['water'])}</strong>
             </div>
           </div>
         </article>
@@ -854,7 +1032,7 @@ def render_method_calculation_details(methods):
         <article class="result-method-detail-card">
           <div class="summary-header">
             <div>
-              <div class="summary-kicker">Détail du calcul</div>
+              <div class="summary-kicker">Calculation details</div>
               <h3>{escape(method['label'])}</h3>
             </div>
             <div class="result-method-refs">{method['refs']}</div>
@@ -906,42 +1084,42 @@ def describe_record_type_fr(record):
     model_or_scope = str(record.get("model_or_scope", "")).strip()
 
     labels = {
-        ("training", "training_emissions"): "Émissions de gaz à effet de serre liées à l'entraînement",
-        ("training", "compute_time"): "Temps de calcul mobilisé pour l'entraînement",
-        ("training", "training_tokens"): "Volume de tokens utilisés pour l'entraînement",
-        ("lifecycle", "creation_lifecycle_emissions"): "Émissions sur l'ensemble du cycle de création du modèle",
-        ("lifecycle", "creation_lifecycle_water"): "Consommation d'eau sur l'ensemble du cycle de création du modèle",
-        ("lifecycle", "development_share"): "Part de l'impact attribuée à la phase de développement",
-        ("lifecycle", "power_utilization_range"): "Plage de facteur d'utilisation électrique de l'infrastructure",
-        ("lifecycle", "training_water_total"): "Consommation totale d'eau associée à l'entraînement",
-        ("lifecycle", "training_water_onsite"): "Consommation d'eau sur site associée à l'entraînement",
-        ("infrastructure", "ai_share_of_datacenter_electricity"): "Part de l'IA dans la consommation électrique des centres de données",
-        ("infrastructure", "annual_electricity"): "Consommation électrique annuelle des centres de données",
-        ("infrastructure", "electricity_share"): "Part de la demande électrique attribuée aux centres de données",
-        ("infrastructure", "annual_growth_rate"): "Taux de croissance annuel de la consommation électrique",
-        ("infrastructure", "ai_power_demand"): "Puissance électrique appelée par les systèmes d'IA",
-        ("infrastructure", "annualized_energy"): "Consommation énergétique annualisée des systèmes d'IA",
-        ("inference", "query_energy"): "Consommation énergétique par requête",
-        ("inference", "prompt_energy"): "Consommation énergétique par prompt",
-        ("inference", "prompt_emissions"): "Émissions par prompt",
-        ("inference", "prompt_water"): "Consommation d'eau par prompt",
-        ("inference", "efficiency_gain"): "Gain d'efficacité annoncé entre deux configurations d'inférence",
-        ("inference", "energy_component"): "Répartition de la consommation énergétique par composant d'inférence",
-        ("inference", "page_generation_energy"): "Consommation énergétique pour générer une page",
-        ("inference", "page_generation_emissions"): "Émissions pour générer une page",
-        ("inference", "page_generation_water"): "Consommation d'eau pour générer une page",
-        ("inference", "response_water_equivalent"): "Consommation d'eau pour un petit ensemble de réponses",
+        ("training", "training_emissions"): "Greenhouse gas emissions from training",
+        ("training", "compute_time"): "Compute time used for training",
+        ("training", "training_tokens"): "Training token volume",
+        ("lifecycle", "creation_lifecycle_emissions"): "Emissions across the model creation lifecycle",
+        ("lifecycle", "creation_lifecycle_water"): "Water consumption across the model creation lifecycle",
+        ("lifecycle", "development_share"): "Impact share attributed to development",
+        ("lifecycle", "power_utilization_range"): "Infrastructure power utilization range",
+        ("lifecycle", "training_water_total"): "Total water consumption associated with training",
+        ("lifecycle", "training_water_onsite"): "On-site water consumption associated with training",
+        ("infrastructure", "ai_share_of_datacenter_electricity"): "AI share of data center electricity demand",
+        ("infrastructure", "annual_electricity"): "Annual data center electricity consumption",
+        ("infrastructure", "electricity_share"): "Share of electricity demand attributed to data centers",
+        ("infrastructure", "annual_growth_rate"): "Annual electricity consumption growth rate",
+        ("infrastructure", "ai_power_demand"): "Power demand from AI systems",
+        ("infrastructure", "annualized_energy"): "Annualized energy consumption of AI systems",
+        ("inference", "query_energy"): "Energy consumption per query",
+        ("inference", "prompt_energy"): "Energy consumption per prompt",
+        ("inference", "prompt_emissions"): "Emissions per prompt",
+        ("inference", "prompt_water"): "Water consumption per prompt",
+        ("inference", "efficiency_gain"): "Reported efficiency gain between inference configurations",
+        ("inference", "energy_component"): "Inference energy consumption by component",
+        ("inference", "page_generation_energy"): "Energy consumption to generate one page",
+        ("inference", "page_generation_emissions"): "Emissions to generate one page",
+        ("inference", "page_generation_water"): "Water consumption to generate one page",
+        ("inference", "response_water_equivalent"): "Water consumption for a small set of responses",
     }
 
     label = labels.get((phase, metric_name))
     if not label:
         phase_label = {
-            "training": "Entraînement",
-            "inference": "Inférence",
+            "training": "Training",
+            "inference": "Inference",
             "infrastructure": "Infrastructure",
-            "lifecycle": "Cycle de vie",
-        }.get(phase, phase.capitalize() if phase else "Indicateur")
-        metric_label = metric_name.replace("_", " ") if metric_name else "non précisé"
+            "lifecycle": "Lifecycle",
+        }.get(phase, phase.capitalize() if phase else "Indicator")
+        metric_label = metric_name.replace("_", " ") if metric_name else "not specified"
         label = f"{phase_label} : {metric_label}"
 
     if model_or_scope:
@@ -998,19 +1176,20 @@ def render_reference_catalog_sections():
     def render_reference_table(table_rows, title):
         if not table_rows:
             return ""
+        title_html = f"<h4>{escape(title)}</h4>" if title else ""
         return f"""
         <div class="reference-subtable">
-          <h4>{escape(title)}</h4>
+          {title_html}
           <div class="reference-table-wrap">
             <table class="reference-table">
               <thead>
                 <tr>
-                  <th>Réf.</th>
-                  <th>Type de donnée</th>
-                  <th>Modèle LLM</th>
-                  <th>Paramètres</th>
-                  <th>Pays</th>
-                  <th>Valeur</th>
+                  <th>Ref.</th>
+                  <th>Data type</th>
+                  <th>LLM model</th>
+                  <th>Parameters</th>
+                  <th>Country</th>
+                  <th>Value</th>
                   <th>Citation</th>
                 </tr>
               </thead>
@@ -1052,14 +1231,224 @@ def render_reference_catalog_sections():
             grouped["other"].append(rendered)
 
     return {
-        "training": render_reference_table("".join(grouped["training"]), "Apprentissage"),
-        "inference": render_reference_table("".join(grouped["inference"]), "Inférence"),
+        "training": render_reference_table("".join(grouped["training"]), ""),
+        "inference": render_reference_table("".join(grouped["inference"]), ""),
         "counts": {
             "total": len(rows),
             "training": len(grouped["training"]),
             "inference": len(grouped["inference"]),
         },
     }
+
+
+def build_site_bibliography_entries():
+    entries = []
+    seen = set()
+
+    for row in build_literature_catalog_rows():
+        citation = format_apa_citation(row)
+        if not citation:
+            continue
+        key = ("literature", str(row.get("study_key") or citation).strip())
+        if key in seen:
+            continue
+        seen.add(key)
+        entries.append(
+            {
+                "category": "LLM literature",
+                "citation": citation,
+                "url": str(row.get("source_url", "")).strip(),
+            }
+        )
+
+    bibliography_index = load_bibliography_index()
+    for key in ("brysbaert2019",):
+        entry = bibliography_index.get(key)
+        if not entry:
+            continue
+        citation = format_bib_entry_apa(entry)
+        dedupe_key = ("context", key)
+        if dedupe_key in seen:
+            continue
+        seen.add(dedupe_key)
+        entries.append(
+            {
+                "category": "Usage methodology",
+                "citation": citation,
+                "url": str(entry.get("url", "")).strip(),
+            }
+        )
+
+    for entry in SITE_CONTEXT_REFERENCES:
+        key = ("context", str(entry.get("key", "")).strip())
+        if key in seen:
+            continue
+        seen.add(key)
+        entries.append(
+            {
+                "category": str(entry.get("category", "Comparison benchmark")),
+                "citation": str(entry.get("citation", "")).strip(),
+                "url": str(entry.get("url", "")).strip(),
+            }
+        )
+
+    entries.sort(key=lambda item: (item["category"], item["citation"]))
+    return entries
+
+
+def render_bibliography_tab():
+    reference_sections = render_reference_catalog_sections()
+    country_rows = load_country_energy_mix()
+    market_model_rows = load_market_models()
+    if not reference_sections:
+        return ""
+    filtered_market_model_rows = []
+    for row in market_model_rows:
+        parameter_status = str(row.get("parameter_value_status", "")).strip().lower()
+        market_status = str(row.get("market_status", "")).strip().lower()
+        serving_mode = str(row.get("serving_mode", "")).strip().lower()
+        if parameter_status != "estimated":
+            continue
+        if market_status != "api" and serving_mode != "closed":
+            continue
+        filtered_market_model_rows.append(row)
+    filtered_market_model_rows.sort(
+        key=lambda row: (
+            str(row.get("provider", "") or "").lower(),
+            str(row.get("display_name", "") or row.get("model_id", "") or "").lower(),
+        )
+    )
+    proprietary_parameter_rows = []
+    for row in filtered_market_model_rows:
+        source_url = str(row.get("parameter_source_url", "") or "").strip()
+        source_label = escape(str(row.get("parameter_source", "") or "Source not specified"))
+        if source_url:
+            source_html = f'<a href="{escape(source_url, quote=True)}" target="_blank" rel="noopener noreferrer">{source_label}</a>'
+        else:
+            source_html = source_label
+        proprietary_parameter_rows.append(
+            f"""
+        <tr>
+          <td>{escape(row.get('display_name', '') or row.get('model_id', '') or 'n.d.')}</td>
+          <td>{escape(row.get('provider', 'n.d.') or 'n.d.')}</td>
+          <td>{escape(format_market_parameter_display(row))}</td>
+          <td>{escape(row.get('parameter_confidence', 'n.d.') or 'n.d.')}</td>
+          <td>{source_html}</td>
+          <td>{escape(row.get('notes', 'n.d.') or 'n.d.')}</td>
+        </tr>
+            """
+        )
+    visible_real_world_rows = [entry for entry in REAL_WORLD_INDICATOR_ROWS if entry.get("domain") != "Water"]
+    real_world_rows = "".join(
+        f"""
+        <tr>
+          <td>{escape(str(index))}</td>
+          <td>{escape(entry['domain'])}</td>
+          <td>{escape(entry['indicator'])}</td>
+          <td>{escape(entry['value'])}</td>
+          <td><a href="{escape(entry['url'] or '#', quote=True)}" target="_blank" rel="noopener noreferrer">{escape(entry['citation'])}</a><div class="reference-locator">{escape(entry['locator'])}</div></td>
+        </tr>
+        """
+        for index, entry in enumerate(visible_real_world_rows, start=1)
+    )
+    country_mix_rows = "".join(
+        f"""
+        <tr>
+          <td>{escape(str(index))}</td>
+          <td>{escape(row.get('country_name', 'n.d.'))}</td>
+          <td>{escape(str(row.get('year', 'n.d.')))}</td>
+          <td>{escape(str(row.get('grid_carbon_intensity_gco2_per_kwh', 'n.d.')))} gCO2e/kWh</td>
+          <td><a href="{escape(str(row.get('source_url', '') or '#'), quote=True)}" target="_blank" rel="noopener noreferrer">{escape(row.get('source_citation', 'n.d.'))}</a><div class="reference-locator">{escape(row.get('notes', 'Location not documented.'))}</div></td>
+        </tr>
+        """
+        for index, row in enumerate(country_rows, start=1)
+    )
+
+    return f"""
+    <section class="tab-panel" id="tab-bibliography-panel" data-tab-panel="bibliography">
+      <section class="panel reference-panel">
+        <div class="summary-header">
+            <div>
+            <div class="summary-kicker">References</div>
+            <h3>Source annex used in the site</h3>
+          </div>
+        </div>
+        <p class="summary-intro">This annex brings together the quantified reference material used in the interface, along with everyday comparison benchmarks and country factors used for carbon and water recalculation.</p>
+
+        <div class="reference-subtable">
+          <h4>Sources used to estimate proprietary LLM parameter counts</h4>
+          <p class="summary-intro">This table lists the third-party sources used when a provider does not publish the parameter count of a closed model. Estimated values are marked with `*` throughout the interface.</p>
+          <div class="reference-table-wrap">
+            <table class="reference-table">
+              <thead>
+                <tr>
+                  <th>Model</th>
+                  <th>Provider</th>
+                  <th>Estimated parameters</th>
+                  <th>Confidence</th>
+                  <th>Estimation source</th>
+                  <th>Notes</th>
+                </tr>
+              </thead>
+              <tbody>
+                {"".join(proprietary_parameter_rows)}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="reference-subtable">
+          <h4>Inference reference set</h4>
+          {reference_sections['inference']}
+        </div>
+
+        <div class="reference-subtable">
+          <h4>Training reference set</h4>
+          {reference_sections['training']}
+        </div>
+
+        <div class="reference-subtable">
+          <h4>Real-world comparison benchmarks</h4>
+          <div class="reference-table-wrap">
+            <table class="reference-table">
+              <thead>
+                <tr>
+                  <th>No.</th>
+                  <th>Domain</th>
+                  <th>Indicator</th>
+                  <th>Value</th>
+                  <th>Reference</th>
+                </tr>
+              </thead>
+              <tbody>
+                {real_world_rows}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="reference-subtable">
+          <h4>Country factors for carbon and water recalculation</h4>
+          <div class="reference-table-wrap">
+            <table class="reference-table">
+              <thead>
+                <tr>
+                  <th>No.</th>
+                  <th>Country</th>
+                  <th>Year</th>
+                  <th>Carbon intensity</th>
+                  <th>Reference</th>
+                </tr>
+              </thead>
+              <tbody>
+                {country_mix_rows}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+    </section>
+    """
 
 
 def render_model_reference_table():
@@ -1071,8 +1460,8 @@ def render_model_reference_table():
         <tr>
           <td>{escape(row.get('model_id', ''))}</td>
           <td>{escape(row.get('provider', ''))}</td>
-          <td>{escape((row.get('active_parameters_billion') or 'n.d.') + ('B' if row.get('active_parameters_billion') else ''))}</td>
-          <td>{escape((row.get('total_parameters_billion') or 'n.d.') + ('B' if row.get('total_parameters_billion') else ''))}</td>
+          <td>{escape(format_parameter_billions(row.get('active_parameters_billion'), is_estimated_parameter_status(row.get('parameter_value_status'))))}</td>
+          <td>{escape(format_parameter_billions(row.get('total_parameters_billion'), is_estimated_parameter_status(row.get('parameter_value_status'))))}</td>
           <td>{escape(row.get('parameter_value_status', 'n.d.'))}</td>
           <td>{escape(row.get('parameter_source', 'n.d.'))}</td>
         </tr>
@@ -1083,26 +1472,27 @@ def render_model_reference_table():
     <section class="panel reference-panel">
       <div class="summary-header">
         <div>
-          <div class="summary-kicker">Modèles</div>
-          <h3>Table de référence des modèles</h3>
+          <div class="summary-kicker">Models</div>
+          <h3>Model reference table</h3>
         </div>
       </div>
-      <p class="summary-intro">Cette table recense les modèles de référence utilisés par le projet, leur nombre de paramètres et la source de la valeur observée ou estimée.</p>
+      <p class="summary-intro">This table lists the reference models used by the project, their parameter counts, and the source of the observed or estimated values.</p>
       <div class="reference-table-wrap">
         <table class="reference-table">
           <thead>
             <tr>
-              <th>Modèle</th>
+              <th>Model</th>
               <th>Provider</th>
-              <th>Paramètres actifs</th>
-              <th>Paramètres totaux</th>
-              <th>Statut</th>
+              <th>Active parameters</th>
+              <th>Total parameters</th>
+              <th>Status</th>
               <th>Source</th>
             </tr>
           </thead>
           <tbody>{body}</tbody>
         </table>
       </div>
+      <p class="summary-intro">`*` indicates an estimated parameter count rather than a provider-published value.</p>
     </section>
     """
 
@@ -1118,7 +1508,6 @@ def render_country_mix_table():
           <td>{escape(row.get('country_name', ''))}</td>
           <td>{escape(row.get('year', ''))}</td>
           <td>{escape(row.get('grid_carbon_intensity_gco2_per_kwh', ''))} gCO2e/kWh</td>
-          <td>{escape(row.get('water_intensity_l_per_kwh', ''))} L/kWh</td>
           <td>{escape(row.get('source_citation', 'n.d.'))}</td>
         </tr>
         """
@@ -1128,20 +1517,19 @@ def render_country_mix_table():
     <section class="panel reference-panel">
       <div class="summary-header">
         <div>
-          <div class="summary-kicker">Pays</div>
-          <h3>Table de référence des mix énergétiques</h3>
+          <div class="summary-kicker">Countries</div>
+          <h3>Electricity mix reference table</h3>
         </div>
       </div>
-      <p class="summary-intro">Cette table recense les facteurs pays utilisés pour contextualiser le carbone et l'eau, avec la source associée à chaque valeur.</p>
+      <p class="summary-intro">This table lists the country factors used to contextualize carbon, with the source associated with each value.</p>
       <div class="reference-table-wrap">
         <table class="reference-table">
           <thead>
             <tr>
               <th>Code</th>
-              <th>Pays</th>
-              <th>Année</th>
-              <th>Intensité carbone</th>
-              <th>Intensité eau</th>
+              <th>Country</th>
+              <th>Year</th>
+              <th>Carbon intensity</th>
               <th>Source</th>
             </tr>
           </thead>
@@ -1152,16 +1540,215 @@ def render_country_mix_table():
     """
 
 
+def render_documentation_tab():
+    return """
+    <section class="tab-panel" id="tab-documentation-panel" data-tab-panel="documentation">
+      <section class="panel reference-panel">
+        <div class="summary-header">
+          <div>
+            <div class="summary-kicker">Documentation</div>
+            <h3>Install and run the project</h3>
+          </div>
+        </div>
+        <p class="summary-intro">The project combines a local dataset, an HTTP API, an MCP server, and a web calculation interface. The main scripts rely on Python 3 and the repository files.</p>
+        <div class="summary-body">
+          <p><strong>Prerequisites.</strong> Python 3 is required. An OpenAI key is only needed for natural-language parsing in the web interface.</p>
+          <p><strong>Move into the project.</strong></p>
+          <pre style="margin:0; white-space:pre-wrap;"><code>cd "llm-environment-opendata"</code></pre>
+          <p><strong>Run the HTTP API.</strong></p>
+          <pre style="margin:0; white-space:pre-wrap;"><code>python3 api/server.py</code></pre>
+          <p>Default address: <code>http://127.0.0.1:8000</code></p>
+          <p><strong>Run the MCP server.</strong></p>
+          <pre style="margin:0; white-space:pre-wrap;"><code>python3 mcp/server.py</code></pre>
+          <p><strong>Run the web interface.</strong></p>
+          <pre style="margin:0; white-space:pre-wrap;"><code>python3 web/server.py</code></pre>
+          <p>Default address: <code>http://127.0.0.1:8080</code></p>
+        </div>
+      </section>
+
+      <section class="panel reference-panel">
+        <div class="summary-header">
+          <div>
+            <div class="summary-kicker">Configuration</div>
+            <h3>OpenAI key and .env files</h3>
+          </div>
+        </div>
+        <p class="summary-intro">The web frontend moderates and structures descriptions through OpenAI. Without API configuration, the web interface cannot interpret free-form descriptions.</p>
+        <div class="summary-body">
+          <p>Supported locations:</p>
+          <pre style="margin:0; white-space:pre-wrap;"><code>llm-environment-opendata/.env
+llm-environment-opendata/web/.env</code></pre>
+          <p>Minimum configuration:</p>
+          <pre style="margin:0; white-space:pre-wrap;"><code>OPENAI_API_KEY=...
+OPENAI_MODEL=gpt-4.1-mini</code></pre>
+        </div>
+      </section>
+
+      <section class="panel reference-panel">
+        <div class="summary-header">
+          <div>
+            <div class="summary-kicker">API HTTP</div>
+            <h3>Available endpoints</h3>
+          </div>
+        </div>
+        <p class="summary-intro">The local API returns JSON and provides access to the corpus, model profiles, country factors, and estimators.</p>
+        <div class="summary-body">
+          <p><strong>Reading and exploration.</strong></p>
+          <pre style="margin:0; white-space:pre-wrap;"><code>GET /health
+GET /records
+GET /records/&lt;record_id&gt;
+GET /sources
+GET /models
+GET /models/&lt;model_id&gt;
+GET /market-models
+GET /energy-mix
+GET /energy-mix/&lt;country_code&gt;
+GET /extrapolation-rules
+GET /stats</code></pre>
+          <p><strong>Calculations.</strong></p>
+          <pre style="margin:0; white-space:pre-wrap;"><code>POST /estimate
+POST /estimate_feature
+POST /predict_inference</code></pre>
+          <p><strong><code>/records</code> filters.</strong> <code>phase</code>, <code>impact_category</code>, <code>study_key</code>, <code>geography</code>.</p>
+        </div>
+      </section>
+
+      <section class="panel reference-panel">
+        <div class="summary-header">
+          <div>
+            <div class="summary-kicker">Exemples</div>
+            <h3>curl examples</h3>
+          </div>
+        </div>
+        <div class="summary-body">
+          <p><strong>Check service status.</strong></p>
+          <pre style="margin:0; white-space:pre-wrap;"><code>curl http://127.0.0.1:8000/health</code></pre>
+          <p><strong>List inference records.</strong></p>
+          <pre style="margin:0; white-space:pre-wrap;"><code>curl "http://127.0.0.1:8000/records?phase=inference"</code></pre>
+          <p><strong>Read one specific record.</strong></p>
+          <pre style="margin:0; white-space:pre-wrap;"><code>curl http://127.0.0.1:8000/records/elsworth2025_prompt_energy</code></pre>
+          <p><strong>Estimate a software feature.</strong></p>
+          <pre style="margin:0; white-space:pre-wrap;"><code>curl -X POST http://127.0.0.1:8000/estimate_feature \
+  -H "Content-Type: application/json" \
+  -d '{
+    "scenario_id": "demo",
+    "provider": "OpenAI",
+    "model_id": "gpt-4o-mini",
+    "request_type": "chat",
+    "input_tokens": 1200,
+    "output_tokens": 350,
+    "requests_per_feature": 1,
+    "feature_uses_per_month": 10000,
+    "months_per_year": 12,
+    "country": "FR"
+  }'</code></pre>
+          <p><strong>Project a normalized inference scenario.</strong></p>
+          <pre style="margin:0; white-space:pre-wrap;"><code>curl -X POST http://127.0.0.1:8000/predict_inference \
+  -H "Content-Type: application/json" \
+  -d '{
+    "scenario_id": "catalog-demo",
+    "provider": "OpenAI",
+    "model_id": "gpt-4o-mini",
+    "request_type": "chat",
+    "input_tokens": 1000,
+    "output_tokens": 550,
+    "requests_per_feature": 1,
+    "feature_uses_per_month": 1,
+    "months_per_year": 12,
+    "country": "FR"
+  }'</code></pre>
+        </div>
+      </section>
+
+      <section class="panel reference-panel">
+        <div class="summary-header">
+          <div>
+            <div class="summary-kicker">MCP</div>
+            <h3>Tools exposed to agents</h3>
+          </div>
+        </div>
+        <p class="summary-intro">The MCP server reads from standard input and returns serialized JSON responses. It exposes corpus lookup tools and reusable estimators.</p>
+        <div class="summary-body">
+          <pre style="margin:0; white-space:pre-wrap;"><code>list_records
+get_record
+aggregate_by_phase
+list_sources
+list_models
+list_market_models
+get_model_profile
+list_country_energy_mix
+get_country_energy_mix
+list_extrapolation_rules
+estimate_externalities
+estimate_feature_externalities
+predict_inference_externalities</code></pre>
+        </div>
+      </section>
+
+      <section class="panel reference-panel">
+        <div class="summary-header">
+          <div>
+            <div class="summary-kicker">Data</div>
+            <h3>Dataset, validation, and exports</h3>
+          </div>
+        </div>
+        <p class="summary-intro">The CSV remains the canonical dataset source. The JSON file is a convenience export for local or software reuse.</p>
+        <div class="summary-body">
+          <p><strong>Main files.</strong></p>
+          <pre style="margin:0; white-space:pre-wrap;"><code>data/records.csv
+data/records.json
+schema/llm_environment_record.schema.json
+data/models.csv
+data/market_models.csv
+data/country_energy_mix.csv
+data/extrapolation_rules.csv</code></pre>
+          <p><strong>Validation and export.</strong></p>
+          <pre style="margin:0; white-space:pre-wrap;"><code>python3 scripts/validate_dataset.py
+python3 scripts/export_json.py</code></pre>
+        </div>
+      </section>
+
+      <section class="panel reference-panel">
+        <div class="summary-header">
+          <div>
+            <div class="summary-kicker">Publication</div>
+            <h3>LaTeX compilation</h3>
+          </div>
+        </div>
+        <p class="summary-intro">The associated scientific paper is maintained in the neighboring <code>llm-environment-opendata-paper</code> folder. PDF generation requires a LaTeX installation providing <code>pdflatex</code>.</p>
+        <div class="summary-body">
+          <pre style="margin:0; white-space:pre-wrap;"><code>cd "../llm-environment-opendata-paper"
+pdflatex -interaction=nonstopmode -halt-on-error llm_environment_opendata_paper.tex</code></pre>
+        </div>
+      </section>
+
+      <section class="panel summary-panel">
+        <div class="summary-header">
+          <div>
+            <div class="summary-kicker">License</div>
+            <h3>Reuse conditions</h3>
+          </div>
+        </div>
+        <div class="summary-body">
+          <p>The software is distributed under the GNU GPL. Any redistribution or modification must remain compatible with the obligations of that free-software license.</p>
+          <p>The dataset, comparability metadata, and scientific texts keep their own documentary constraints, especially regarding citation of the underlying sources.</p>
+          <p>For a public release of the repository, it is recommended to keep the full license text and author notices explicitly in the project.</p>
+        </div>
+      </section>
+    </section>
+    """.replace("__PROJECT_PAPER_BIBTEX__", escape(PROJECT_PAPER_BIBTEX))
+
+
 def format_market_country_status(value):
     labels = {
-        "multi_region": "Multi-région documentée",
-        "documented_multi_region": "Multi-région documentée",
-        "self_hosted_variable": "Variable selon l'hébergeur",
-        "provider_country_proxy": "Proxy pays fournisseur",
-        "screening_proxy": "Proxy de screening",
-        "comparative_reference": "Pays de référence comparative",
-        "documented_region_proxy": "Région documentée, pays retenu à titre de référence",
-        "non_specified": "Non spécifié",
+        "multi_region": "Documented multi-region",
+        "documented_multi_region": "Documented multi-region",
+        "self_hosted_variable": "Varies by hosting provider",
+        "provider_country_proxy": "Provider-country proxy",
+        "screening_proxy": "Screening proxy",
+        "comparative_reference": "Comparative reference country",
+        "documented_region_proxy": "Documented region, country retained as reference",
+        "non_specified": "Not specified",
     }
     return labels.get(value, value or "n.d.")
 
@@ -1169,13 +1756,28 @@ def format_market_country_status(value):
 def format_market_parameter_display(row):
     active = str(row.get("active_parameters_billion", "") or "").strip()
     total = str(row.get("total_parameters_billion", "") or "").strip()
+    estimated = is_estimated_parameter_status(row.get("parameter_value_status"))
     if active and total and active != total:
-        return f"{active}B actifs / {total}B totaux"
+        active_text = format_parameter_billions(active, estimated)
+        total_text = format_parameter_billions(total, estimated)
+        return f"{active_text} active / {total_text} total"
     if active:
-        return f"{active}B"
+        return format_parameter_billions(active, estimated)
     if total:
-        return f"{total}B"
+        return format_parameter_billions(total, estimated)
     return "n.d."
+
+
+def market_parameter_sort_value(row):
+    for key in ("active_parameters_billion", "total_parameters_billion"):
+        raw = str(row.get(key, "") or "").strip()
+        if not raw:
+            continue
+        try:
+            return str(float(raw))
+        except ValueError:
+            continue
+    return ""
 
 
 def render_market_models_table(records):
@@ -1189,9 +1791,9 @@ def render_market_models_table(records):
     chart_rows = []
     body = []
     for row in rows:
-        parameter_title = escape(str(row.get("parameter_source", "") or "Source non précisée"))
-        server_title = escape(str(row.get("server_country_source", "") or "Source non précisée"))
-        estimation_title = escape(str(row.get("estimation_country_source", "") or "Source non précisée"))
+        parameter_title = escape(str(row.get("parameter_source", "") or "Source not specified"))
+        server_title = escape(str(row.get("server_country_source", "") or "Source not specified"))
+        estimation_title = escape(str(row.get("estimation_country_source", "") or "Source not specified"))
         method_map = row.get("method_results_by_id") or {}
         prompt_method = method_map.get("prompt_query_average") or {}
         page_method = method_map.get("page_average") or {}
@@ -1208,26 +1810,19 @@ def render_market_models_table(records):
                 "page_energy_wh": float((page_method.get("annual_energy_wh") or {}).get("central", 0.0) or 0.0),
                 "prompt_carbon_gco2e": float((prompt_method.get("annual_carbon_gco2e") or {}).get("central", 0.0) or 0.0),
                 "page_carbon_gco2e": float((page_method.get("annual_carbon_gco2e") or {}).get("central", 0.0) or 0.0),
-                "prompt_water_ml": float((prompt_method.get("annual_water_ml") or {}).get("central", 0.0) or 0.0),
-                "page_water_ml": float((page_method.get("annual_water_ml") or {}).get("central", 0.0) or 0.0),
             }
         )
         body.append(
             f"""
             <tr>
               <td><strong>{escape(row.get('display_name', row.get('model_id', '')))}</strong><div class="method-basis">{escape(row.get('provider', ''))}</div></td>
-              <td>{escape(format_market_parameter_display(row))}</td>
+              <td data-sort-value="{escape(market_parameter_sort_value(row), quote=True)}">{escape(format_market_parameter_display(row))}</td>
               <td>{escape(row.get('server_country', 'n.d.') or 'n.d.')}<div class="reference-locator">{escape(format_market_country_status(row.get('server_country_status')))}</div></td>
               <td>{escape(row.get('estimation_country_code', 'n.d.') or 'n.d.')}<div class="reference-locator">{escape(format_market_country_status(row.get('estimation_country_status')))}</div></td>
               <td>{escape(prompt_energy)}</td>
               <td>{escape(page_energy)}</td>
               <td>{escape(prompt_carbon)}</td>
               <td>{escape(page_carbon)}</td>
-              <td>
-                <div><a href="{escape(str(row.get('parameter_source_url', '') or '#'), quote=True)}" target="_blank" rel="noopener noreferrer" title="{parameter_title}">Paramètres</a></div>
-                <div><a href="{escape(str(row.get('server_country_source_url', '') or '#'), quote=True)}" target="_blank" rel="noopener noreferrer" title="{server_title}">Pays serveur</a></div>
-                <div><a href="{escape(str(row.get('estimation_country_source_url', '') or '#'), quote=True)}" target="_blank" rel="noopener noreferrer" title="{estimation_title}">Pays retenu</a></div>
-              </td>
             </tr>
             """
         )
@@ -1236,58 +1831,39 @@ def render_market_models_table(records):
         [
             {
                 "label": "Lampe fluorescente 1 h",
-                "provider": "Repère de vie courante",
+                "provider": "Everyday benchmark",
                 "kind": "reference",
                 "prompt_energy_wh": 9.3,
                 "page_energy_wh": 9.3,
                 "prompt_carbon_gco2e": 0.0,
                 "page_carbon_gco2e": 0.0,
-                "prompt_water_ml": 0.0,
-                "page_water_ml": 0.0,
             },
             {
                 "label": "Ordinateur portable 1 h",
-                "provider": "Repère de vie courante",
+                "provider": "Everyday benchmark",
                 "kind": "reference",
                 "prompt_energy_wh": 32.0,
                 "page_energy_wh": 32.0,
                 "prompt_carbon_gco2e": 0.0,
                 "page_carbon_gco2e": 0.0,
-                "prompt_water_ml": 0.0,
-                "page_water_ml": 0.0,
             },
             {
-                "label": "Chauffage électrique 1 h",
-                "provider": "Repère de vie courante",
+                "label": "Electric heater 11 min",
+                "provider": "Everyday benchmark",
                 "kind": "reference",
-                "prompt_energy_wh": 1500.0,
-                "page_energy_wh": 1500.0,
+                "prompt_energy_wh": 275.0,
+                "page_energy_wh": 275.0,
                 "prompt_carbon_gco2e": 0.0,
                 "page_carbon_gco2e": 0.0,
-                "prompt_water_ml": 0.0,
-                "page_water_ml": 0.0,
             },
             {
-                "label": "Douche 1 h",
-                "provider": "Repère de vie courante",
+                "label": "Electric heater 10 min (US mix)",
+                "provider": "Everyday benchmark",
                 "kind": "reference",
                 "prompt_energy_wh": 0.0,
                 "page_energy_wh": 0.0,
-                "prompt_carbon_gco2e": 0.0,
-                "page_carbon_gco2e": 0.0,
-                "prompt_water_ml": 600000.0,
-                "page_water_ml": 600000.0,
-            },
-            {
-                "label": "Voiture thermique 1 h",
-                "provider": "Repère de vie courante",
-                "kind": "reference",
-                "prompt_energy_wh": 0.0,
-                "page_energy_wh": 0.0,
-                "prompt_carbon_gco2e": 23500.0,
-                "page_carbon_gco2e": 23500.0,
-                "prompt_water_ml": 0.0,
-                "page_water_ml": 0.0,
+                "prompt_carbon_gco2e": 96.0,
+                "page_carbon_gco2e": 96.0,
             },
         ]
     )
@@ -1297,49 +1873,48 @@ def render_market_models_table(records):
       <div class="summary-header">
         <div>
           <div class="summary-kicker">Visualisation</div>
-          <h3>Impact environnemental comparé des modèles</h3>
+          <h3>Comparative environmental impact of models</h3>
         </div>
       </div>
-      <p class="summary-intro">Le graphique ci-dessous représente les valeurs centrales estimées pour tous les modèles du catalogue sur un scénario standardisé d'inférence correspondant à <strong>1 heure d'usage actif</strong> : <strong>{requests_per_hour} interactions/heure</strong>, <strong>1000 tokens en entrée</strong>, <strong>550 tokens en sortie</strong>, une requête LLM par usage. La cadence horaire est dérivée d'une vitesse moyenne de lecture de <strong>{reading_wpm} mots/min</strong> (Brysbaert, 2019) et d'une convention de conversion de travail <strong>1 token ≈ {words_per_token} mot</strong>.</p>
-      <div class="chart-tabbar" role="tablist" aria-label="Indicateur du graphique d'inférence">
-        <button type="button" class="chart-tab-button is-active" data-model-chart-control="metric-tab" data-metric-value="energy" aria-selected="true">Énergie</button>
-        <button type="button" class="chart-tab-button" data-model-chart-control="metric-tab" data-metric-value="carbon" aria-selected="false">Carbone</button>
-        <button type="button" class="chart-tab-button" data-model-chart-control="metric-tab" data-metric-value="water" aria-selected="false">Eau</button>
+      <p class="summary-intro">The chart below shows the estimated central values for all catalog models under a standardized inference scenario corresponding to <strong>1 hour of active use</strong>: <strong>{requests_per_hour} interactions/hour</strong>, <strong>1000 input tokens</strong>, <strong>550 output tokens</strong>, and one LLM request per use. The hourly pace is derived from an average reading speed of <strong>{reading_wpm} words/min</strong> (Brysbaert, 2019) and a project convention of <strong>1 token ≈ {words_per_token} word</strong>.</p>
+      <div class="chart-tabbar" role="tablist" aria-label="Inference chart indicator">
+        <button type="button" class="chart-tab-button is-active" data-model-chart-control="metric-tab" data-metric-value="energy" aria-selected="true">Energy</button>
+        <button type="button" class="chart-tab-button" data-model-chart-control="metric-tab" data-metric-value="carbon" aria-selected="false">Carbon</button>
       </div>
       <div id="models-impact-chart" class="models-impact-chart" data-chart-rows='{escape(json.dumps(chart_rows, ensure_ascii=False), quote=True)}'></div>
-      <p class="summary-intro models-benchmark-note">Repères intégrés dans le graphique, tous exprimés sur une durée d'une heure : énergie domestique issue de mesures Purdue Extension (lampe fluorescente ≈ 9,3 Wh sur 1 h ; ordinateur portable ≈ 32 Wh sur 1 h) et d'un chauffage électrique d'appoint de puissance nominale 1500 W (≈ 1,5 kWh sur 1 h) ; eau domestique issue de l'ADEME/INC et de l'Anses (douche ≈ 10 L/min, soit ≈ 600 L sur 1 h) ; carbone automobile issu de l'ICCT (2025, 235 gCO2e/km pour une voiture essence moyenne) avec une convention de comparaison fixée à 100 km parcourus en 1 h, soit ≈ 23,5 kgCO2e sur 1 h.</p>
+      <p class="summary-intro models-benchmark-note">Benchmarks integrated into the chart, all expressed over one hour or rescaled to a comparable order of magnitude: household electricity from Purdue Extension measurements (fluorescent lamp ≈ 9.3 Wh over 1 h; laptop ≈ 32 Wh over 1 h) and a 1500 W electric space heater rescaled here to 11 minutes to obtain ≈ 275 Wh; for carbon, a 10-minute electric-heater benchmark recalculated with the US electricity mix retained by the project (0.25 kWh × 384 gCO2e/kWh ≈ 96 gCO2e), closer to the order of magnitude of the highest models in the inference scenario.</p>
     </section>
     <section class="panel reference-panel">
       <div class="summary-header">
         <div>
-          <div class="summary-kicker">Modèles</div>
-          <h3>{len(rows)} modèles actuels suivis par le projet</h3>
+          <div class="summary-kicker">Models</div>
+          <h3>{len(rows)} current models tracked by the project</h3>
         </div>
       </div>
-      <p class="summary-intro">Le tableau ci-dessous compare les modèles suivis par le projet sur ce même scénario d'inférence. Pour chaque modèle, l'application affiche séparément l'estimation dérivée de la moyenne <strong>Wh/prompt|requête</strong> et l'estimation dérivée de la moyenne <strong>Wh/page</strong>.</p>
+      <p class="summary-intro">The table below compares the models tracked by the project under the same inference scenario. For each model, the application shows separately the estimate derived from the <strong>Wh/prompt|request</strong> average and the estimate derived from the <strong>Wh/page</strong> average, along with their carbon counterparts.</p>
       <div class="table-toolbar">
-        <label class="table-search-label" for="market-model-search">Rechercher un modèle</label>
-        <input id="market-model-search" class="table-search-input" type="search" placeholder="Exemple: GPT, Claude, Mistral, US, 70B" data-table-search="market-models-table">
+        <label class="table-search-label" for="market-model-search">Search for a model</label>
+        <input id="market-model-search" class="table-search-input" type="search" placeholder="Example: GPT, Claude, Mistral, US, 70B" data-table-search="market-models-table">
       </div>
       <div class="reference-table-wrap">
         <table class="reference-table sortable-table" id="market-models-table">
           <thead>
             <tr>
-              <th><button type="button" class="sort-button" data-sort-table="market-models-table" data-sort-index="0" data-sort-type="text">Modèle</button></th>
-              <th><button type="button" class="sort-button" data-sort-table="market-models-table" data-sort-index="1" data-sort-type="text">Paramètres</button></th>
-              <th><button type="button" class="sort-button" data-sort-table="market-models-table" data-sort-index="2" data-sort-type="text">Pays serveur</button></th>
-              <th><button type="button" class="sort-button" data-sort-table="market-models-table" data-sort-index="3" data-sort-type="text">Pays retenu</button></th>
-              <th><button type="button" class="sort-button" data-sort-table="market-models-table" data-sort-index="4" data-sort-type="number">Énergie / h prompt-réq</button></th>
-              <th><button type="button" class="sort-button" data-sort-table="market-models-table" data-sort-index="5" data-sort-type="number">Énergie / h page</button></th>
-              <th><button type="button" class="sort-button" data-sort-table="market-models-table" data-sort-index="6" data-sort-type="number">Carbone / h prompt-réq</button></th>
-              <th><button type="button" class="sort-button" data-sort-table="market-models-table" data-sort-index="7" data-sort-type="number">Carbone / h page</button></th>
-              <th><button type="button" class="sort-button" data-sort-table="market-models-table" data-sort-index="8" data-sort-type="text">Sources</button></th>
+              <th><button type="button" class="sort-button" data-sort-table="market-models-table" data-sort-index="0" data-sort-type="text">Model</button></th>
+              <th><button type="button" class="sort-button" data-sort-table="market-models-table" data-sort-index="1" data-sort-type="number">Parameters</button></th>
+              <th><button type="button" class="sort-button" data-sort-table="market-models-table" data-sort-index="2" data-sort-type="text">Server country</button></th>
+              <th><button type="button" class="sort-button" data-sort-table="market-models-table" data-sort-index="3" data-sort-type="text">Retained country</button></th>
+              <th><button type="button" class="sort-button" data-sort-table="market-models-table" data-sort-index="4" data-sort-type="number">Energy / h prompt-req</button></th>
+              <th><button type="button" class="sort-button" data-sort-table="market-models-table" data-sort-index="5" data-sort-type="number">Energy / h page</button></th>
+              <th><button type="button" class="sort-button" data-sort-table="market-models-table" data-sort-index="6" data-sort-type="number">Carbon / h prompt-req</button></th>
+              <th><button type="button" class="sort-button" data-sort-table="market-models-table" data-sort-index="7" data-sort-type="number">Carbon / h page</button></th>
             </tr>
           </thead>
           <tbody>{''.join(body)}</tbody>
         </table>
       </div>
-      <p class="summary-intro">`Pays serveur` décrit l'information publiée sur l'hébergement du service ou, pour les open weights, le fait que l'hébergement dépend du déploiement. `Pays retenu` correspond au pays effectivement utilisé pour recalculer le CO2 via le mix électrique. Quand le pays exact n'est pas publié, le projet utilise un proxy explicite de screening plutôt qu'une localisation présentée comme certaine.</p>
+      <p class="summary-intro">`Server country` describes the published information about where the service is hosted or, for open-weight models, the fact that hosting depends on deployment. `Retained country` is the country actually used to recalculate CO2 via the electricity mix. When the exact country is not published, the project uses an explicit screening proxy rather than presenting a location as certain.</p>
+      <p class="summary-intro">`*` indicates an estimated parameter count rather than a provider-published value.</p>
     </section>
     """
 
@@ -1389,17 +1964,15 @@ def render_training_models_table(records):
                 "kind": "model",
                 "direct_training_energy_wh": float(direct_energy.get("value", 0.0) or 0.0),
                 "direct_training_carbon_tco2e": float(direct_carbon.get("value", 0.0) or 0.0),
-                "creation_lifecycle_water_kl": float(lifecycle_water.get("value", 0.0) or 0.0),
             }
         )
         body.append(
             f"""
             <tr>
               <td><strong>{escape(row.get('display_name', row.get('model_id', '')))}</strong><div class="method-basis">{escape(row.get('provider', ''))}</div></td>
-              <td>{escape(format_market_parameter_display(row))}</td>
+              <td data-sort-value="{escape(market_parameter_sort_value(row), quote=True)}">{escape(format_market_parameter_display(row))}</td>
               <td>{escape(format_training_estimate(direct_energy.get('value'), direct_energy.get('unit')))}</td>
               <td>{escape(format_training_estimate(direct_carbon.get('value'), direct_carbon.get('unit')))}</td>
-              <td>{escape(format_training_estimate(lifecycle_water.get('value'), lifecycle_water.get('unit')))}</td>
             </tr>
             """
         )
@@ -1407,44 +1980,18 @@ def render_training_models_table(records):
     chart_rows.extend(
         [
             {
-                "label": "10 000 foyers (usages domestiques annuels)",
-                "provider": "Repère de vie courante",
+                "label": "10,000 households (annual domestic use)",
+                "provider": "Everyday benchmark",
                 "kind": "reference",
                 "direct_training_energy_wh": 25000000000.0,
                 "direct_training_carbon_tco2e": 235.0,
-                "creation_lifecycle_water_kl": 0.0,
             },
             {
-                "label": "4 955 vols commerciaux complets",
-                "provider": "Repère de vie courante",
+                "label": "4,955 full commercial flights",
+                "provider": "Everyday benchmark",
                 "kind": "reference",
                 "direct_training_energy_wh": 0.0,
                 "direct_training_carbon_tco2e": 104560.5,
-                "creation_lifecycle_water_kl": 0.0,
-            },
-            {
-                "label": "1 000 douches courtes",
-                "provider": "Repère de vie courante",
-                "kind": "reference",
-                "direct_training_energy_wh": 0.0,
-                "direct_training_carbon_tco2e": 0.0,
-                "creation_lifecycle_water_kl": 50.0,
-            },
-            {
-                "label": "1 000 bains",
-                "provider": "Repère de vie courante",
-                "kind": "reference",
-                "direct_training_energy_wh": 0.0,
-                "direct_training_carbon_tco2e": 0.0,
-                "creation_lifecycle_water_kl": 150.0,
-            },
-            {
-                "label": "1,5 million de journées d'eau potable",
-                "provider": "Repère de vie courante",
-                "kind": "reference",
-                "direct_training_energy_wh": 0.0,
-                "direct_training_carbon_tco2e": 0.0,
-                "creation_lifecycle_water_kl": 225000.0,
             },
         ]
     )
@@ -1454,181 +2001,43 @@ def render_training_models_table(records):
       <div class="summary-header">
         <div>
           <div class="summary-kicker">Visualisation</div>
-          <h3>Impacts d'apprentissage comparés des modèles</h3>
+          <h3>Comparative training impacts of models</h3>
         </div>
       </div>
-      <p class="summary-intro">Le graphique ci-dessous représente les valeurs centrales extrapolées pour tous les modèles du catalogue sur trois familles d'indicateurs d'apprentissage : énergie d'entraînement, CO2e d'entraînement direct et eau du cycle de création. Des repères de vie courante sont insérés directement dans la liste pour situer les ordres de grandeur.</p>
-      <div class="chart-tabbar" role="tablist" aria-label="Indicateur du graphique d'apprentissage">
-        <button type="button" class="chart-tab-button is-active" data-training-chart-control="metric-tab" data-metric-value="direct_training_energy" aria-selected="true">Énergie</button>
-        <button type="button" class="chart-tab-button" data-training-chart-control="metric-tab" data-metric-value="direct_training_carbon" aria-selected="false">Carbone</button>
-        <button type="button" class="chart-tab-button" data-training-chart-control="metric-tab" data-metric-value="creation_lifecycle_water" aria-selected="false">Eau cycle de création</button>
+      <p class="summary-intro">The chart below shows the extrapolated central values for all catalog models across two training indicator families: training energy and direct training CO2e. Everyday benchmarks are inserted directly into the list to situate the orders of magnitude.</p>
+      <div class="chart-tabbar" role="tablist" aria-label="Training chart indicator">
+        <button type="button" class="chart-tab-button is-active" data-training-chart-control="metric-tab" data-metric-value="direct_training_energy" aria-selected="true">Energy</button>
+        <button type="button" class="chart-tab-button" data-training-chart-control="metric-tab" data-metric-value="direct_training_carbon" aria-selected="false">Carbon</button>
       </div>
       <div id="training-impact-chart" class="models-impact-chart" data-training-chart-rows='{escape(json.dumps(chart_rows, ensure_ascii=False), quote=True)}'></div>
-      <p class="summary-intro models-benchmark-note">Repères intégrés dans le graphique : énergie domestique avec 10 000 foyers sur une année d'usages domestiques, soit ≈ 25 GWh sur la base d'une consommation moyenne de 2 500 kWh par ménage (RTE, estimation 2021), automobile issue de l'ICCT (2025, 235 gCO2e/km pour une voiture essence moyenne), avion complet dérivé de Klöwer et al. (2025) à partir de 577,97 MtCO2 et 27,45 millions de vols commerciaux observés en 2023, soit ≈ 104 560,5 tCO2 pour 4 955 vols complets, et eau domestique issue de l'ADEME/INC et de l'Anses (douche courte ≈ 50 L ; bain ≈ 150 L ; consommation quotidienne moyenne d'eau potable ≈ 150 L par personne en France, soit ≈ 225 000 kL pour 1,5 million de journées).</p>
+      <p class="summary-intro models-benchmark-note">Benchmarks integrated into the chart: household electricity for 10,000 households over one year of domestic use, i.e. ≈ 25 GWh based on an average consumption of 2,500 kWh per household (RTE, 2021 estimate), road transport from the ICCT (2025, 235 gCO2e/km for an average gasoline car), and full-flight aviation derived from Klöwer et al. (2025) from 577.97 MtCO2 and 27.45 million commercial flights observed in 2023, i.e. ≈ 104,560.5 tCO2 for 4,955 full flights.</p>
     </section>
     <section class="panel reference-panel">
       <div class="summary-header">
         <div>
-          <div class="summary-kicker">Modèles</div>
-          <h3>{len(rows)} modèles actuels avec estimation des impacts d'apprentissage</h3>
+          <div class="summary-kicker">Models</div>
+          <h3>{len(rows)} current models with estimated training impacts</h3>
         </div>
       </div>
-      <p class="summary-intro">Ce tableau projette les ordres de grandeur d'apprentissage des modèles actuels à partir des familles d'indicateurs réellement disponibles dans la littérature: <strong>énergie d'entraînement</strong> dérivée des émissions quand le pays source est documenté dans la table des mix, <strong>CO2e d'entraînement direct</strong> et <strong>eau du cycle de création</strong>. Les valeurs sont extrapolées par nombre de paramètres. L'énergie d'entraînement reste donc une reconstruction de screening plus fragile que le carbone direct et l'eau.</p>
+      <p class="summary-intro">This table projects the training orders of magnitude of current models from the indicator families actually available in the literature: <strong>training energy</strong> derived from emissions when the source country is documented in the electricity-mix table, and <strong>direct training CO2e</strong>. Values are extrapolated by parameter count. Training energy therefore remains a more fragile screening reconstruction than direct carbon.</p>
       <div class="table-toolbar">
-        <label class="table-search-label" for="training-model-search">Rechercher un modèle</label>
-        <input id="training-model-search" class="table-search-input" type="search" placeholder="Exemple: GPT, Claude, 70B, Meta" data-table-search="training-models-table">
+        <label class="table-search-label" for="training-model-search">Search for a model</label>
+        <input id="training-model-search" class="table-search-input" type="search" placeholder="Example: GPT, Claude, 70B, Meta" data-table-search="training-models-table">
       </div>
       <div class="reference-table-wrap">
         <table class="reference-table sortable-table" id="training-models-table">
           <thead>
             <tr>
-              <th><button type="button" class="sort-button" data-sort-table="training-models-table" data-sort-index="0" data-sort-type="text">Modèle</button></th>
-              <th><button type="button" class="sort-button" data-sort-table="training-models-table" data-sort-index="1" data-sort-type="text">Paramètres</button></th>
-              <th><button type="button" class="sort-button" data-sort-table="training-models-table" data-sort-index="2" data-sort-type="number">Énergie d'entraînement</button></th>
-              <th><button type="button" class="sort-button" data-sort-table="training-models-table" data-sort-index="3" data-sort-type="number">CO2e entraînement direct</button></th>
-              <th><button type="button" class="sort-button" data-sort-table="training-models-table" data-sort-index="4" data-sort-type="number">Eau cycle de création</button></th>
+              <th><button type="button" class="sort-button" data-sort-table="training-models-table" data-sort-index="0" data-sort-type="text">Model</button></th>
+              <th><button type="button" class="sort-button" data-sort-table="training-models-table" data-sort-index="1" data-sort-type="number">Parameters</button></th>
+              <th><button type="button" class="sort-button" data-sort-table="training-models-table" data-sort-index="2" data-sort-type="number">Training energy</button></th>
+              <th><button type="button" class="sort-button" data-sort-table="training-models-table" data-sort-index="3" data-sort-type="number">Direct training CO2e</button></th>
             </tr>
           </thead>
           <tbody>{''.join(body)}</tbody>
         </table>
       </div>
-    </section>
-    """
-
-
-def render_how_it_works_tab(records):
-    anchors = build_energy_inference_anchors(records)
-    prompt_query_anchors = [anchor for anchor in anchors if anchor.get("metric_name") in {"prompt_energy", "query_energy"}]
-    page_anchors = [anchor for anchor in anchors if anchor.get("metric_name") == "page_generation_energy"]
-
-    def render_anchor_rows(anchor_rows):
-        if not anchor_rows:
-            return "<tr><td colspan=\"5\">Aucun ancrage exploitable dans cette famille.</td></tr>"
-        rows = []
-        for anchor in anchor_rows:
-            record = get_record(records, anchor.get("record_id"))
-            rows.append(
-                f"""
-                <tr>
-                  <td>{escape(anchor.get('source_model', 'n.d.'))}</td>
-                  <td>{escape(format_reference_parameters(record.get('model_parameters_normalized') if record else 'n.d.'))}</td>
-                  <td>{escape(anchor.get('source_country', 'n.d.'))}</td>
-                  <td>{escape(anchor.get('source_energy', 'n.d.'))}</td>
-                  <td><a href="{escape(str((record or {}).get('source_url', '#')), quote=True)}" target="_blank" rel="noopener noreferrer" title="{escape(format_apa_hover(record or {}))}">{escape(format_apa_citation(record or {}))}</a></td>
-                </tr>
-                """
-            )
-        return "".join(rows)
-
-    return f"""
-    <section class="tab-panel" id="tab-how-panel" data-tab-panel="how">
-      <section class="panel summary-panel">
-        <div class="summary-header">
-          <div>
-            <div class="summary-kicker">How it works</div>
-            <h3>Méthode d'estimation d'inférence</h3>
-          </div>
-        </div>
-        <p class="summary-intro">EcoTrace LLM ne prétend pas mesurer des données télémétriques propriétaires qui ne sont pas publiées. L'application construit une extrapolation de screening à partir des quelques indicateurs d'inférence quantifiés réellement observés dans la littérature scientifique.</p>
-        <div class="summary-body">
-          <p><strong>1. Ancrages observés.</strong> Le moteur prédictif part uniquement des ancrages énergétiques d'inférence pour lesquels le nombre de paramètres du modèle source est connu ou estimé. Dans l'état actuel du corpus, cela donne une famille <code>Wh/prompt|requête</code> et une famille <code>Wh/page</code>.</p>
-          <p><strong>2. Mise à l'échelle par modèle.</strong> Pour chaque famille, l'application calcule une intensité moyenne <code>Wh / milliard de paramètres</code>, puis applique cette intensité au modèle cible à partir de son nombre de paramètres publiés ou estimés.</p>
-          <p><strong>3. Conversion pays.</strong> Le carbone et l'eau ne sont pas extrapolés directement depuis la littérature. Ils sont dérivés de l'énergie via le mix électrique du pays retenu. Pour un service propriétaire hébergé, on retient le pays de l'éditeur dans le catalogue. Pour un modèle open weight, on retient le pays du projet quand il est fourni.</p>
-          <p><strong>4. Annualisation.</strong> Les résultats par requête ou par page sont ensuite projetés à l'année en fonction du nombre d'usages, du nombre d'appels LLM par usage et de la fréquence mensuelle.</p>
-        </div>
-      </section>
-
-      <section class="panel reference-panel">
-        <div class="summary-header">
-          <div>
-            <div class="summary-kicker">Formules</div>
-            <h3>Chaîne de calcul retenue</h3>
-          </div>
-        </div>
-        <div class="summary-body">
-          <p>\\[
-          I_f = \\frac{{1}}{{|A_f|}} \\sum_{{a \\in A_f}} \\frac{{E_a}}{{P_a}}
-          \\]
-          avec \\( f \\in \\{{\\text{{prompt|requête}}, \\text{{page}}\\}} \\).</p>
-          <p>\\[
-          E_{{t,f}} = I_f \\times P_t
-          \\]
-          pour estimer l'énergie d'inférence du modèle cible.</p>
-          <p>\\[
-          CO2_{{t,f,c}} = \\frac{{E_{{t,f}}}}{{1000}} \\times CI_c
-          \\qquad
-          Water_{{t,f,c}} = \\frac{{E_{{t,f}}}}{{1000}} \\times WI_c \\times 1000
-          \\]</p>
-          <p>\\[
-          N_{{year}} = usages_{{mensuels}} \\times 12 \\times appels_{{LLM/usage}}
-          \\qquad
-          Impact_{{year}} = Impact_{{unitaire}} \\times N_{{year}}
-          \\]</p>
-          <p><strong>Définition des variables.</strong></p>
-          <p>\\(A_f\\) désigne l'ensemble des ancrages de littérature disponibles pour la famille d'unités \\(f\\). \\(E_a\\) est la valeur énergétique observée pour l'ancrage \\(a\\), convertie en Wh dans son unité native. \\(P_a\\) est le nombre de paramètres du modèle source de l'ancrage, exprimé en milliards. \\(I_f\\) est l'intensité énergétique moyenne par milliard de paramètres pour la famille \\(f\\).</p>
-          <p>\\(P_t\\) désigne le nombre de paramètres du modèle cible. \\(E_{{t,f}}\\) est l'énergie estimée pour ce modèle cible dans la famille \\(f\\). \\(CI_c\\) est l'intensité carbone de l'électricité du pays \\(c\\), exprimée en gCO2e/kWh. \\(WI_c\\) est l'intensité hydrique de l'électricité du pays \\(c\\), exprimée en L/kWh.</p>
-          <p>\\(N_{{year}}\\) est le nombre annuel d'unités d'inférence retenues pour le scénario. \\(Impact_{{unitaire}}\\) est la valeur énergétique, carbone ou eau associée à une unité d'inférence. \\(Impact_{{year}}\\) est la projection annuelle obtenue après multiplication par le volume d'usage.</p>
-        </div>
-        <p class="summary-intro">Les deux familles <code>Wh/prompt|requête</code> et <code>Wh/page</code> restent affichées séparément. Le projet ne fusionne pas ces deux mesures en une pseudo-valeur unique, car le corpus ne contient pas encore de conversion empirique robuste entre elles pour un même modèle.</p>
-      </section>
-
-      <section class="panel reference-panel">
-        <div class="summary-header">
-          <div>
-            <div class="summary-kicker">Corpus</div>
-            <h3>Ancrages énergétiques mobilisés dans le prédicteur</h3>
-          </div>
-        </div>
-        <p class="summary-intro">Seuls les indicateurs énergétiques d'inférence disposant d'un nombre de paramètres exploitable sont retenus dans le coeur prédictif. Les autres indicateurs restent visibles dans le référentiel, mais ne servent pas à la mise à l'échelle des modèles.</p>
-        <div class="reference-subtable">
-          <h4>Famille Wh/prompt|requête</h4>
-          <div class="reference-table-wrap">
-            <table class="reference-table">
-              <thead>
-                <tr>
-                  <th>Modèle source</th>
-                  <th>Paramètres</th>
-                  <th>Pays</th>
-                  <th>Valeur observée</th>
-                  <th>Citation</th>
-                </tr>
-              </thead>
-              <tbody>{render_anchor_rows(prompt_query_anchors)}</tbody>
-            </table>
-          </div>
-        </div>
-        <div class="reference-subtable">
-          <h4>Famille Wh/page</h4>
-          <div class="reference-table-wrap">
-            <table class="reference-table">
-              <thead>
-                <tr>
-                  <th>Modèle source</th>
-                  <th>Paramètres</th>
-                  <th>Pays</th>
-                  <th>Valeur observée</th>
-                  <th>Citation</th>
-                </tr>
-              </thead>
-              <tbody>{render_anchor_rows(page_anchors)}</tbody>
-            </table>
-          </div>
-        </div>
-      </section>
-
-      <section class="panel summary-panel">
-        <div class="summary-header">
-          <div>
-            <div class="summary-kicker">Limites</div>
-            <h3>Ce que la méthode fait et ne fait pas</h3>
-          </div>
-        </div>
-        <div class="summary-body">
-          <p><strong>Oui :</strong> produire une estimation cohérente là où les fournisseurs ne publient rien, en documentant explicitement les ancrages, les paramètres et le pays retenu.</p>
-          <p><strong>Non :</strong> prétendre fournir une mesure auditée ou un chiffre officiel d'empreinte du fournisseur. Le résultat doit être lu comme une estimation de screening, utile pour comparer des ordres de grandeur et guider l'écoconception.</p>
-          <p><strong>Point de vigilance :</strong> les nombres de paramètres de plusieurs modèles propriétaires sont estimés à partir de sources tierces. Ils sont maintenus dans le catalogue avec leur source et leur statut (<code>observed</code>, <code>estimated</code> ou proxy de famille).</p>
-        </div>
-      </section>
+      <p class="summary-intro">`*` indicates an estimated parameter count rather than a provider-published value.</p>
     </section>
     """
 
@@ -1663,17 +2072,17 @@ def process_description(form):
     moderation = moderate_application_description_with_openai(description)
     if moderation["decision"] != "allow":
         guidance = (
-            "Décris une application, une fonctionnalité ou un workflow utilisant un LLM, "
-            "avec son usage, son volume ou son contexte technique."
+            "Describe an application, feature, or workflow using an LLM, "
+            "with its usage pattern, scale, or technical context."
         )
         raise OpenAIModerationError(
-            f"Cette description ne correspond pas clairement à un logiciel ou à un usage de LLM exploitable par la plateforme. "
+            f"This description does not clearly correspond to software or an LLM usage scenario that the platform can process. "
             f"{moderation['reason']} {guidance}"
         )
     parsed_payload, parser_notes, parser_meta = parse_application_description_with_openai(description)
     parser_meta["moderation"] = moderation
     parsed_payload["software_components"] = []
-    parser_notes.append("L'estimation a ete restreinte aux consommations du LLM; les composants logiciels hors LLM ont ete exclus du calcul.")
+    parser_notes.append("The estimate was restricted to LLM consumption; non-LLM software components were excluded from the calculation.")
     apply_overrides(parsed_payload, form)
     records = load_records()
     result = estimate_feature_externalities(records, parsed_payload)
@@ -1716,20 +2125,43 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
     if error_message:
         error_block = f"""
         <section class="panel alert-panel error">
-          <h2>Description non exploitable</h2>
+          <h2>Description cannot be processed</h2>
           <p class="lead">{escape(error_message)}</p>
-          <p class="lead">EcoTrace LLM attend une description d'application, de fonctionnalité ou de workflow mobilisant un ou plusieurs LLMs.</p>
+          <p class="lead">The application expects a description of an application, feature, or workflow using one or more LLMs.</p>
         </section>
         """
 
-    reference_sections = render_reference_catalog_sections()
-    training_reference_block = reference_sections["training"]
-    inference_reference_block = reference_sections["inference"]
-    reference_counts = reference_sections["counts"]
     all_records = load_records()
     market_models_block = render_market_models_table(all_records)
     training_models_block = render_training_models_table(all_records)
-    how_it_works_tab = render_how_it_works_tab(all_records)
+    bibliography_tab = render_bibliography_tab()
+    documentation_tab = render_documentation_tab()
+    contact_tab = f"""
+    <section class="tab-panel" id="tab-contact-panel" data-tab-panel="contact">
+      <section class="panel reference-panel">
+        <div class="summary-body">
+          <p><strong>Arnault Pachot</strong></p>
+          <p><a href="mailto:{obfuscate_email('apachot@pollitics.com')}">{obfuscate_email('apachot@pollitics.com')}</a></p>
+          <p><strong>Thierry Petit</strong></p>
+          <p><a href="mailto:{obfuscate_email('tpetit@pollitics.com')}">{obfuscate_email('tpetit@pollitics.com')}</a></p>
+          <p class="summary-intro">Email addresses are obfuscated in the page source to reduce basic scraping.</p>
+        </div>
+      </section>
+    </section>
+    """
+    cite_tab = f"""
+    <section class="tab-panel" id="tab-cite-panel" data-tab-panel="cite">
+      <section class="panel reference-panel">
+        <div class="summary-body">
+          <p><strong>Short reference.</strong></p>
+          <p>Pachot, A., &amp; Petit, T. (2026, March 12). <em>An open tool for exploring and estimating the environmental footprint of large language models: Dataset, observatory, API, MCP server, and web interface.</em></p>
+          <p><strong>BibTeX.</strong></p>
+          <pre style="margin:0; white-space:pre-wrap;"><code>{escape(PROJECT_PAPER_BIBTEX)}</code></pre>
+          <p><a href="/downloads/llm_environment_opendata_paper.pdf">Download PDF</a> | <a href="/downloads/llm_environment_opendata_paper.bib">Download BibTeX entry</a></p>
+        </div>
+      </section>
+    </section>
+    """
     result_block = ""
     result_methods_block = ""
     if result:
@@ -1738,33 +2170,33 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
         result_methods_block = render_method_comparisons(method_comparisons)
         evidence = (parser_meta or {}).get("evidence", {})
         method_label = {
-            "parametric_extrapolation": "Extrapolation parametrique",
-            "literature_proxy": "Proxy de litterature",
-            "literature_multiples": "Agrégation multi-indicateurs d'inférence",
-            "wh_parameter_model": "Modèle unifié Wh -> paramètres",
-        }.get(result.get("method"), "Methode non qualifiee")
+            "parametric_extrapolation": "Parametric extrapolation",
+            "literature_proxy": "Literature proxy",
+            "literature_multiples": "Multi-indicator inference aggregation",
+            "wh_parameter_model": "Unified Wh -> parameters model",
+        }.get(result.get("method"), "Unqualified method")
         model_profile = result.get("model_profile") or {}
         country_mix = result.get("country_energy_mix") or {}
         country_resolution_label = {
-            "publisher_country": "pays de l'éditeur",
-            "project_country": "pays du projet",
-            "fallback_reference_country": "pays de référence",
-            "explicit_country": "pays explicite",
-        }.get(result.get("country_resolution"), "pays retenu")
+            "publisher_country": "publisher country",
+            "project_country": "project country",
+            "fallback_reference_country": "reference country",
+            "explicit_country": "explicit country",
+        }.get(result.get("country_resolution"), "retained country")
         result_block = f"""
         <section class="panel result hero-card">
           <div class="summary-header">
             <div>
-              <div class="summary-kicker">Calcul</div>
-              <h3>DÉTAIL DU CALCUL</h3>
+              <div class="summary-kicker">Calculation</div>
+              <h3>Calculation details</h3>
             </div>
           </div>
-          <p class="lead">Estimation d'inférence fondée sur des indicateurs scientifiques sourcés et un calcul traçable.</p>
-          <p class="scope-note">Périmètre retenu: seules les externalités d'inférence du LLM sont prises en compte. L'apprentissage du modèle, les consommations du système logiciel et les infrastructures annexes sont exclus de cette estimation affichée.</p>
-          <p class="meta-inline">Niveau de preuve: <strong>{escape(evidence.get('label', 'Non qualifie'))}</strong></p>
-          <p class="meta-inline">Methode: <strong>{escape(method_label)}</strong></p>
-          <p class="meta-inline">Modele de reference: <strong>{escape(model_profile.get('model_id', parsed_payload.get('model_id', 'non specifie')))}</strong>{' | Parametres actifs approx.: <strong>' + escape(model_profile.get('active_parameters_billion', '')) + 'B</strong>' if model_profile.get('active_parameters_billion') else ''}</p>
-          <p class="meta-inline">Mix electrique: <strong>{escape(country_mix.get('country_code', parsed_payload.get('country', 'non specifie')))}</strong> <span class="method-basis">({escape(country_resolution_label)})</span>{' | ' + escape(country_mix.get('grid_carbon_intensity_gco2_per_kwh', '')) + ' gCO2e/kWh' if country_mix.get('grid_carbon_intensity_gco2_per_kwh') else ''}</p>
+          <p class="lead">Inference estimate based on source-linked scientific indicators and a traceable calculation.</p>
+          <p class="scope-note">Retained scope: only LLM inference externalities are included. Model training, software-system consumption, and ancillary infrastructure are excluded from the displayed estimate.</p>
+          <p class="meta-inline">Evidence level: <strong>{escape(evidence.get('label', 'Unqualified'))}</strong></p>
+          <p class="meta-inline">Method: <strong>{escape(method_label)}</strong></p>
+          <p class="meta-inline">Reference model: <strong>{escape(model_profile.get('model_id', parsed_payload.get('model_id', 'not specified')))}</strong>{' | Approx. active parameters: <strong>' + escape(format_parameter_billions(model_profile.get('active_parameters_billion'), is_estimated_parameter_status(model_profile.get('parameter_value_status')))) + '</strong>' if model_profile.get('active_parameters_billion') else ''}</p>
+          <p class="meta-inline">Electricity mix: <strong>{escape(country_mix.get('country_code', parsed_payload.get('country', 'not specified')))}</strong> <span class="method-basis">({escape(country_resolution_label)})</span>{' | ' + escape(country_mix.get('grid_carbon_intensity_gco2_per_kwh', '')) + ' gCO2e/kWh' if country_mix.get('grid_carbon_intensity_gco2_per_kwh') else ''}</p>
           {render_assumptions_summary(result)}
           {render_method_calculation_details(method_comparisons)}
         </section>
@@ -1773,17 +2205,16 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
     home_tab = f"""
     <section class="tab-panel is-active" id="tab-home-panel" data-tab-panel="home">
       <header class="hero">
-        <div class="eyebrow">Projet {PROJECT_NAME}</div>
-        <h1>Estimer l’empreinte environnementale d’inférence d’une application utilisant des LLMs</h1>
-        <p class="subtitle">Décris ton application en langage naturel pour obtenir une estimation d’inférence, ses hypothèses et son détail de calcul sourcé.</p>
+        <h1>An Open Tool for Exploring and Estimating the Environmental Footprint of Large Language Models</h1>
+        <p class="meta-inline"><a href="/downloads/llm_environment_opendata_paper.pdf">Download the associated scientific publication PDF</a> | <a href="/downloads/llm_environment_opendata_paper.bib">Download the BibTeX entry</a></p>
       </header>
       <form class="panel" method="post" action="/" id="estimate-form">
-        <label for="description">Description libre de l'application</label>
-        <textarea id="description" name="description" placeholder="Exemple: Nous avons un assistant RAG sur GPT-4 via API, utilisé 4000 fois par mois en France. Chaque requête envoie 2200 input tokens et reçoit 500 output tokens. Il y a une base vectorielle, des embeddings et du logging.">{escape(description)}</textarea>
+        <label for="description">Describe your application in natural language to obtain an inference estimate, its assumptions, and its source-linked calculation details.</label>
+        <textarea id="description" name="description" placeholder="Example: We have a RAG assistant on GPT-4 via API, used 4,000 times per month in France. Each request sends 2,200 input tokens and receives 500 output tokens. There is a vector database, embeddings, and logging.">{escape(description)}</textarea>
         <button type="submit" id="submit-button">
           <span class="spinner" aria-hidden="true"></span>
-          <span class="default-text">Evaluer l'application</span>
-          <span class="loading-text">Evaluation en cours...</span>
+          <span class="default-text">Estimate application</span>
+          <span class="loading-text">Estimating...</span>
         </button>
       </form>
       {result_methods_block}
@@ -1791,41 +2222,25 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
       {result_block}
     </section>
     """
-    training_tab = f"""
-    <section class="tab-panel" id="tab-training-panel" data-tab-panel="training">
-      {training_models_block}
-      <section class="panel reference-panel">
-        <div class="summary-header">
-          <div>
-            <div class="summary-kicker">Référentiel</div>
-            <h3>{reference_counts['training']} indicateurs d'apprentissage issus de la littérature scientifique</h3>
-          </div>
-        </div>
-        <p class="summary-intro">Cette page présente des indicateurs documentés sur les externalités environnementales liées à l'apprentissage et au cycle de vie de création des modèles LLM. Les références macro d'infrastructure et les sources institutionnelles hors périmètre LLM ont été exclues.</p>
-        {training_reference_block}
-        <p class="summary-intro">`*` indique une valeur de nombre de paramètres estimée et non officiellement publiée par le fournisseur.</p>
+    observatory_tab = f"""
+    <section class="tab-panel" id="tab-observatory-panel" data-tab-panel="observatory">
+      <nav class="subtabs" aria-label="Observatory">
+        <button type="button" class="subtab-button is-active" data-subtab-target="observatory-inference">Inference</button>
+        <button type="button" class="subtab-button" data-subtab-target="observatory-training">Training</button>
+      </nav>
+
+      <section class="subtab-panel is-active" id="subtab-observatory-inference-panel" data-subtab-panel="observatory-inference">
+        {market_models_block}
       </section>
-    </section>
-    """
-    models_tab = f"""
-    <section class="tab-panel" id="tab-models-panel" data-tab-panel="models">
-      {market_models_block}
-      <section class="panel reference-panel">
-        <div class="summary-header">
-          <div>
-            <div class="summary-kicker">Référentiel</div>
-            <h3>{reference_counts['inference']} indicateurs d'inférence issus de la littérature scientifique</h3>
-          </div>
-        </div>
-        <p class="summary-intro">Ce tableau regroupe les indicateurs quantifiés relatifs à l'inférence des LLMs dans les publications retenues.</p>
-        {inference_reference_block}
-        <p class="summary-intro">`*` indique une valeur de nombre de paramètres estimée et non officiellement publiée par le fournisseur.</p>
+
+      <section class="subtab-panel" id="subtab-observatory-training-panel" data-subtab-panel="observatory-training">
+        {training_models_block}
       </section>
     </section>
     """
 
     return f"""<!doctype html>
-<html lang="fr">
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -1835,6 +2250,10 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
       tex: {{
         inlineMath: [['\\\\(', '\\\\)']],
         displayMath: [['\\\\[', '\\\\]']]
+      }},
+      chtml: {{
+        displayAlign: 'left',
+        displayIndent: '0'
       }},
       options: {{
         skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre']
@@ -1846,24 +2265,24 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
     :root {{
       --bg: #ffffff;
       --paper: #ffffff;
-      --ink: #20261f;
-      --muted: #667065;
-      --line: #d7dbd2;
-      --accent: #3f5a49;
-      --accent-soft: #eff2ec;
-      --error: #dc3545;
+      --ink: #1f2430;
+      --muted: #5f6773;
+      --line: #d8dde6;
+      --accent: #243b63;
+      --accent-soft: #ffffff;
+      --error: #9f2f3f;
       --shadow: none;
     }}
     * {{ box-sizing: border-box; }}
     body {{
       margin: 0;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      font-family: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Palatino, "URW Palladio L", serif;
       color: var(--ink);
       background: var(--bg);
       scroll-behavior: smooth;
     }}
-    .wrap {{ max-width: 960px; margin: 0 auto; padding: 24px 16px 40px; }}
-    .hero {{ margin-bottom: 20px; }}
+    .wrap {{ max-width: 920px; margin: 0 auto; padding: 32px 24px 56px; }}
+    .hero {{ margin-bottom: 28px; }}
     .eyebrow {{
       display: inline-block;
       margin-bottom: 8px;
@@ -1871,37 +2290,41 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
       border-radius: 0;
       background: transparent;
       color: var(--accent);
-      font-size: 0.78rem;
-      font-weight: 600;
-      letter-spacing: 0.05em;
+      font-size: 0.76rem;
+      font-weight: 700;
+      letter-spacing: 0.08em;
       border-bottom: 1px solid var(--line);
     }}
-    h1 {{ margin: 0 0 8px; font-size: clamp(1.8rem, 4vw, 2.35rem); line-height: 1.18; font-weight: 650; }}
-    h2, h3 {{ margin: 0 0 0.75rem; font-weight: 700; }}
-    .subtitle {{ max-width: 760px; color: var(--muted); font-size: 0.98rem; line-height: 1.55; margin: 0; }}
+    h1 {{ margin: 0 0 10px; font-size: clamp(1.55rem, 3vw, 1.95rem); line-height: 1.24; font-weight: 700; color: var(--ink); }}
+    h2 {{ margin: 0 0 0.7rem; font-size: 1.22rem; line-height: 1.3; font-weight: 700; color: var(--ink); }}
+    h3 {{ margin: 0 0 0.7rem; font-size: 1.1rem; line-height: 1.32; font-weight: 700; color: var(--ink); }}
+    h4 {{ line-height: 1.35; }}
+    .subtitle {{ max-width: 720px; color: var(--muted); font-size: 1rem; line-height: 1.68; margin: 0; }}
     .panel {{
       background: var(--paper);
-      border: 1px solid var(--line);
-      border-radius: 0.4rem;
-      padding: 1rem 1rem;
+      border: 0;
+      border-radius: 0.2rem;
+      padding: 1.15rem 0;
       box-shadow: var(--shadow);
-      margin-bottom: 1rem;
+      margin-bottom: 1.5rem;
     }}
     .hero-card {{
-      border-color: var(--line);
       background: var(--paper);
     }}
     .alert-panel.error {{
-      border-color: rgba(220,53,69,0.3);
-      background: #fff5f6;
+      border: 0;
+      background: #fff;
     }}
     textarea, input {{
       width: 100%;
       border: 1px solid var(--line);
-      border-radius: 0.35rem;
-      padding: 0.875rem 1rem;
+      border-radius: 0.2rem;
+      padding: 0.95rem 1rem;
       font: inherit;
-      background: #fdfdf9;
+      background: #fff;
+    }}
+    #description {{
+      background: rgba(140, 122, 91, 0.08);
     }}
     textarea:focus, input:focus {{
       outline: none;
@@ -1909,14 +2332,14 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
       box-shadow: none;
     }}
     textarea {{ min-height: 200px; resize: vertical; }}
-    label {{ display: block; font-size: 0.95rem; font-weight: 600; color: var(--ink); margin-bottom: 0.5rem; }}
+    label {{ display: block; font-size: 0.95rem; line-height: 1.45; font-weight: 600; color: var(--ink); margin-bottom: 0.55rem; }}
     button {{
       margin-top: 1rem;
       border: 1px solid var(--accent);
-      border-radius: 0.35rem;
+      border-radius: 0.2rem;
       background: var(--paper);
       color: var(--accent);
-      padding: 0.75rem 1.15rem;
+      padding: 0.78rem 1.15rem;
       font: inherit;
       font-weight: 600;
       cursor: pointer;
@@ -1924,18 +2347,18 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
       align-items: center;
       gap: 0.65rem;
     }}
-    button:hover {{ background: var(--accent-soft); }}
+    button:hover {{ background: #fff; }}
     button:disabled {{
-      background: #f1f3ef;
-      color: #8a948b;
-      border-color: #b9c0b7;
+      background: #fff;
+      color: #8c94a0;
+      border-color: #c7ccd5;
       cursor: wait;
     }}
     .spinner {{
       width: 1rem;
       height: 1rem;
-      border: 2px solid rgba(255,255,255,0.45);
-      border-top-color: #fff;
+      border: 2px solid rgba(36,59,99,0.18);
+      border-top-color: var(--accent);
       border-radius: 50%;
       animation: spin 0.8s linear infinite;
       display: none;
@@ -1956,33 +2379,33 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
       to {{ transform: rotate(360deg); }}
     }}
     .metric {{
-      margin-top: 0.9rem;
-      padding: 0.9rem;
-      border-radius: 0.65rem;
+      margin-top: 1rem;
+      padding: 0.2rem 0;
+      border-radius: 0.2rem;
       background: #fff;
-      border: 1px solid var(--line);
+      border: 0;
     }}
     .metric .label {{
       display: block;
       color: var(--muted);
       font-size: 0.85rem;
-      text-transform: uppercase;
-      letter-spacing: 0.03em;
-      margin-bottom: 0.5rem;
+      text-transform: none;
+      letter-spacing: 0.01em;
+      margin-bottom: 0.35rem;
     }}
     .metric strong {{
-      font-size: 1.12rem;
-      line-height: 1.35;
+      font-size: 1.08rem;
+      line-height: 1.45;
     }}
     .submetrics-block {{
-      margin-top: 1rem;
-      padding-top: 0.9rem;
+      margin-top: 1.15rem;
+      padding-top: 1rem;
       border-top: 1px solid var(--line);
     }}
     .submetrics-title {{
-      margin: 0 0 0.7rem;
-      color: #495057;
-      font-size: 0.92rem;
+      margin: 0 0 0.8rem;
+      color: var(--ink);
+      font-size: 0.96rem;
       font-weight: 700;
     }}
     .submetrics-title-secondary {{
@@ -1991,13 +2414,13 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
     .submetrics {{
       display: grid;
       grid-template-columns: repeat(3, minmax(0, 1fr));
-      gap: 0.7rem;
+      gap: 0.9rem;
     }}
     .submetric {{
-      padding: 0.75rem 0.8rem;
-      border: 1px solid var(--line);
-      border-radius: 0.6rem;
-      background: #f7f7f3;
+      padding: 0.15rem 0;
+      border: 0;
+      border-radius: 0.2rem;
+      background: #fff;
     }}
     .submetric-label {{
       display: block;
@@ -2017,25 +2440,25 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
       background: #fff;
     }}
     .method-panel {{
-      margin-top: 1rem;
-      padding-top: 0.9rem;
+      margin-top: 1.2rem;
+      padding-top: 1.05rem;
       border-top: 1px solid var(--line);
     }}
     .result-panel {{
-      margin-bottom: 1.5rem;
+      margin-bottom: 2rem;
       padding-top: 0;
       border-top: 0;
     }}
     .result-method-grid {{
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-      gap: 0.9rem;
+      gap: 1.15rem;
     }}
     .result-method-card {{
-      border: 1px solid var(--line);
-      border-radius: 0.4rem;
+      border: 0;
+      border-radius: 0.2rem;
       background: var(--paper);
-      padding: 1rem;
+      padding: 0.2rem 0;
       box-shadow: none;
     }}
     .result-method-head {{
@@ -2043,20 +2466,15 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
       justify-content: space-between;
       gap: 0.75rem;
       align-items: flex-start;
-      margin-bottom: 0.6rem;
+      margin-bottom: 0.7rem;
     }}
     .result-method-head h4 {{
       margin: 0;
       font-size: 1.02rem;
-      line-height: 1.35;
+      line-height: 1.4;
     }}
     .result-method-kicker {{
-      margin-bottom: 0.2rem;
-      color: var(--accent);
-      font-size: 0.74rem;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 0.04em;
+      display: none;
     }}
     .result-method-refs {{
       display: flex;
@@ -2066,71 +2484,71 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
       min-width: 3rem;
     }}
     .result-method-basis {{
-      margin: 0 0 0.85rem;
+      margin: 0 0 0.95rem;
       color: var(--muted);
-      font-size: 0.9rem;
-      line-height: 1.55;
+      font-size: 0.94rem;
+      line-height: 1.62;
     }}
     .result-method-metrics {{
       display: grid;
       grid-template-columns: repeat(3, minmax(0, 1fr));
-      gap: 0.6rem;
+      gap: 1rem;
     }}
     .result-method-metric {{
-      padding: 0.75rem 0.8rem;
-      border: 1px solid var(--line);
-      border-radius: 0.35rem;
-      background: #f8f8f4;
+      padding: 0.15rem 0;
+      border: 0;
+      border-radius: 0.2rem;
+      background: #fff;
     }}
     .result-method-label {{
       display: block;
       margin-bottom: 0.3rem;
       color: var(--muted);
       font-size: 0.78rem;
-      text-transform: uppercase;
-      letter-spacing: 0.03em;
+      text-transform: none;
+      letter-spacing: 0.01em;
     }}
     .result-method-metric strong {{
       font-size: 1rem;
-      line-height: 1.35;
+      line-height: 1.45;
     }}
     .result-method-actions {{
       margin-top: 0.9rem;
     }}
     .result-method-detail {{
-      margin-top: 0.95rem;
-      padding-top: 0.9rem;
+      margin-top: 1.1rem;
+      padding-top: 1rem;
       border-top: 1px solid var(--line);
     }}
     .result-method-detail-card {{
-      border: 1px solid var(--line);
-      border-radius: 0.4rem;
+      border: 0;
+      border-radius: 0.2rem;
       background: var(--paper);
-      padding: 1rem;
+      padding: 0.15rem 0;
       box-shadow: none;
     }}
     .result-method-detail-card + .result-method-detail-card {{
       margin-top: 0.9rem;
     }}
     .result-method-detail .method-modal-section + .method-modal-section {{
-      margin-top: 0.85rem;
-      padding-top: 0.85rem;
+      margin-top: 0.95rem;
+      padding-top: 0.95rem;
       border-top: 1px solid var(--line);
     }}
     .method-basis {{
       margin-top: 0.25rem;
       color: var(--muted);
-      font-size: 0.83rem;
-      line-height: 1.45;
+      font-size: 0.88rem;
+      line-height: 1.55;
     }}
     .method-detail-button,
     .modal-close-button {{
       appearance: none;
-      border: 1px solid var(--line);
+      border: 1px solid transparent;
       background: transparent;
       color: var(--accent);
-      border-radius: 0.35rem;
-      padding: 0.45rem 0.75rem;
+      border-radius: 0.2rem;
+      padding: 0.35rem 0.1rem;
       font: inherit;
       font-size: 0.85rem;
       font-weight: 600;
@@ -2139,7 +2557,7 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
     }}
     .method-detail-button:hover,
     .modal-close-button:hover {{
-      background: var(--accent-soft);
+      background: #fff;
     }}
     .method-modal {{
       border: 0;
@@ -2149,24 +2567,24 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
       width: 100%;
     }}
     .method-modal::backdrop {{
-      background: rgba(33,37,41,0.45);
+      background: rgba(255,255,255,0.96);
     }}
     .method-modal-card {{
       background: var(--paper);
-      border: 1px solid var(--line);
+      border: 0;
       border-radius: 0.9rem;
       box-shadow: var(--shadow);
-      padding: 1rem 1.1rem;
+      padding: 0.25rem 0;
     }}
     .method-modal-section + .method-modal-section {{
-      margin-top: 1rem;
-      padding-top: 1rem;
+      margin-top: 1.05rem;
+      padding-top: 1.05rem;
       border-top: 1px solid var(--line);
     }}
     .metric-detail {{
-      margin-top: 0.85rem;
+      margin-top: 1rem;
       border-top: 1px solid var(--line);
-      padding-top: 0.7rem;
+      padding-top: 0.85rem;
     }}
     .metric-detail-toggle {{
       display: inline-flex;
@@ -2174,7 +2592,7 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
       gap: 0.45rem;
       cursor: pointer;
       color: var(--accent);
-      font-size: 0.9rem;
+      font-size: 0.95rem;
       font-weight: 600;
       list-style: none;
     }}
@@ -2199,34 +2617,33 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
     }}
     .metric-detail-body {{
       margin-top: 0.7rem;
-      padding: 0.85rem 0.9rem;
-      border: 1px solid var(--line);
-      border-radius: 0.35rem;
-      background: #f8f8f4;
+      padding: 0.15rem 0;
+      border: 0;
+      border-radius: 0.2rem;
+      background: #fff;
     }}
-    .lead {{ color: var(--muted); line-height: 1.6; margin: 0; }}
+    .lead {{ color: var(--muted); line-height: 1.68; margin: 0; max-width: 720px; }}
     .scope-note {{
-      margin: 0.6rem 0 0;
-      padding: 0.7rem 0.85rem;
+      margin: 0.7rem 0 0;
+      padding: 0.15rem 0 0.15rem 0.9rem;
       border-left: 2px solid var(--line);
-      background: #f8f8f4;
-      color: #495057;
-      font-size: 0.93rem;
-      line-height: 1.55;
+      background: #fff;
+      color: var(--ink);
+      font-size: 0.95rem;
+      line-height: 1.65;
     }}
     .meta-inline {{
-      margin: 0.45rem 0 0;
+      margin: 0.5rem 0 0;
       color: var(--muted);
-      font-size: 0.92rem;
+      font-size: 0.94rem;
     }}
     .summary-panel {{
-      border-color: rgba(13,110,253,0.18);
       background: var(--paper);
     }}
     .tabs {{
       display: flex;
-      gap: 0.6rem;
-      margin-bottom: 1rem;
+      gap: 1rem;
+      margin-bottom: 1.5rem;
       flex-wrap: wrap;
     }}
     .tab-button {{
@@ -2234,22 +2651,22 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
       border: 0;
       border-bottom: 1px solid transparent;
       background: transparent;
-      color: #495057;
+      color: var(--muted);
       border-radius: 0;
-      padding: 0.4rem 0 0.45rem;
+      padding: 0.3rem 0 0.55rem;
       font: inherit;
       font-weight: 600;
       cursor: pointer;
-      margin: 0 1rem 0 0;
+      margin: 0 1.2rem 0 0;
     }}
     .tab-button:hover {{
-      border-color: rgba(63,90,73,0.35);
+      border-color: rgba(36,59,99,0.35);
       background: transparent;
     }}
     .tab-button.is-active {{
       background: transparent;
       color: var(--accent);
-      border-color: var(--accent);
+      border-color: rgb(140, 122, 91);
     }}
     .tab-panel {{
       display: none;
@@ -2257,65 +2674,102 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
     .tab-panel.is-active {{
       display: block;
     }}
+    .subtabs {{
+      display: flex;
+      gap: 1rem;
+      margin: 0 0 1.5rem;
+      flex-wrap: wrap;
+    }}
+    .subtab-button {{
+      appearance: none;
+      border: 0;
+      border-bottom: 1px solid transparent;
+      background: transparent;
+      color: var(--muted);
+      padding: 0.25rem 0 0.45rem;
+      font: inherit;
+      font-size: 0.98rem;
+      font-weight: 600;
+      cursor: pointer;
+      margin: 0 1.1rem 0 0;
+    }}
+    .subtab-button:hover {{
+      border-color: rgba(36,59,99,0.35);
+    }}
+    .subtab-button.is-active {{
+      color: var(--accent);
+      border-color: rgb(140, 122, 91);
+    }}
+    .subtab-panel {{
+      display: none;
+    }}
+    .subtab-panel.is-active {{
+      display: block;
+    }}
     .summary-header {{
       display: flex;
       justify-content: space-between;
       gap: 1rem;
       align-items: center;
-      margin-bottom: 0.5rem;
+      margin-bottom: 0.7rem;
     }}
     .summary-kicker {{
-      color: var(--accent);
-      text-transform: uppercase;
-      letter-spacing: 0.04em;
-      font-size: 0.78rem;
-      font-weight: 700;
-      margin-bottom: 0.35rem;
+      display: none;
+    }}
+    .summary-header h3 {{
+      color: var(--ink);
+    }}
+    .result-method-head h4 {{
+      color: var(--ink);
+    }}
+    .math-label,
+    .submetrics-title,
+    .table-search-label {{
+      color: var(--ink);
     }}
     .summary-intro {{
-      margin: 0 0 0.85rem;
+      margin: 0 0 1rem;
       color: var(--muted);
-      max-width: 72ch;
-      line-height: 1.5;
-      font-size: 0.94rem;
-    }}
-    .summary-body {{
-      border: 1px solid var(--line);
-      padding: 0.9rem 1rem;
-      background: #f8f8f4;
-      border-radius: 0.35rem;
-      line-height: 1.7;
+      max-width: 70ch;
+      line-height: 1.68;
       font-size: 0.96rem;
     }}
+    .summary-body {{
+      border: 0;
+      padding: 0.15rem 0;
+      background: #fff;
+      border-radius: 0.35rem;
+      line-height: 1.78;
+      font-size: 0.98rem;
+    }}
     .reference-panel {{
-      border-color: rgba(70,103,86,0.14);
     }}
     .table-toolbar {{
       display: flex;
       flex-direction: column;
-      gap: 0.45rem;
-      margin: 0 0 0.85rem;
+      gap: 0.5rem;
+      margin: 0 0 1rem;
     }}
     .table-search-label {{
       margin: 0;
       font-size: 0.88rem;
       font-weight: 600;
-      color: #495057;
+      color: var(--ink);
     }}
     .table-search-input {{
       max-width: 420px;
-      padding: 0.7rem 0.9rem;
+      padding: 0.8rem 0.9rem;
     }}
     .models-chart-panel {{
-      margin-bottom: 1rem;
-      padding: 1rem;
-      border: 1px solid var(--line);
-      border-radius: 0.4rem;
+      margin-bottom: 1.5rem;
+      padding: 0.2rem 0;
+      border: 0;
+      border-radius: 0.2rem;
       background: var(--paper);
     }}
     .models-chart-toolbar {{
       display: flex;
-      gap: 0.8rem;
+      gap: 1rem;
       flex-wrap: wrap;
       margin-bottom: 1rem;
     }}
@@ -2329,52 +2783,54 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
       margin: 0;
       font-size: 0.85rem;
       font-weight: 600;
-      color: #495057;
+      color: var(--ink);
     }}
     .models-chart-field select {{
       width: 100%;
       border: 1px solid var(--line);
-      border-radius: 0.35rem;
+      border-radius: 0.2rem;
       padding: 0.7rem 0.8rem;
       font: inherit;
-      background: #fdfdf9;
+      background: #fff;
     }}
     .chart-tabbar {{
       display: flex;
-      gap: 0.5rem;
+      gap: 0.65rem;
       flex-wrap: wrap;
-      margin-bottom: 1rem;
+      margin-bottom: 1.15rem;
     }}
     .chart-tab-button {{
       margin-top: 0;
       border: 1px solid var(--line);
-      border-radius: 999px;
+      border-radius: 0.2rem;
       background: transparent;
       color: var(--muted);
-      padding: 0.45rem 0.8rem;
-      font-size: 0.88rem;
+      padding: 0.38rem 0.72rem;
+      font-size: 0.9rem;
       font-weight: 600;
     }}
     .chart-tab-button:hover {{
-      background: var(--accent-soft);
+      background: #fff;
       color: var(--accent);
-      border-color: rgba(63,90,73,0.24);
+      border-color: rgba(36,59,99,0.24);
     }}
     .chart-tab-button.is-active {{
-      background: var(--accent-soft);
+      background: #fff;
       color: var(--accent);
-      border-color: rgba(63,90,73,0.24);
+      border-color: rgba(36,59,99,0.24);
     }}
     .models-impact-chart {{
-      border: 1px solid var(--line);
-      border-radius: 0.35rem;
-      background: #f8f8f4;
-      padding: 0.9rem;
+      border: 0;
+      border-radius: 0.2rem;
+      background: rgba(140, 122, 91, 0.08);
+      padding: 0.45rem 0.5rem;
       min-height: 480px;
     }}
     .models-benchmark-note {{
-      margin-top: 0.85rem;
-      font-size: 0.88rem;
+      margin-top: 1rem;
+      font-size: 0.92rem;
+      line-height: 1.65;
+      color: var(--muted);
     }}
     .models-impact-chart svg {{
       width: 100%;
@@ -2383,28 +2839,28 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
     }}
     .reference-table-wrap {{
       overflow-x: auto;
-      border: 1px solid var(--line);
-      border-radius: 0.35rem;
+      border: 0;
+      border-radius: 0.2rem;
       background: var(--paper);
     }}
     .reference-table {{
       width: 100%;
       border-collapse: collapse;
-      font-size: 0.94rem;
+      font-size: 0.96rem;
     }}
     .reference-table th,
     .reference-table td {{
-      padding: 0.75rem 0.85rem;
+      padding: 0.9rem 0.9rem;
       border-bottom: 1px solid var(--line);
       text-align: left;
       vertical-align: top;
     }}
     .reference-table th {{
-      background: #f0f2ee;
-      font-size: 0.82rem;
-      text-transform: uppercase;
-      letter-spacing: 0.03em;
-      color: #495057;
+      background: #fff;
+      font-size: 0.8rem;
+      text-transform: none;
+      letter-spacing: 0.01em;
+      color: var(--muted);
     }}
     .sort-button {{
       margin: 0;
@@ -2426,73 +2882,105 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
       border-bottom: 0;
     }}
     .reference-table tbody tr:target td {{
-      background: #f3ecd7;
+      background: #fff;
     }}
     .reference-locator {{
       margin-top: 0.2rem;
       color: var(--muted);
-      font-size: 0.83rem;
-      line-height: 1.45;
+      font-size: 0.86rem;
+      line-height: 1.55;
     }}
     .source-tag {{
       display: inline-block;
       margin-left: 0.15rem;
       padding: 0.05rem 0.35rem;
       border-radius: 0.25rem;
-      background: var(--accent-soft);
+      background: #fff;
+      border: 0;
       color: var(--accent);
-      font-size: 0.8rem;
+      font-size: 0.82rem;
       font-weight: 700;
       text-decoration: none;
       vertical-align: baseline;
     }}
     .source-tag:hover {{
-      background: rgba(70,103,86,0.18);
+      background: #fff;
       text-decoration: none;
     }}
     .math-panel {{
-      border-color: rgba(108,117,125,0.18);
       background: #fff;
     }}
     .assumptions-box {{
-      margin-bottom: 0.85rem;
-      padding: 0.9rem;
-      border: 1px solid var(--line);
-      border-radius: 0.35rem;
-      background: #f8f8f4;
+      margin-bottom: 1rem;
+      padding: 0.15rem 0;
+      border: 0;
+      border-radius: 0.2rem;
+      background: #fff;
     }}
     .assumptions-box-compact {{
       margin-top: 0.9rem;
       margin-bottom: 0;
     }}
+    #tab-documentation-panel pre {{
+      margin: 0;
+      padding: 0.85rem 0.95rem;
+      border-radius: 0.2rem;
+      background: rgba(140, 122, 91, 0.08);
+      overflow-x: auto;
+    }}
+    #tab-documentation-panel pre code {{
+      display: block;
+      background: transparent;
+      border: 0;
+      padding: 0;
+      white-space: pre-wrap;
+    }}
+    #tab-cite-panel pre {{
+      margin: 0;
+      padding: 0.85rem 0.95rem;
+      border-radius: 0.2rem;
+      background: rgba(140, 122, 91, 0.08);
+      overflow-x: auto;
+    }}
+    #tab-cite-panel pre code {{
+      display: block;
+      background: transparent;
+      border: 0;
+      padding: 0;
+      white-space: pre-wrap;
+    }}
     .assumptions-list {{
       margin: 0;
       padding-left: 1.15rem;
-      color: #495057;
-      line-height: 1.6;
+      color: var(--ink);
+      line-height: 1.7;
     }}
     .assumptions-list li + li {{
       margin-top: 0.35rem;
     }}
     .math-label {{
       display: block;
-      margin-bottom: 0.5rem;
-      font-size: 0.82rem;
+      margin-bottom: 0.6rem;
+      font-size: 0.8rem;
       font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 0.03em;
-      color: #495057;
+      text-transform: none;
+      letter-spacing: 0.01em;
+      color: var(--ink);
     }}
     .math-formula {{
-      margin-bottom: 0.75rem;
-      font-size: 1.05rem;
+      margin-bottom: 0.85rem;
+      font-size: 1.02rem;
+    }}
+    mjx-container[jax="CHTML"][display="true"] {{
+      text-align: left !important;
+      margin: 0.45rem 0 0.85rem 0 !important;
     }}
     .math-formula code,
     .metric-detail-body code,
     .math-panel code {{
       font-family: "SFMono-Regular", Consolas, monospace;
       background: #fff;
-      border: 1px solid var(--line);
+      border: 0;
       border-radius: 0.45rem;
       padding: 0.2rem 0.4rem;
     }}
@@ -2506,28 +2994,29 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
       display: inline-block;
       padding: 0.1rem 0.38rem;
       border-radius: 0.25rem;
-      background: var(--accent-soft);
+      background: #fff;
+      border: 0;
       color: var(--accent);
       font-size: 0.74rem;
       font-weight: 700;
       text-decoration: none;
     }}
     .inline-ref:hover {{
-      background: rgba(70,103,86,0.18);
+      background: #fff;
       text-decoration: none;
     }}
     .metric-detail-body p,
     .math-panel p {{
       margin: 0;
-      color: #495057;
-      line-height: 1.7;
+      color: var(--ink);
+      line-height: 1.75;
     }}
     .extrapolation-list {{
       margin: 0 0 0.75rem;
       padding-left: 1.2rem;
-      color: #495057;
-      line-height: 1.6;
-      font-size: 0.92rem;
+      color: var(--ink);
+      line-height: 1.68;
+      font-size: 0.94rem;
     }}
     .extrapolation-list li + li {{
       margin-top: 0.35rem;
@@ -2535,30 +3024,38 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
     a {{ color: var(--accent); text-decoration: none; }}
     a:hover {{ text-decoration: underline; }}
     @media (max-width: 900px) {{
+      .wrap {{ padding: 24px 18px 40px; }}
       .submetrics {{ grid-template-columns: 1fr; }}
-      .summary-header {{ flex-direction: column; }}
+      .summary-header {{ flex-direction: column; align-items: flex-start; }}
+      .result-method-metrics {{ grid-template-columns: 1fr; }}
     }}
   </style>
 </head>
   <body>
   <main class="wrap">
-    <nav class="tabs" aria-label="Navigation principale">
-      <button type="button" class="tab-button is-active" data-tab-target="home">Accueil</button>
-      <button type="button" class="tab-button" data-tab-target="how">How it works</button>
-      <button type="button" class="tab-button" data-tab-target="training">Apprentissage</button>
-      <button type="button" class="tab-button" data-tab-target="models">Inférence</button>
+    <nav class="tabs" aria-label="Main navigation">
+      <button type="button" class="tab-button is-active" data-tab-target="home">Home</button>
+      <button type="button" class="tab-button" data-tab-target="observatory">Observatory</button>
+      <button type="button" class="tab-button" data-tab-target="documentation">Documentation</button>
+      <button type="button" class="tab-button" data-tab-target="cite">Cite</button>
+      <button type="button" class="tab-button" data-tab-target="contact">Contact</button>
+      <button type="button" class="tab-button" data-tab-target="bibliography">References</button>
     </nav>
 
     {home_tab}
-    {how_it_works_tab}
-    {training_tab}
-    {models_tab}
+    {observatory_tab}
+    {documentation_tab}
+    {cite_tab}
+    {contact_tab}
+    {bibliography_tab}
   </main>
   <script>
     const estimateForm = document.getElementById('estimate-form');
     const submitButton = document.getElementById('submit-button');
     const tabButtons = Array.from(document.querySelectorAll('[data-tab-target]'));
     const tabPanels = Array.from(document.querySelectorAll('[data-tab-panel]'));
+    const subtabButtons = Array.from(document.querySelectorAll('[data-subtab-target]'));
+    const subtabPanels = Array.from(document.querySelectorAll('[data-subtab-panel]'));
     const searchInputs = Array.from(document.querySelectorAll('[data-table-search]'));
     const sortButtons = Array.from(document.querySelectorAll('[data-sort-table]'));
     const modelsChart = document.getElementById('models-impact-chart');
@@ -2577,6 +3074,15 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
         tabButtons.forEach((item) => item.classList.toggle('is-active', item === button));
         tabPanels.forEach((panel) => {{
           panel.classList.toggle('is-active', panel.getAttribute('data-tab-panel') === target);
+        }});
+      }});
+    }});
+    subtabButtons.forEach((button) => {{
+      button.addEventListener('click', function () {{
+        const target = button.getAttribute('data-subtab-target');
+        subtabButtons.forEach((item) => item.classList.toggle('is-active', item === button));
+        subtabPanels.forEach((panel) => {{
+          panel.classList.toggle('is-active', panel.getAttribute('data-subtab-panel') === target);
         }});
       }});
     }});
@@ -2617,8 +3123,8 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
         rows.sort((rowA, rowB) => {{
           const cellA = rowA.children[index];
           const cellB = rowB.children[index];
-          const textA = cellA ? cellA.textContent.trim() : '';
-          const textB = cellB ? cellB.textContent.trim() : '';
+          const textA = cellA ? (cellA.getAttribute('data-sort-value') || cellA.textContent.trim()) : '';
+          const textB = cellB ? (cellB.getAttribute('data-sort-value') || cellB.textContent.trim()) : '';
           let comparison = 0;
           if (sortType === 'number') {{
             comparison = numericValue(textA) - numericValue(textB);
@@ -2648,7 +3154,7 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
     }};
     const buildChartMarkup = (rows, metric, family) => {{
       if (!rows.length) {{
-        return '<p class="lead">Aucune donnée disponible pour cette sélection.</p>';
+        return '<p class="lead">No data available for this selection.</p>';
       }}
       const key = `${{family}}_${{metric}}_${{metric === 'energy' ? 'wh' : metric === 'carbon' ? 'gco2e' : 'ml'}}`;
       const sorted = rows
@@ -2661,7 +3167,7 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
         .filter((row) => row.value > 0)
         .sort((a, b) => b.value - a.value);
       if (!sorted.length) {{
-        return '<p class="lead">Aucune valeur exploitable pour cette sélection.</p>';
+        return '<p class="lead">No usable value available for this selection.</p>';
       }}
       const maxValue = sorted[0].value || 1;
       const barHeight = 26;
@@ -2684,11 +3190,11 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
           <text x="${{barStart + width + 10}}" y="${{y + 17}}" font-size="12" fill="#212529">${{valueText}}</text>
         `;
       }}).join('');
-      const titleMetric = metric === 'energy' ? 'Énergie' : metric === 'carbon' ? 'Carbone' : 'Eau';
-      const titleFamily = family === 'prompt' ? 'prompt|requête' : 'page';
+      const titleMetric = metric === 'energy' ? 'Energy' : metric === 'carbon' ? 'Carbon' : 'Water';
+      const titleFamily = family === 'prompt' ? 'prompt|request' : 'page';
       return `
-        <div class="summary-intro" style="margin-bottom:0.75rem;">Comparaison des valeurs centrales estimées pour l'indicateur <strong>${{titleMetric}}</strong>, selon la famille <strong>${{titleFamily}}</strong>.</div>
-        <svg viewBox="0 0 ${{chartWidth}} ${{chartHeight}}" role="img" aria-label="Graphique comparatif des modèles">${{bars}}</svg>
+        <div class="summary-intro" style="margin-bottom:0.75rem;">Comparison of estimated central values for the <strong>${{titleMetric}}</strong> indicator, using the <strong>${{titleFamily}}</strong> family.</div>
+        <svg viewBox="0 0 ${{chartWidth}} ${{chartHeight}}" role="img" aria-label="Comparative chart of models">${{bars}}</svg>
       `;
     }};
     const renderModelsChart = () => {{
@@ -2722,24 +3228,17 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
         if (value >= 1000) return `${{(value / 1000).toFixed(1)}} kWh`;
         return `${{value.toFixed(0)}} Wh`;
       }}
-      if (metric === 'creation_lifecycle_water') {{
-        if (value >= 1000) return `${{value.toFixed(0)}} kL`;
-        if (value >= 100) return `${{value.toFixed(1)}} kL`;
-        return `${{value.toFixed(2)}} kL`;
-      }}
       if (value >= 1000) return `${{value.toFixed(0)}} tCO2e`;
       if (value >= 100) return `${{value.toFixed(1)}} tCO2e`;
       return `${{value.toFixed(2)}} tCO2e`;
     }};
     const buildTrainingChartMarkup = (rows, metric) => {{
       if (!rows.length) {{
-        return '<p class="lead">Aucune donnée disponible pour cette sélection.</p>';
+        return '<p class="lead">No data available for this selection.</p>';
       }}
       const key = metric === 'direct_training_energy'
         ? 'direct_training_energy_wh'
-        : metric === 'direct_training_carbon'
-          ? 'direct_training_carbon_tco2e'
-          : 'creation_lifecycle_water_kl';
+        : 'direct_training_carbon_tco2e';
       const sorted = rows
         .map((row) => ({{
           label: row.label,
@@ -2750,7 +3249,7 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
         .filter((row) => row.value > 0)
         .sort((a, b) => b.value - a.value);
       if (!sorted.length) {{
-        return '<p class="lead">Aucune valeur exploitable pour cette sélection.</p>';
+        return '<p class="lead">No usable value available for this selection.</p>';
       }}
       const maxValue = sorted[0].value || 1;
       const barHeight = 26;
@@ -2774,13 +3273,11 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
         `;
       }}).join('');
       const titleMetric = metric === 'direct_training_energy'
-        ? "Énergie d'entraînement"
-        : metric === 'direct_training_carbon'
-          ? "CO2e entraînement direct"
-          : "Eau cycle de création";
+        ? "Training energy"
+        : "Direct training CO2e";
       return `
-        <div class="summary-intro" style="margin-bottom:0.75rem;">Comparaison des valeurs centrales extrapolées pour l'indicateur <strong>${{titleMetric}}</strong>.</div>
-        <svg viewBox="0 0 ${{chartWidth}} ${{chartHeight}}" role="img" aria-label="Graphique comparatif des impacts d'apprentissage">${{bars}}</svg>
+        <div class="summary-intro" style="margin-bottom:0.75rem;">Comparison of extrapolated central values for the <strong>${{titleMetric}}</strong> indicator.</div>
+        <svg viewBox="0 0 ${{chartWidth}} ${{chartHeight}}" role="img" aria-label="Comparative chart of training impacts">${{bars}}</svg>
       `;
     }};
     const renderTrainingChart = () => {{
@@ -2811,6 +3308,17 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
 </html>
 """
 class Handler(BaseHTTPRequestHandler):
+    def _write_bytes(self, body, content_type, filename=None, status=200):
+        self.send_response(status)
+        self.send_header("Content-Type", content_type)
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Cache-Control", "no-store")
+        self.send_header("Last-Modified", formatdate(usegmt=True))
+        if filename:
+            self.send_header("Content-Disposition", f'attachment; filename="{filename}"')
+        self.end_headers()
+        self.wfile.write(body)
+
     def _write_html(self, html, status=200):
         body = html.encode("utf-8")
         self.send_response(status)
@@ -2820,6 +3328,23 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def do_GET(self):
+        if self.path == "/downloads/llm_environment_opendata_paper.pdf":
+            if PAPER_PDF_PATH.exists():
+                self._write_bytes(
+                    PAPER_PDF_PATH.read_bytes(),
+                    "application/pdf",
+                    filename="llm_environment_opendata_paper.pdf",
+                )
+                return
+            self._write_html(render_page(error_message="Publication PDF not found."), status=404)
+            return
+        if self.path == "/downloads/llm_environment_opendata_paper.bib":
+            self._write_bytes(
+                PROJECT_PAPER_BIBTEX.encode("utf-8"),
+                "application/x-bibtex; charset=utf-8",
+                filename="llm_environment_opendata_paper.bib",
+            )
+            return
         self._write_html(render_page())
 
     def do_POST(self):
