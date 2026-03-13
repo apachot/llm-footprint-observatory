@@ -261,6 +261,35 @@ def get_country_mix(country_code):
     return None
 
 
+def get_record_country_mix(record):
+    candidates = [
+        record.get("country_code"),
+        record.get("country_normalized"),
+        record.get("geography"),
+    ]
+    aliases = {
+        "États-Unis": "US",
+        "United States": "US",
+        "France": "FR",
+        "Germany": "DE",
+        "Deutschland": "DE",
+        "United Kingdom": "GB",
+        "Great Britain": "GB",
+        "Canada": "CA",
+        "China": "CN",
+    }
+    for candidate in candidates:
+        mix = get_country_mix(candidate)
+        if mix:
+            return mix
+        alias = aliases.get(str(candidate or "").strip())
+        if alias:
+            mix = get_country_mix(alias)
+            if mix:
+                return mix
+    return None
+
+
 def get_market_model_profile(model_id):
     normalized_model = normalize_identifier(model_id)
     if not normalized_model:
@@ -1210,6 +1239,7 @@ def normalize_training_metric_value(record):
 
 def build_training_prediction_anchors(records):
     families = {
+        "direct_training_energy": [],
         "direct_training_carbon": [],
         "creation_lifecycle_carbon": [],
         "creation_lifecycle_water": [],
@@ -1232,16 +1262,29 @@ def build_training_prediction_anchors(records):
         normalized_value, normalized_unit = normalize_training_metric_value(record)
         if normalized_value is None:
             continue
-        families[family].append(
-            {
-                "record_id": record.get("record_id"),
-                "source_model": record.get("llm_normalized") or record.get("model_or_scope"),
-                "source_params": source_params,
-                "source_country": record.get("country_normalized") or "Non spécifié",
-                "source_value": normalized_value,
-                "source_unit": normalized_unit,
-            }
-        )
+        anchor_payload = {
+            "record_id": record.get("record_id"),
+            "source_model": record.get("llm_normalized") or record.get("model_or_scope"),
+            "source_params": source_params,
+            "source_country": record.get("country_normalized") or "Non spécifié",
+            "source_value": normalized_value,
+            "source_unit": normalized_unit,
+        }
+        families[family].append(anchor_payload)
+
+        if family == "direct_training_carbon":
+            mix = get_record_country_mix(record)
+            grid_carbon = to_float((mix or {}).get("grid_carbon_intensity_gco2_per_kwh"), default=None)
+            if grid_carbon not in (None, 0):
+                energy_kwh = (normalized_value * 1_000_000.0) / grid_carbon
+                families["direct_training_energy"].append(
+                    {
+                        **anchor_payload,
+                        "source_value": energy_kwh * 1000.0,
+                        "source_unit": "Wh",
+                        "source_country": (mix or {}).get("country_name") or anchor_payload["source_country"],
+                    }
+                )
     return families
 
 
@@ -1262,7 +1305,7 @@ def build_training_market_predictions(records):
             estimated_value = mean_intensity * target_params
             family_results[family_name] = {
                 "value": estimated_value,
-                "unit": "tCO2e" if "carbon" in family_name else "kL",
+                "unit": "Wh" if family_name == "direct_training_energy" else ("tCO2e" if "carbon" in family_name else "kL"),
                 "anchors": anchors,
                 "mean_intensity_per_billion": mean_intensity,
             }

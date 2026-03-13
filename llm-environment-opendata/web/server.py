@@ -1086,7 +1086,6 @@ def render_model_reference_table():
           <div class="summary-kicker">Modèles</div>
           <h3>Table de référence des modèles</h3>
         </div>
-        <div class="summary-badge">Paramètres</div>
       </div>
       <p class="summary-intro">Cette table recense les modèles de référence utilisés par le projet, leur nombre de paramètres et la source de la valeur observée ou estimée.</p>
       <div class="reference-table-wrap">
@@ -1132,7 +1131,6 @@ def render_country_mix_table():
           <div class="summary-kicker">Pays</div>
           <h3>Table de référence des mix énergétiques</h3>
         </div>
-        <div class="summary-badge">Mix électrique</div>
       </div>
       <p class="summary-intro">Cette table recense les facteurs pays utilisés pour contextualiser le carbone et l'eau, avec la source associée à chaque valeur.</p>
       <div class="reference-table-wrap">
@@ -1301,7 +1299,6 @@ def render_market_models_table(records):
           <div class="summary-kicker">Visualisation</div>
           <h3>Impact environnemental comparé des modèles</h3>
         </div>
-        <div class="summary-badge">1 heure d'usage standardisé</div>
       </div>
       <p class="summary-intro">Le graphique ci-dessous représente les valeurs centrales estimées pour tous les modèles du catalogue sur un scénario standardisé d'inférence correspondant à <strong>1 heure d'usage actif</strong> : <strong>{requests_per_hour} interactions/heure</strong>, <strong>1000 tokens en entrée</strong>, <strong>550 tokens en sortie</strong>, une requête LLM par usage. La cadence horaire est dérivée d'une vitesse moyenne de lecture de <strong>{reading_wpm} mots/min</strong> (Brysbaert, 2019) et d'une convention de conversion de travail <strong>1 token ≈ {words_per_token} mot</strong>.</p>
       <div class="chart-tabbar" role="tablist" aria-label="Indicateur du graphique d'inférence">
@@ -1318,7 +1315,6 @@ def render_market_models_table(records):
           <div class="summary-kicker">Modèles</div>
           <h3>{len(rows)} modèles actuels suivis par le projet</h3>
         </div>
-        <div class="summary-badge">Comparaison détaillée</div>
       </div>
       <p class="summary-intro">Le tableau ci-dessous compare les modèles suivis par le projet sur ce même scénario d'inférence. Pour chaque modèle, l'application affiche séparément l'estimation dérivée de la moyenne <strong>Wh/prompt|requête</strong> et l'estimation dérivée de la moyenne <strong>Wh/page</strong>.</p>
       <div class="table-toolbar">
@@ -1352,6 +1348,14 @@ def format_training_estimate(value, unit):
     if value in (None, ""):
         return "n.d."
     value = float(value)
+    if unit == "Wh":
+        if value >= 1_000_000_000:
+            return f"{value / 1_000_000_000:,.1f} GWh".replace(",", " ")
+        if value >= 1_000_000:
+            return f"{value / 1_000_000:,.1f} MWh".replace(",", " ")
+        if value >= 1000:
+            return f"{value / 1000:,.1f} kWh".replace(",", " ")
+        return f"{value:,.0f} Wh".replace(",", " ")
     if unit == "tCO2e":
         if value >= 1000:
             return f"{value:,.0f} tCO2e".replace(",", " ")
@@ -1375,16 +1379,16 @@ def render_training_models_table(records):
     body = []
     for row in rows:
         results = row.get("training_results_by_id") or {}
+        direct_energy = results.get("direct_training_energy") or {}
         direct_carbon = results.get("direct_training_carbon") or {}
-        lifecycle_carbon = results.get("creation_lifecycle_carbon") or {}
         lifecycle_water = results.get("creation_lifecycle_water") or {}
         chart_rows.append(
             {
                 "label": row.get("display_name", row.get("model_id", "")),
                 "provider": row.get("provider", ""),
                 "kind": "model",
+                "direct_training_energy_wh": float(direct_energy.get("value", 0.0) or 0.0),
                 "direct_training_carbon_tco2e": float(direct_carbon.get("value", 0.0) or 0.0),
-                "creation_lifecycle_carbon_tco2e": float(lifecycle_carbon.get("value", 0.0) or 0.0),
                 "creation_lifecycle_water_kl": float(lifecycle_water.get("value", 0.0) or 0.0),
             }
         )
@@ -1393,8 +1397,8 @@ def render_training_models_table(records):
             <tr>
               <td><strong>{escape(row.get('display_name', row.get('model_id', '')))}</strong><div class="method-basis">{escape(row.get('provider', ''))}</div></td>
               <td>{escape(format_market_parameter_display(row))}</td>
+              <td>{escape(format_training_estimate(direct_energy.get('value'), direct_energy.get('unit')))}</td>
               <td>{escape(format_training_estimate(direct_carbon.get('value'), direct_carbon.get('unit')))}</td>
-              <td>{escape(format_training_estimate(lifecycle_carbon.get('value'), lifecycle_carbon.get('unit')))}</td>
               <td>{escape(format_training_estimate(lifecycle_water.get('value'), lifecycle_water.get('unit')))}</td>
             </tr>
             """
@@ -1403,44 +1407,44 @@ def render_training_models_table(records):
     chart_rows.extend(
         [
             {
-                "label": "1 M km en voiture",
+                "label": "10 000 foyers (usages domestiques annuels)",
                 "provider": "Repère de vie courante",
                 "kind": "reference",
+                "direct_training_energy_wh": 25000000000.0,
                 "direct_training_carbon_tco2e": 235.0,
-                "creation_lifecycle_carbon_tco2e": 235.0,
                 "creation_lifecycle_water_kl": 0.0,
             },
             {
-                "label": "5 000 vols commerciaux complets",
+                "label": "4 955 vols commerciaux complets",
                 "provider": "Repère de vie courante",
                 "kind": "reference",
-                "direct_training_carbon_tco2e": 105250.0,
-                "creation_lifecycle_carbon_tco2e": 105250.0,
+                "direct_training_energy_wh": 0.0,
+                "direct_training_carbon_tco2e": 104560.5,
                 "creation_lifecycle_water_kl": 0.0,
             },
             {
                 "label": "1 000 douches courtes",
                 "provider": "Repère de vie courante",
                 "kind": "reference",
+                "direct_training_energy_wh": 0.0,
                 "direct_training_carbon_tco2e": 0.0,
-                "creation_lifecycle_carbon_tco2e": 0.0,
                 "creation_lifecycle_water_kl": 50.0,
             },
             {
                 "label": "1 000 bains",
                 "provider": "Repère de vie courante",
                 "kind": "reference",
+                "direct_training_energy_wh": 0.0,
                 "direct_training_carbon_tco2e": 0.0,
-                "creation_lifecycle_carbon_tco2e": 0.0,
                 "creation_lifecycle_water_kl": 150.0,
             },
             {
-                "label": "1 000 journées d'eau potable",
+                "label": "1,5 million de journées d'eau potable",
                 "provider": "Repère de vie courante",
                 "kind": "reference",
+                "direct_training_energy_wh": 0.0,
                 "direct_training_carbon_tco2e": 0.0,
-                "creation_lifecycle_carbon_tco2e": 0.0,
-                "creation_lifecycle_water_kl": 150.0,
+                "creation_lifecycle_water_kl": 225000.0,
             },
         ]
     )
@@ -1452,16 +1456,15 @@ def render_training_models_table(records):
           <div class="summary-kicker">Visualisation</div>
           <h3>Impacts d'apprentissage comparés des modèles</h3>
         </div>
-        <div class="summary-badge">Screening</div>
       </div>
-      <p class="summary-intro">Le graphique ci-dessous représente les valeurs centrales extrapolées pour tous les modèles du catalogue sur les trois familles d'indicateurs d'apprentissage actuellement exploitables. Des repères de vie courante sont insérés directement dans la liste pour situer les ordres de grandeur.</p>
+      <p class="summary-intro">Le graphique ci-dessous représente les valeurs centrales extrapolées pour tous les modèles du catalogue sur trois familles d'indicateurs d'apprentissage : énergie d'entraînement, CO2e d'entraînement direct et eau du cycle de création. Des repères de vie courante sont insérés directement dans la liste pour situer les ordres de grandeur.</p>
       <div class="chart-tabbar" role="tablist" aria-label="Indicateur du graphique d'apprentissage">
-        <button type="button" class="chart-tab-button is-active" data-training-chart-control="metric-tab" data-metric-value="direct_training_carbon" aria-selected="true">CO2e entraînement direct</button>
-        <button type="button" class="chart-tab-button" data-training-chart-control="metric-tab" data-metric-value="creation_lifecycle_carbon" aria-selected="false">CO2e cycle de création</button>
+        <button type="button" class="chart-tab-button is-active" data-training-chart-control="metric-tab" data-metric-value="direct_training_energy" aria-selected="true">Énergie</button>
+        <button type="button" class="chart-tab-button" data-training-chart-control="metric-tab" data-metric-value="direct_training_carbon" aria-selected="false">Carbone</button>
         <button type="button" class="chart-tab-button" data-training-chart-control="metric-tab" data-metric-value="creation_lifecycle_water" aria-selected="false">Eau cycle de création</button>
       </div>
       <div id="training-impact-chart" class="models-impact-chart" data-training-chart-rows='{escape(json.dumps(chart_rows, ensure_ascii=False), quote=True)}'></div>
-      <p class="summary-intro models-benchmark-note">Repères intégrés dans le graphique : automobile issue de l'ICCT (2025, 235 gCO2e/km pour une voiture essence moyenne), avion complet dérivé de Klöwer et al. (2025) à partir de 577,97 MtCO2 et 27,45 millions de vols commerciaux observés en 2023, et eau domestique issue de l'ADEME/INC et de l'Anses (douche courte ≈ 50 L ; bain ≈ 150 L ; consommation quotidienne moyenne d'eau potable ≈ 150 L par personne en France).</p>
+      <p class="summary-intro models-benchmark-note">Repères intégrés dans le graphique : énergie domestique avec 10 000 foyers sur une année d'usages domestiques, soit ≈ 25 GWh sur la base d'une consommation moyenne de 2 500 kWh par ménage (RTE, estimation 2021), automobile issue de l'ICCT (2025, 235 gCO2e/km pour une voiture essence moyenne), avion complet dérivé de Klöwer et al. (2025) à partir de 577,97 MtCO2 et 27,45 millions de vols commerciaux observés en 2023, soit ≈ 104 560,5 tCO2 pour 4 955 vols complets, et eau domestique issue de l'ADEME/INC et de l'Anses (douche courte ≈ 50 L ; bain ≈ 150 L ; consommation quotidienne moyenne d'eau potable ≈ 150 L par personne en France, soit ≈ 225 000 kL pour 1,5 million de journées).</p>
     </section>
     <section class="panel reference-panel">
       <div class="summary-header">
@@ -1469,9 +1472,8 @@ def render_training_models_table(records):
           <div class="summary-kicker">Modèles</div>
           <h3>{len(rows)} modèles actuels avec estimation des impacts d'apprentissage</h3>
         </div>
-        <div class="summary-badge">Comparaison détaillée</div>
       </div>
-      <p class="summary-intro">Ce tableau projette les ordres de grandeur d'apprentissage des modèles actuels à partir des familles d'indicateurs réellement disponibles dans la littérature: <strong>CO2e d'entraînement direct</strong>, <strong>CO2e du cycle de création</strong> et <strong>eau du cycle de création</strong>. Les valeurs sont extrapolées par nombre de paramètres. Aucune correction pays n'est appliquée ici, faute d'ancrages énergétiques d'entraînement suffisamment homogènes.</p>
+      <p class="summary-intro">Ce tableau projette les ordres de grandeur d'apprentissage des modèles actuels à partir des familles d'indicateurs réellement disponibles dans la littérature: <strong>énergie d'entraînement</strong> dérivée des émissions quand le pays source est documenté dans la table des mix, <strong>CO2e d'entraînement direct</strong> et <strong>eau du cycle de création</strong>. Les valeurs sont extrapolées par nombre de paramètres. L'énergie d'entraînement reste donc une reconstruction de screening plus fragile que le carbone direct et l'eau.</p>
       <div class="table-toolbar">
         <label class="table-search-label" for="training-model-search">Rechercher un modèle</label>
         <input id="training-model-search" class="table-search-input" type="search" placeholder="Exemple: GPT, Claude, 70B, Meta" data-table-search="training-models-table">
@@ -1482,8 +1484,8 @@ def render_training_models_table(records):
             <tr>
               <th><button type="button" class="sort-button" data-sort-table="training-models-table" data-sort-index="0" data-sort-type="text">Modèle</button></th>
               <th><button type="button" class="sort-button" data-sort-table="training-models-table" data-sort-index="1" data-sort-type="text">Paramètres</button></th>
-              <th><button type="button" class="sort-button" data-sort-table="training-models-table" data-sort-index="2" data-sort-type="number">CO2e entraînement direct</button></th>
-              <th><button type="button" class="sort-button" data-sort-table="training-models-table" data-sort-index="3" data-sort-type="number">CO2e cycle de création</button></th>
+              <th><button type="button" class="sort-button" data-sort-table="training-models-table" data-sort-index="2" data-sort-type="number">Énergie d'entraînement</button></th>
+              <th><button type="button" class="sort-button" data-sort-table="training-models-table" data-sort-index="3" data-sort-type="number">CO2e entraînement direct</button></th>
               <th><button type="button" class="sort-button" data-sort-table="training-models-table" data-sort-index="4" data-sort-type="number">Eau cycle de création</button></th>
             </tr>
           </thead>
@@ -1526,7 +1528,6 @@ def render_how_it_works_tab(records):
             <div class="summary-kicker">How it works</div>
             <h3>Méthode d'estimation d'inférence</h3>
           </div>
-          <div class="summary-badge">Méthode</div>
         </div>
         <p class="summary-intro">EcoTrace LLM ne prétend pas mesurer des données télémétriques propriétaires qui ne sont pas publiées. L'application construit une extrapolation de screening à partir des quelques indicateurs d'inférence quantifiés réellement observés dans la littérature scientifique.</p>
         <div class="summary-body">
@@ -1543,7 +1544,6 @@ def render_how_it_works_tab(records):
             <div class="summary-kicker">Formules</div>
             <h3>Chaîne de calcul retenue</h3>
           </div>
-          <div class="summary-badge">Équations</div>
         </div>
         <div class="summary-body">
           <p>\\[
@@ -1578,7 +1578,6 @@ def render_how_it_works_tab(records):
             <div class="summary-kicker">Corpus</div>
             <h3>Ancrages énergétiques mobilisés dans le prédicteur</h3>
           </div>
-          <div class="summary-badge">Littérature</div>
         </div>
         <p class="summary-intro">Seuls les indicateurs énergétiques d'inférence disposant d'un nombre de paramètres exploitable sont retenus dans le coeur prédictif. Les autres indicateurs restent visibles dans le référentiel, mais ne servent pas à la mise à l'échelle des modèles.</p>
         <div class="reference-subtable">
@@ -1623,7 +1622,6 @@ def render_how_it_works_tab(records):
             <div class="summary-kicker">Limites</div>
             <h3>Ce que la méthode fait et ne fait pas</h3>
           </div>
-          <div class="summary-badge">Honnêteté</div>
         </div>
         <div class="summary-body">
           <p><strong>Oui :</strong> produire une estimation cohérente là où les fournisseurs ne publient rien, en documentant explicitement les ancrages, les paramètres et le pays retenu.</p>
@@ -1802,7 +1800,6 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
             <div class="summary-kicker">Référentiel</div>
             <h3>{reference_counts['training']} indicateurs d'apprentissage issus de la littérature scientifique</h3>
           </div>
-          <div class="summary-badge">Apprentissage</div>
         </div>
         <p class="summary-intro">Cette page présente des indicateurs documentés sur les externalités environnementales liées à l'apprentissage et au cycle de vie de création des modèles LLM. Les références macro d'infrastructure et les sources institutionnelles hors périmètre LLM ont été exclues.</p>
         {training_reference_block}
@@ -1819,7 +1816,6 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
             <div class="summary-kicker">Référentiel</div>
             <h3>{reference_counts['inference']} indicateurs d'inférence issus de la littérature scientifique</h3>
           </div>
-          <div class="summary-badge">Inférence</div>
         </div>
         <p class="summary-intro">Ce tableau regroupe les indicateurs quantifiés relatifs à l'inférence des LLMs dans les publications retenues.</p>
         {inference_reference_block}
@@ -1848,8 +1844,8 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
   <script defer src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
   <style>
     :root {{
-      --bg: #f7f7f2;
-      --paper: #fcfcf8;
+      --bg: #ffffff;
+      --paper: #ffffff;
       --ink: #20261f;
       --muted: #667065;
       --line: #d7dbd2;
@@ -2276,16 +2272,6 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
       font-weight: 700;
       margin-bottom: 0.35rem;
     }}
-    .summary-badge {{
-      flex: 0 0 auto;
-      border: 1px solid var(--line);
-      border-radius: 0.35rem;
-      padding: 0.35rem 0.55rem;
-      background: transparent;
-      color: var(--accent);
-      font-size: 0.8rem;
-      font-weight: 500;
-    }}
     .summary-intro {{
       margin: 0 0 0.85rem;
       color: var(--muted);
@@ -2680,8 +2666,8 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
       const maxValue = sorted[0].value || 1;
       const barHeight = 26;
       const rowGap = 18;
-      const chartWidth = 880;
-      const labelWidth = 210;
+      const chartWidth = 980;
+      const labelWidth = 320;
       const valueWidth = 150;
       const barStart = labelWidth + 12;
       const barMaxWidth = chartWidth - labelWidth - valueWidth - 40;
@@ -2730,6 +2716,12 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
     }});
     renderModelsChart();
     const formatTrainingChartValue = (value, metric) => {{
+      if (metric === 'direct_training_energy') {{
+        if (value >= 1_000_000_000) return `${{(value / 1_000_000_000).toFixed(1)}} GWh`;
+        if (value >= 1_000_000) return `${{(value / 1_000_000).toFixed(1)}} MWh`;
+        if (value >= 1000) return `${{(value / 1000).toFixed(1)}} kWh`;
+        return `${{value.toFixed(0)}} Wh`;
+      }}
       if (metric === 'creation_lifecycle_water') {{
         if (value >= 1000) return `${{value.toFixed(0)}} kL`;
         if (value >= 100) return `${{value.toFixed(1)}} kL`;
@@ -2743,10 +2735,10 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
       if (!rows.length) {{
         return '<p class="lead">Aucune donnée disponible pour cette sélection.</p>';
       }}
-      const key = metric === 'direct_training_carbon'
-        ? 'direct_training_carbon_tco2e'
-        : metric === 'creation_lifecycle_carbon'
-          ? 'creation_lifecycle_carbon_tco2e'
+      const key = metric === 'direct_training_energy'
+        ? 'direct_training_energy_wh'
+        : metric === 'direct_training_carbon'
+          ? 'direct_training_carbon_tco2e'
           : 'creation_lifecycle_water_kl';
       const sorted = rows
         .map((row) => ({{
@@ -2763,8 +2755,8 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
       const maxValue = sorted[0].value || 1;
       const barHeight = 26;
       const rowGap = 18;
-      const chartWidth = 880;
-      const labelWidth = 210;
+      const chartWidth = 980;
+      const labelWidth = 320;
       const valueWidth = 150;
       const barStart = labelWidth + 12;
       const barMaxWidth = chartWidth - labelWidth - valueWidth - 40;
@@ -2781,11 +2773,11 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
           <text x="${{barStart + width + 10}}" y="${{y + 17}}" font-size="12" fill="#212529">${{valueText}}</text>
         `;
       }}).join('');
-      const titleMetric = metric === 'direct_training_carbon'
-        ? 'CO2e entraînement direct'
-        : metric === 'creation_lifecycle_carbon'
-          ? 'CO2e cycle de création'
-          : 'Eau cycle de création';
+      const titleMetric = metric === 'direct_training_energy'
+        ? "Énergie d'entraînement"
+        : metric === 'direct_training_carbon'
+          ? "CO2e entraînement direct"
+          : "Eau cycle de création";
       return `
         <div class="summary-intro" style="margin-bottom:0.75rem;">Comparaison des valeurs centrales extrapolées pour l'indicateur <strong>${{titleMetric}}</strong>.</div>
         <svg viewBox="0 0 ${{chartWidth}} ${{chartHeight}}" role="img" aria-label="Graphique comparatif des impacts d'apprentissage">${{bars}}</svg>
@@ -2794,7 +2786,7 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
     const renderTrainingChart = () => {{
       if (!trainingChart) return;
       const metricControl = document.querySelector('[data-training-chart-control="metric-tab"].is-active');
-      const metric = metricControl ? metricControl.getAttribute('data-metric-value') : 'direct_training_carbon';
+      const metric = metricControl ? metricControl.getAttribute('data-metric-value') : 'direct_training_energy';
       let rows = [];
       try {{
         rows = JSON.parse(trainingChart.getAttribute('data-training-chart-rows') || '[]');
