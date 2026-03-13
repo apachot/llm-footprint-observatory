@@ -8,6 +8,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from core.estimator import (
+    build_market_model_predictions,
     compute_stats,
     estimate_externalities,
     estimate_feature_externalities,
@@ -19,6 +20,7 @@ from core.estimator import (
     load_extrapolation_rules,
     load_models,
     load_records,
+    predict_inference_externalities,
 )
 
 
@@ -63,6 +65,11 @@ def tool_definitions():
             "inputSchema": {"type": "object", "properties": {}},
         },
         {
+            "name": "list_market_models",
+            "description": "List the maintained catalog of current market models with standardized inference estimates.",
+            "inputSchema": {"type": "object", "properties": {}},
+        },
+        {
             "name": "get_model_profile",
             "description": "Get one model profile by model identifier.",
             "inputSchema": {
@@ -91,6 +98,28 @@ def tool_definitions():
             "inputSchema": {"type": "object", "properties": {}},
         },
         {
+            "name": "predict_inference_externalities",
+            "description": "Predict annualized inference-only environmental externalities by averaging prompt-based and page-based literature indicators.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "scenario_id": {"type": "string"},
+                    "provider": {"type": "string"},
+                    "model_id": {"type": "string"},
+                    "request_type": {"type": "string"},
+                    "input_tokens": {"type": "number"},
+                    "output_tokens": {"type": "number"},
+                    "requests_per_feature": {"type": "number"},
+                    "feature_uses_per_month": {"type": "number"},
+                    "months_per_year": {"type": "number"},
+                    "estimated_active_parameters_billion": {"type": "number"},
+                    "country": {"type": "string"},
+                    "grid_carbon_intensity_gco2_per_kwh": {"type": "number"},
+                    "water_intensity_l_per_kwh": {"type": "number"},
+                },
+            },
+        },
+        {
             "name": "estimate_externalities",
             "description": "Estimate prompt- or scenario-level environmental externalities for an LLM use case.",
             "inputSchema": {
@@ -113,7 +142,7 @@ def tool_definitions():
         },
         {
             "name": "estimate_feature_externalities",
-            "description": "Estimate annualized feature-level environmental externalities for software using an LLM.",
+            "description": "Estimate annualized inference-only environmental externalities for software using an LLM, using the same aggregated literature-based predictor.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -169,6 +198,9 @@ def handle_call(name, arguments):
     if name == "list_models":
         return make_text_payload({"models": load_models()})
 
+    if name == "list_market_models":
+        return make_text_payload({"market_models": build_market_model_predictions(records)})
+
     if name == "get_model_profile":
         return make_text_payload({"model_profile": get_model_profile(model_id=arguments["model_id"])})
 
@@ -183,6 +215,9 @@ def handle_call(name, arguments):
 
     if name == "estimate_externalities":
         return make_text_payload(estimate_externalities(records, arguments))
+
+    if name == "predict_inference_externalities":
+        return make_text_payload(predict_inference_externalities(records, arguments))
 
     if name == "estimate_feature_externalities":
         return make_text_payload(estimate_feature_externalities(records, arguments))

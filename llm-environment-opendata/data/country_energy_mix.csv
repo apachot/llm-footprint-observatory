@@ -4,3 +4,4 @@ US,United States,2024,385,1.8,"Project default screening factors",,"Higher-carbo
 DE,Germany,2024,380,1.2,"Project default screening factors",,"European fossil-renewable mixed grid screening default."
 GB,United Kingdom,2024,180,0.7,"Project default screening factors",,"Moderate-carbon screening default."
 CA,Canada,2024,120,1.0,"Project default screening factors",,"Hydro-dominant screening default."
+CN,China,2024,540,1.4,"Project default screening factors",,"Coal-heavy screening default used for provider-country proxy scenarios."

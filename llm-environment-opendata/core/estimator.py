@@ -9,8 +9,11 @@ METADATA_PATH = ROOT / "data" / "record_metadata.csv"
 MODELS_PATH = ROOT / "data" / "models.csv"
 COUNTRY_MIX_PATH = ROOT / "data" / "country_energy_mix.csv"
 EXTRAPOLATION_RULES_PATH = ROOT / "data" / "extrapolation_rules.csv"
+MARKET_MODELS_PATH = ROOT / "data" / "market_models.csv"
 
 REFERENCE_PROMPT_TOKENS = 1550.0
+REFERENCE_PAGE_TOKENS = 750.0
+MARKET_REFERENCE_REQUESTS_PER_YEAR = 1_000_000.0
 
 
 def load_records():
@@ -30,6 +33,11 @@ def load_models():
 
 def load_country_energy_mix():
     with COUNTRY_MIX_PATH.open("r", encoding="utf-8", newline="") as handle:
+        return [row for row in csv.DictReader(handle)]
+
+
+def load_market_models():
+    with MARKET_MODELS_PATH.open("r", encoding="utf-8", newline="") as handle:
         return [row for row in csv.DictReader(handle)]
 
 
@@ -220,6 +228,49 @@ def get_country_mix(country_code):
     return None
 
 
+def get_market_model_profile(model_id):
+    normalized_model = normalize_identifier(model_id)
+    if not normalized_model:
+        return None
+    for profile in load_market_models():
+        aliases = [normalize_identifier(profile.get("model_id"))]
+        aliases.extend(normalize_identifier(part) for part in profile.get("display_name", "").split("|") if part.strip())
+        if normalized_model in aliases:
+            return dict(profile)
+    return None
+
+
+def resolve_inference_country_mix(payload):
+    explicit_country = payload.get("country")
+    explicit_mix = get_country_mix(explicit_country) if explicit_country else None
+    market_profile = get_market_model_profile(payload.get("model_id"))
+    deployment_mode = normalize_identifier(payload.get("deployment_mode"))
+
+    if not market_profile:
+        return explicit_mix, "explicit_country" if explicit_mix else "none", market_profile
+
+    market_status = str(market_profile.get("market_status", "")).strip().lower()
+    serving_mode = str(market_profile.get("serving_mode", "")).strip().lower()
+    provider_mix = get_country_mix(market_profile.get("estimation_country_code"))
+
+    hosted_deployment = deployment_mode in {"api", "saas", "cloud", "hosted", "managed"}
+    self_hosted_deployment = deployment_mode in {"selfhosted", "self_hosted", "local", "onprem", "onpremise"}
+
+    if market_status == "api" or (serving_mode == "closed" and not self_hosted_deployment):
+        return provider_mix, "publisher_country", market_profile
+
+    if market_status == "api_and_open_weight" and hosted_deployment:
+        return provider_mix, "publisher_country", market_profile
+
+    if explicit_mix:
+        return explicit_mix, "project_country", market_profile
+
+    if market_status in {"open_weight", "api_and_open_weight"} or serving_mode in {"open", "hybrid"}:
+        return provider_mix, "fallback_reference_country", market_profile
+
+    return explicit_mix or provider_mix, "fallback_reference_country" if provider_mix else "none", market_profile
+
+
 def get_extrapolation_rule(metric_kind):
     for row in load_extrapolation_rules():
         if row.get("metric_kind") == metric_kind:
@@ -393,12 +444,381 @@ def infer_parametric_request_estimate(records, payload, grid_carbon_intensity, w
     }
 
 
+def infer_source_intensity(energy_record, metric_record, metric_kind):
+    if not energy_record or not metric_record:
+        return None
+    try:
+        energy_value = float(energy_record["metric_value"])
+        metric_value = float(metric_record["metric_value"])
+    except (TypeError, ValueError):
+        return None
+
+    energy_unit = str(energy_record.get("metric_unit", "")).lower()
+    metric_unit = str(metric_record.get("metric_unit", "")).lower()
+
+    if "/page" in energy_unit:
+        energy_kwh = energy_value
+    elif "/prompt" in energy_unit or "/query" in energy_unit:
+        energy_kwh = energy_value / 1000.0
+    else:
+        return None
+
+    if energy_kwh <= 0:
+        return None
+
+    if metric_kind == "carbon" and "gco2" in metric_unit:
+        return metric_value / energy_kwh
+
+    if metric_kind == "water":
+        if "ml/" in metric_unit:
+            water_l = metric_value / 1000.0
+        elif metric_unit.startswith("l/"):
+            water_l = metric_value
+        else:
+            return None
+        return water_l / energy_kwh
+
+    return None
+
+
+def format_scalar(value, decimals=3):
+    if value is None:
+        return "n.d."
+    text = f"{float(value):.{decimals}f}"
+    text = text.rstrip("0").rstrip(".")
+    return text or "0"
+
+
+def format_raw_metric(value, unit):
+    return f"{format_scalar(value)} {unit}".strip()
+
+
+def aggregate_method_ranges(methods):
+    if not methods:
+        empty = rounded_range(0.0, 0.0, 0.0)
+        return {
+            "energy_wh": empty,
+            "carbon_gco2e": empty,
+            "water_ml": empty,
+        }
+
+    def aggregate_metric(metric_key):
+        lows = [float(method[metric_key]["low"]) for method in methods if method.get(metric_key)]
+        centrals = [float(method[metric_key]["central"]) for method in methods if method.get(metric_key)]
+        highs = [float(method[metric_key]["high"]) for method in methods if method.get(metric_key)]
+        if not centrals:
+            return rounded_range(0.0, 0.0, 0.0)
+        return rounded_range(min(lows), sum(centrals) / len(centrals), max(highs))
+
+    return {
+        "energy_wh": aggregate_metric("annual_energy_wh"),
+        "carbon_gco2e": aggregate_metric("annual_carbon_gco2e"),
+        "water_ml": aggregate_metric("annual_water_ml"),
+    }
+
+
+def build_inference_method_set(records, payload):
+    request_type = payload.get("request_type", "chat_generation")
+    input_tokens = to_float(payload.get("input_tokens", 0.0), default=0.0)
+    output_tokens = to_float(payload.get("output_tokens", 0.0), default=0.0)
+    requests_per_feature = to_float(payload.get("requests_per_feature", 1.0), default=1.0)
+    feature_uses_per_month = to_float(payload.get("feature_uses_per_month", 0.0), default=0.0)
+    months_per_year = to_float(payload.get("months_per_year", 12.0), default=12.0)
+    annual_feature_uses = feature_uses_per_month * months_per_year
+    annual_requests = annual_feature_uses * requests_per_feature
+    model_profile = get_model_profile(
+        model_id=payload.get("model_id"),
+        provider=payload.get("provider"),
+        estimated_active_parameters_billion=payload.get("estimated_active_parameters_billion"),
+    )
+    target_params = to_float((model_profile or {}).get("active_parameters_billion"), default=None)
+
+    country_mix, country_resolution, market_profile = resolve_inference_country_mix(payload)
+    grid_carbon_intensity = to_float(payload.get("grid_carbon_intensity_gco2_per_kwh"), default=None)
+    water_intensity = to_float(payload.get("water_intensity_l_per_kwh"), default=None)
+    if grid_carbon_intensity is None and country_mix:
+        grid_carbon_intensity = to_float(country_mix.get("grid_carbon_intensity_gco2_per_kwh"), default=None)
+    if water_intensity is None and country_mix:
+        water_intensity = to_float(country_mix.get("water_intensity_l_per_kwh"), default=None)
+
+    token_ratio = compute_token_ratio(input_tokens, output_tokens)
+    total_tokens = input_tokens + output_tokens
+    page_ratio = (total_tokens / REFERENCE_PAGE_TOKENS) if total_tokens > 0 else (REFERENCE_PROMPT_TOKENS / REFERENCE_PAGE_TOKENS)
+
+    methods = []
+    selected_factors = []
+    assumptions = [
+        "Inference-only estimate: training and software-system overheads excluded",
+        f"Request type classified as {request_type}",
+        f"{requests_per_feature} LLM request(s) per feature use",
+        f"{annual_feature_uses} feature uses per year",
+    ]
+    if target_params is not None:
+        assumptions.append(f"Model-size scaling enabled with target profile at {target_params:g}B active parameters")
+    else:
+        assumptions.append("No parameter count available for the target model; multiplicative scaling disabled")
+    if country_mix:
+        if country_resolution == "publisher_country":
+            assumptions.append(
+                f"Carbon and water recalculated with the publisher-country mix for {country_mix.get('country_code')} because the model is treated as a proprietary hosted service"
+            )
+        elif country_resolution == "project_country":
+            assumptions.append(
+                f"Carbon and water recalculated with the project country mix for {country_mix.get('country_code')} because the model is treated as open-weight or self-hosted"
+            )
+        else:
+            assumptions.append(
+                f"Country mix fallback applied for {country_mix.get('country_code')} ({country_mix.get('source_citation')})"
+            )
+
+    def add_method(
+        method_id,
+        label,
+        basis,
+        record_ids,
+        per_request_energy_wh,
+        per_request_carbon_g,
+        per_request_water_ml,
+        detail,
+    ):
+        annual_energy = rounded_range(
+            per_request_energy_wh["low"] * annual_requests,
+            per_request_energy_wh["central"] * annual_requests,
+            per_request_energy_wh["high"] * annual_requests,
+        )
+        annual_carbon = rounded_range(
+            per_request_carbon_g["low"] * annual_requests,
+            per_request_carbon_g["central"] * annual_requests,
+            per_request_carbon_g["high"] * annual_requests,
+        )
+        annual_water = rounded_range(
+            per_request_water_ml["low"] * annual_requests,
+            per_request_water_ml["central"] * annual_requests,
+            per_request_water_ml["high"] * annual_requests,
+        )
+        methods.append(
+            {
+                "method_id": method_id,
+                "label": label,
+                "basis": basis,
+                "record_ids": dedupe(record_ids),
+                "annual_energy_wh": annual_energy,
+                "annual_carbon_gco2e": annual_carbon,
+                "annual_water_ml": annual_water,
+                "per_request_energy_wh": per_request_energy_wh,
+                "per_request_carbon_gco2e": per_request_carbon_g,
+                "per_request_water_ml": per_request_water_ml,
+                "detail": detail,
+            }
+        )
+
+    prompt_energy = get_record(records, "elsworth2025_prompt_energy")
+    prompt_carbon = get_record(records, "elsworth2025_prompt_carbon")
+    prompt_water = get_record(records, "elsworth2025_prompt_water")
+    if prompt_energy:
+        source_params = to_float(prompt_energy.get("model_parameters_normalized", "").replace("B", ""), default=None)
+        param_ratio = (target_params / source_params) if (target_params is not None and source_params not in (None, 0)) else 1.0
+        source_energy_wh = to_float(prompt_energy["metric_value"]) * token_ratio * param_ratio
+        per_request_energy = rounded_range(source_energy_wh, source_energy_wh, source_energy_wh)
+        if grid_carbon_intensity is not None:
+            carbon_val = wh_to_gco2e(source_energy_wh, grid_carbon_intensity)
+            per_request_carbon = rounded_range(carbon_val, carbon_val, carbon_val)
+        elif prompt_carbon:
+            carbon_val = to_float(prompt_carbon["metric_value"]) * token_ratio
+            per_request_carbon = rounded_range(carbon_val, carbon_val, carbon_val)
+        else:
+            per_request_carbon = rounded_range(0.0, 0.0, 0.0)
+        if water_intensity is not None:
+            water_val = wh_to_liters(source_energy_wh, water_intensity) * 1000.0
+            per_request_water = rounded_range(water_val, water_val, water_val)
+        elif prompt_water:
+            water_val = to_float(prompt_water["metric_value"]) * token_ratio
+            per_request_water = rounded_range(water_val, water_val, water_val)
+        else:
+            per_request_water = rounded_range(0.0, 0.0, 0.0)
+        record_ids = ["elsworth2025_prompt_energy", "elsworth2025_prompt_carbon", "elsworth2025_prompt_water"]
+        selected_factors.extend(record_ids)
+        add_method(
+            "prompt_average",
+            "Méthode par prompt",
+            "Moyenne des indicateurs connus exprimés par prompt, recalculés pour le pays d'inférence",
+            record_ids,
+            per_request_energy,
+            per_request_carbon,
+            per_request_water,
+            {
+                "kind": "multiples",
+                "unit_basis": "prompt",
+                "ratio": token_ratio,
+                "anchors": [
+                    {
+                        "source_model": prompt_energy.get("llm_normalized") or prompt_energy.get("model_or_scope"),
+                        "source_country": prompt_energy.get("country_normalized") or "Non spécifié",
+                        "source_params": source_params,
+                        "target_params": target_params,
+                        "parameter_factor": param_ratio,
+                        "source_energy": format_raw_metric(prompt_energy["metric_value"], prompt_energy["metric_unit"]),
+                        "source_carbon": format_raw_metric(prompt_carbon["metric_value"], prompt_carbon["metric_unit"]) if prompt_carbon else None,
+                        "source_water": format_raw_metric(prompt_water["metric_value"], prompt_water["metric_unit"]) if prompt_water else None,
+                        "source_carbon_intensity": infer_source_intensity(prompt_energy, prompt_carbon, "carbon") if prompt_carbon else None,
+                        "source_water_intensity": infer_source_intensity(prompt_energy, prompt_water, "water") if prompt_water else None,
+                        "per_request_energy": rounded_range(source_energy_wh, source_energy_wh, source_energy_wh),
+                        "per_request_carbon": per_request_carbon,
+                        "per_request_water": per_request_water,
+                    }
+                ],
+                "target_country": payload.get("country"),
+                "target_mix": country_mix,
+                "target_grid_carbon_intensity": grid_carbon_intensity,
+                "target_water_intensity": water_intensity,
+            },
+        )
+
+    page_anchors = []
+    page_record_ids = []
+    for prefix in ("ren2024_gemma2b", "ren2024_llama70b"):
+        energy_record = get_record(records, f"{prefix}_energy")
+        carbon_record = get_record(records, f"{prefix}_carbon")
+        water_record = get_record(records, f"{prefix}_water")
+        if not energy_record:
+            continue
+        source_params = to_float(energy_record.get("model_parameters_normalized", "").replace("B", ""), default=None)
+        param_ratio = (target_params / source_params) if (target_params is not None and source_params not in (None, 0)) else 1.0
+        source_energy_wh = to_float(energy_record["metric_value"]) * 1000.0 * page_ratio * param_ratio
+        if grid_carbon_intensity is not None:
+            carbon_val = wh_to_gco2e(source_energy_wh, grid_carbon_intensity)
+            per_request_carbon = rounded_range(carbon_val, carbon_val, carbon_val)
+        elif carbon_record:
+            carbon_val = to_float(carbon_record["metric_value"]) * page_ratio
+            per_request_carbon = rounded_range(carbon_val, carbon_val, carbon_val)
+        else:
+            per_request_carbon = rounded_range(0.0, 0.0, 0.0)
+        if water_intensity is not None:
+            water_val = wh_to_liters(source_energy_wh, water_intensity) * 1000.0
+            per_request_water = rounded_range(water_val, water_val, water_val)
+        elif water_record:
+            water_val = to_float(water_record["metric_value"]) * 1000.0 * page_ratio
+            per_request_water = rounded_range(water_val, water_val, water_val)
+        else:
+            per_request_water = rounded_range(0.0, 0.0, 0.0)
+        anchor_record_ids = [f"{prefix}_energy", f"{prefix}_carbon", f"{prefix}_water"]
+        page_record_ids.extend(anchor_record_ids)
+        page_anchors.append(
+            {
+                "source_model": energy_record.get("llm_normalized") or energy_record.get("model_or_scope"),
+                "source_country": energy_record.get("country_normalized") or "Non spécifié",
+                "source_params": source_params,
+                "target_params": target_params,
+                "parameter_factor": param_ratio,
+                "source_energy": format_raw_metric(energy_record["metric_value"], energy_record["metric_unit"]),
+                "source_carbon": format_raw_metric(carbon_record["metric_value"], carbon_record["metric_unit"]) if carbon_record else None,
+                "source_water": format_raw_metric(water_record["metric_value"], water_record["metric_unit"]) if water_record else None,
+                "source_carbon_intensity": infer_source_intensity(energy_record, carbon_record, "carbon") if carbon_record else None,
+                "source_water_intensity": infer_source_intensity(energy_record, water_record, "water") if water_record else None,
+                "per_request_energy": rounded_range(source_energy_wh, source_energy_wh, source_energy_wh),
+                "per_request_carbon": per_request_carbon,
+                "per_request_water": per_request_water,
+            }
+        )
+    if page_anchors:
+        selected_factors.extend(page_record_ids)
+        def avg_range(anchors, key):
+            lows = [anchor[key]["low"] for anchor in anchors]
+            centrals = [anchor[key]["central"] for anchor in anchors]
+            highs = [anchor[key]["high"] for anchor in anchors]
+            return rounded_range(min(lows), sum(centrals) / len(centrals), max(highs))
+        add_method(
+            "page_average",
+            "Méthode par page",
+            "Moyenne des indicateurs connus exprimés par page, ajustés au volume de tokens puis recalculés pour le pays d'inférence",
+            page_record_ids,
+            avg_range(page_anchors, "per_request_energy"),
+            avg_range(page_anchors, "per_request_carbon"),
+            avg_range(page_anchors, "per_request_water"),
+            {
+                "kind": "multiples",
+                "unit_basis": "page",
+                "ratio": page_ratio,
+                "anchors": page_anchors,
+                "target_country": payload.get("country"),
+                "target_mix": country_mix,
+                "target_grid_carbon_intensity": grid_carbon_intensity,
+                "target_water_intensity": water_intensity,
+            },
+        )
+
+    aggregated = aggregate_method_ranges(methods)
+    per_request_aggregate = {
+        "energy_wh": rounded_range(
+            aggregated["energy_wh"]["low"] / annual_requests if annual_requests else 0.0,
+            aggregated["energy_wh"]["central"] / annual_requests if annual_requests else 0.0,
+            aggregated["energy_wh"]["high"] / annual_requests if annual_requests else 0.0,
+        ),
+        "carbon_gco2e": rounded_range(
+            aggregated["carbon_gco2e"]["low"] / annual_requests if annual_requests else 0.0,
+            aggregated["carbon_gco2e"]["central"] / annual_requests if annual_requests else 0.0,
+            aggregated["carbon_gco2e"]["high"] / annual_requests if annual_requests else 0.0,
+        ),
+        "water_ml": rounded_range(
+            aggregated["water_ml"]["low"] / annual_requests if annual_requests else 0.0,
+            aggregated["water_ml"]["central"] / annual_requests if annual_requests else 0.0,
+            aggregated["water_ml"]["high"] / annual_requests if annual_requests else 0.0,
+        ),
+    }
+
+    return {
+        "scenario_id": payload.get("scenario_id", "inference-estimate"),
+        "estimate_level": "inference_feature",
+        "method": "literature_multiples",
+        "uncertainty_level": "high",
+        "applicability_note": "Inference-only screening estimate aggregated across multiple literature indicators.",
+        "inputs": {
+            "provider": payload.get("provider"),
+            "model_id": payload.get("model_id"),
+            "request_type": request_type,
+            "input_tokens": input_tokens,
+            "output_tokens": output_tokens,
+            "country": payload.get("country"),
+            "effective_country": country_mix.get("country_code") if country_mix else None,
+        },
+        "feature_scope": {
+            "requests_per_feature": requests_per_feature,
+            "feature_uses_per_month": feature_uses_per_month,
+            "months_per_year": months_per_year,
+            "annual_feature_uses": annual_feature_uses,
+            "annual_llm_requests": annual_requests,
+        },
+        "per_request_llm": per_request_aggregate,
+        "per_feature_llm": {
+            "energy_wh": scale_range(per_request_aggregate["energy_wh"], requests_per_feature),
+            "carbon_gco2e": scale_range(per_request_aggregate["carbon_gco2e"], requests_per_feature),
+            "water_ml": scale_range(per_request_aggregate["water_ml"], requests_per_feature),
+        },
+        "annual_llm": aggregated,
+        "annual_total": aggregated,
+        "method_results": methods,
+        "selected_factors": dedupe(selected_factors),
+        "assumptions": assumptions,
+        "country_energy_mix": country_mix,
+        "country_resolution": country_resolution,
+        "model_profile": get_model_profile(
+            model_id=payload.get("model_id"),
+            provider=payload.get("provider"),
+            estimated_active_parameters_billion=payload.get("estimated_active_parameters_billion"),
+        ),
+        "market_model_profile": market_profile,
+        "extrapolation_rules": [],
+        "extrapolation_details": {},
+        "software_overhead": {"components": [], "annual_energy_wh": 0.0, "annual_carbon_gco2e": 0.0, "annual_water_ml": 0.0},
+    }
+
+
 def estimate_externalities(records, payload):
     request_type = payload.get("request_type", "chat_generation")
     requests_count = to_float(payload.get("requests_count", 1.0), default=1.0)
     input_tokens = to_float(payload.get("input_tokens", 0.0), default=0.0)
     output_tokens = to_float(payload.get("output_tokens", 0.0), default=0.0)
-    country_mix = get_country_mix(payload.get("country"))
+    country_mix, country_resolution, market_profile = resolve_inference_country_mix(payload)
     grid_carbon_intensity = to_float(payload.get("grid_carbon_intensity_gco2_per_kwh"), default=None)
     water_intensity = to_float(payload.get("water_intensity_l_per_kwh"), default=None)
     if grid_carbon_intensity is None and country_mix:
@@ -411,9 +831,18 @@ def estimate_externalities(records, payload):
         assumptions = list(extrapolated["assumptions"])
         assumptions.append(f"Request type classified as {request_type}")
         if country_mix:
-            assumptions.append(
-                f"Country mix fallback applied for {country_mix.get('country_code')} ({country_mix.get('source_citation')})"
-            )
+            if country_resolution == "publisher_country":
+                assumptions.append(
+                    f"Carbon and water recalculated with the publisher-country mix for {country_mix.get('country_code')} because the model is treated as a proprietary hosted service"
+                )
+            elif country_resolution == "project_country":
+                assumptions.append(
+                    f"Carbon and water recalculated with the project country mix for {country_mix.get('country_code')} because the model is treated as open-weight or self-hosted"
+                )
+            else:
+                assumptions.append(
+                    f"Country mix fallback applied for {country_mix.get('country_code')} ({country_mix.get('source_citation')})"
+                )
         return {
             "scenario_id": payload.get("scenario_id", "unspecified"),
             "estimate_level": "request" if requests_count == 1 else "scenario",
@@ -435,6 +864,8 @@ def estimate_externalities(records, payload):
             "method": extrapolated["method"],
             "model_profile": extrapolated["model_profile"],
             "country_energy_mix": country_mix,
+            "country_resolution": country_resolution,
+            "market_model_profile": market_profile,
             "extrapolation_rules": extrapolated["rule_ids"],
             "extrapolation_details": extrapolated.get("extrapolation_details", {}),
         }
@@ -450,9 +881,18 @@ def estimate_externalities(records, payload):
 
     assumptions.append(f"Request type classified as {request_type}")
     if country_mix:
-        assumptions.append(
-            f"Country mix fallback applied for {country_mix.get('country_code')} ({country_mix.get('source_citation')})"
-        )
+        if country_resolution == "publisher_country":
+            assumptions.append(
+                f"Carbon and water recalculated with the publisher-country mix for {country_mix.get('country_code')} because the model is treated as a proprietary hosted service"
+            )
+        elif country_resolution == "project_country":
+            assumptions.append(
+                f"Carbon and water recalculated with the project country mix for {country_mix.get('country_code')} because the model is treated as open-weight or self-hosted"
+            )
+        else:
+            assumptions.append(
+                f"Country mix fallback applied for {country_mix.get('country_code')} ({country_mix.get('source_citation')})"
+            )
 
     prompt_energy = get_record(records, "elsworth2025_prompt_energy")
     prompt_carbon = get_record(records, "elsworth2025_prompt_carbon")
@@ -533,109 +973,66 @@ def estimate_externalities(records, payload):
             estimated_active_parameters_billion=payload.get("estimated_active_parameters_billion"),
         ),
         "country_energy_mix": country_mix,
+        "country_resolution": country_resolution,
+        "market_model_profile": market_profile,
         "extrapolation_rules": [],
         "extrapolation_details": {},
     }
 
 
 def estimate_feature_externalities(records, payload):
-    per_request_payload = {
-        "scenario_id": payload.get("scenario_id", "feature-estimate"),
-        "provider": payload.get("provider"),
-        "model_id": payload.get("model_id"),
-        "estimated_active_parameters_billion": payload.get("estimated_active_parameters_billion"),
-        "deployment_mode": payload.get("deployment_mode"),
-        "request_type": payload.get("request_type", "chat_generation"),
-        "input_tokens": payload.get("input_tokens", 0.0),
-        "output_tokens": payload.get("output_tokens", 0.0),
-        "requests_count": 1,
-        "country": payload.get("country"),
-        "grid_carbon_intensity_gco2_per_kwh": payload.get("grid_carbon_intensity_gco2_per_kwh"),
-        "water_intensity_l_per_kwh": payload.get("water_intensity_l_per_kwh"),
-    }
-    per_request = estimate_externalities(records, per_request_payload)
+    return build_inference_method_set(records, payload)
 
-    requests_per_feature = to_float(payload.get("requests_per_feature", 1.0), default=1.0)
-    feature_uses_per_month = to_float(payload.get("feature_uses_per_month", 0.0), default=0.0)
-    months_per_year = to_float(payload.get("months_per_year", 12.0), default=12.0)
-    software_components = payload.get("software_components", [])
-    annual_feature_uses = feature_uses_per_month * months_per_year
-    llm_requests_per_year = annual_feature_uses * requests_per_feature
 
-    llm_energy_per_request = per_request["results"].get("energy_wh", {"low": 0.0, "central": 0.0, "high": 0.0})
-    llm_carbon_per_request = per_request["results"].get("carbon_gco2e", {"low": 0.0, "central": 0.0, "high": 0.0})
-    llm_water_per_request = per_request["results"].get("water_ml", {"low": 0.0, "central": 0.0, "high": 0.0})
+def predict_inference_externalities(records, payload):
+    return build_inference_method_set(records, payload)
 
-    llm_energy_per_feature = scale_range(llm_energy_per_request, requests_per_feature)
-    llm_carbon_per_feature = scale_range(llm_carbon_per_request, requests_per_feature)
-    llm_water_per_feature = scale_range(llm_water_per_request, requests_per_feature)
 
-    annual_llm_energy = scale_range(llm_energy_per_feature, annual_feature_uses)
-    annual_llm_carbon = scale_range(llm_carbon_per_feature, annual_feature_uses)
-    annual_llm_water = scale_range(llm_water_per_feature, annual_feature_uses)
-
-    grid_carbon_intensity = to_float(payload.get("grid_carbon_intensity_gco2_per_kwh"), default=None)
-    water_intensity = to_float(payload.get("water_intensity_l_per_kwh"), default=None)
-    software_breakdown = build_software_breakdown(software_components, annual_feature_uses, grid_carbon_intensity, water_intensity)
-    overhead_energy_annual = software_breakdown["annual_energy_wh"]
-    overhead_carbon_annual = software_breakdown["annual_carbon_gco2e"]
-    overhead_water_annual = software_breakdown["annual_water_ml"]
-
-    total_energy_annual = add_scalar_to_range(annual_llm_energy, overhead_energy_annual)
-    total_carbon_annual = (
-        add_scalar_to_range(annual_llm_carbon, overhead_carbon_annual)
-        if overhead_carbon_annual is not None
-        else annual_llm_carbon
-    )
-    total_water_annual = (
-        add_scalar_to_range(annual_llm_water, overhead_water_annual)
-        if overhead_water_annual is not None
-        else annual_llm_water
-    )
-
-    assumptions = list(per_request["assumptions"])
-    assumptions.append(f"{requests_per_feature} LLM request(s) per feature use")
-    assumptions.append(f"{annual_feature_uses} feature uses per year")
-    if software_components:
-        assumptions.append("Software-system overhead split across explicit technical components")
-
-    return {
-        "scenario_id": payload.get("scenario_id", "feature-estimate"),
-        "estimate_level": "feature",
-        "feature_scope": {
-            "requests_per_feature": requests_per_feature,
-            "feature_uses_per_month": feature_uses_per_month,
-            "months_per_year": months_per_year,
-            "annual_feature_uses": annual_feature_uses,
-            "annual_llm_requests": llm_requests_per_year,
-        },
-        "per_request_llm": per_request["results"],
-        "per_feature_llm": {
-            "energy_wh": llm_energy_per_feature,
-            "carbon_gco2e": llm_carbon_per_feature,
-            "water_ml": llm_water_per_feature,
-        },
-        "annual_llm": {
-            "energy_wh": annual_llm_energy,
-            "carbon_gco2e": annual_llm_carbon,
-            "water_ml": annual_llm_water,
-        },
-        "annual_total": {
-            "energy_wh": total_energy_annual,
-            "carbon_gco2e": total_carbon_annual,
-            "water_ml": total_water_annual,
-        },
-        "software_overhead": software_breakdown,
-        "selected_factors": per_request["selected_factors"],
-        "assumptions": assumptions,
-        "uncertainty_level": "high",
-        "applicability_note": "Feature-level annualization for screening and eco-design, not an audited footprint statement.",
-        "method": per_request.get("method", "literature_proxy"),
-        "model_profile": per_request.get("model_profile"),
-        "country_energy_mix": per_request.get("country_energy_mix"),
-        "extrapolation_rules": per_request.get("extrapolation_rules", []),
-        "extrapolation_details": per_request.get("extrapolation_details", {}),
-    }
+def build_market_model_predictions(records):
+    predictions = []
+    monthly_uses = MARKET_REFERENCE_REQUESTS_PER_YEAR / 12.0
+    for row in load_market_models():
+        active_parameters = to_float(row.get("active_parameters_billion"), default=None)
+        payload = {
+            "scenario_id": f"market-{row.get('model_id')}",
+            "provider": row.get("provider"),
+            "model_id": row.get("model_id"),
+            "request_type": "chat_generation",
+            "input_tokens": 1000.0,
+            "output_tokens": 550.0,
+            "requests_per_feature": 1.0,
+            "feature_uses_per_month": monthly_uses,
+            "months_per_year": 12.0,
+            "country": row.get("estimation_country_code") or "US",
+        }
+        if active_parameters is not None:
+            payload["estimated_active_parameters_billion"] = active_parameters
+        estimate = predict_inference_externalities(records, payload)
+        predictions.append(
+            {
+                **row,
+                "standard_scenario": {
+                    "request_type": "chat_generation",
+                    "input_tokens": 1000.0,
+                    "output_tokens": 550.0,
+                    "requests_per_year": MARKET_REFERENCE_REQUESTS_PER_YEAR,
+                },
+                "estimate_status": "estimated",
+                "estimate_method": estimate.get("method"),
+                "evidence_level": "measured_proxy" if active_parameters is not None else "generic_proxy",
+                "per_request_energy_wh": estimate.get("per_request_llm", {}).get("energy_wh", {}),
+                "per_request_carbon_gco2e": estimate.get("per_request_llm", {}).get("carbon_gco2e", {}),
+                "per_request_water_ml": estimate.get("per_request_llm", {}).get("water_ml", {}),
+                "annual_energy_wh": estimate.get("annual_llm", {}).get("energy_wh", {}),
+                "annual_carbon_gco2e": estimate.get("annual_llm", {}).get("carbon_gco2e", {}),
+                "annual_water_ml": estimate.get("annual_llm", {}).get("water_ml", {}),
+                "country_energy_mix": estimate.get("country_energy_mix") or {},
+                "selected_factors": estimate.get("selected_factors", []),
+                "assumptions": estimate.get("assumptions", []),
+                "method_results": estimate.get("method_results", []),
+            }
+        )
+    return predictions
 
 
 def compute_token_ratio(input_tokens, output_tokens):

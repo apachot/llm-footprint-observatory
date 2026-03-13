@@ -13,7 +13,9 @@ from core.estimator import (
     DATASET_PATH,
     COUNTRY_MIX_PATH,
     EXTRAPOLATION_RULES_PATH,
+    MARKET_MODELS_PATH,
     MODELS_PATH,
+    build_market_model_predictions,
     compute_stats,
     estimate_externalities,
     estimate_feature_externalities,
@@ -26,6 +28,7 @@ from core.estimator import (
     load_extrapolation_rules,
     load_models,
     load_records,
+    predict_inference_externalities,
 )
 
 
@@ -49,6 +52,7 @@ class Handler(BaseHTTPRequestHandler):
                     "status": "ok",
                     "dataset": str(DATASET_PATH),
                     "models": str(MODELS_PATH),
+                    "market_models": str(MARKET_MODELS_PATH),
                     "country_mix": str(COUNTRY_MIX_PATH),
                     "extrapolation_rules": str(EXTRAPOLATION_RULES_PATH),
                 }
@@ -75,6 +79,10 @@ class Handler(BaseHTTPRequestHandler):
 
         if path == "/models":
             self._write_json({"models": load_models()})
+            return
+
+        if path == "/market-models":
+            self._write_json({"market_models": build_market_model_predictions(records)})
             return
 
         if path.startswith("/models/"):
@@ -117,12 +125,14 @@ class Handler(BaseHTTPRequestHandler):
                     "/sources",
                     "/models",
                     "/models/<model_id>",
+                    "/market-models",
                     "/energy-mix",
                     "/energy-mix/<country_code>",
                     "/extrapolation-rules",
                     "/stats",
                     "POST /estimate",
                     "POST /estimate_feature",
+                    "POST /predict_inference",
                 ],
             },
             status=404,
@@ -130,9 +140,9 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         parsed = urlparse(self.path)
-        if parsed.path not in ("/estimate", "/estimate_feature"):
+        if parsed.path not in ("/estimate", "/estimate_feature", "/predict_inference"):
             self._write_json(
-                {"error": "not found", "available_endpoints": ["POST /estimate", "POST /estimate_feature"]},
+                {"error": "not found", "available_endpoints": ["POST /estimate", "POST /estimate_feature", "POST /predict_inference"]},
                 status=404,
             )
             return
@@ -151,6 +161,8 @@ class Handler(BaseHTTPRequestHandler):
         records = load_records()
         if parsed.path == "/estimate":
             estimate = estimate_externalities(records, payload)
+        elif parsed.path == "/predict_inference":
+            estimate = predict_inference_externalities(records, payload)
         else:
             estimate = estimate_feature_externalities(records, payload)
         self._write_json(estimate)
