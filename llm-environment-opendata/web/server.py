@@ -2924,21 +2924,9 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
       text-transform: none;
       letter-spacing: 0.01em;
     }}
-    .result-method-metric-energy .result-method-label {{
-      color: #276749;
-    }}
-    .result-method-metric-carbon .result-method-label {{
-      color: #b54736;
-    }}
     .result-method-metric strong {{
       font-size: 1rem;
       line-height: 1.45;
-    }}
-    .result-method-metric-energy strong {{
-      color: #1f5139;
-    }}
-    .result-method-metric-carbon strong {{
-      color: #8f2f22;
     }}
     .result-method-actions {{
       margin-top: 0.9rem;
