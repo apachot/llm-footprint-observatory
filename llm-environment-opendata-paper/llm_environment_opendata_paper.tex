@@ -32,7 +32,7 @@
 \maketitle
 
 \begin{abstract}
-The environmental literature on large language models (LLMs) is expanding rapidly, but the underlying quantitative evidence remains difficult to reuse because values are dispersed across papers, model cards, reports, and dashboards with heterogeneous units and system boundaries. We present \emph{ImpactLLM}, an open scientific tool that turns this fragmented evidence into a reusable infrastructure. The project combines a source-linked dataset, comparability metadata, machine-access interfaces, and a public web observatory. Its current inference estimator is deliberately conservative: it is an inference-only screening method calibrated on observed prompt energy, then adjusted with a bounded multi-factor proxy based on token volume, active parameters, context-window class, serving mode, modality support, architecture notes, and country electricity factors. The contribution is therefore primarily infrastructural and methodological: rather than claiming direct access to hidden provider telemetry, \emph{ImpactLLM} makes the evidence layer and the extrapolative assumptions explicit, inspectable, and reusable.
+The environmental literature on large language models (LLMs) is growing, but the evidence remains difficult to reuse because values are dispersed across papers, model cards, reports, and dashboards with heterogeneous units and system boundaries. We present \emph{ImpactLLM}, an open observatory and screening tool for exploring the environmental footprint of current LLMs. The contribution is intentionally practical rather than grand-theoretical. First, the project provides a source-linked evidence layer that can be reused through a tabular dataset, a local API, an MCP server, and a public web interface. Second, it offers a rapid application-level estimator driven by natural-language descriptions rather than by long technical forms. The current estimator is inference-only and designed for screening: it starts from observed literature anchors, then applies a bounded multi-factor proxy that remains explicit and inspectable. In a domain where direct telemetry is usually unavailable for the most-used proprietary models, we argue that an open, auditable observatory is itself a useful scientific contribution.
 \end{abstract}
 
 \textbf{Keywords:} LLMs, open data, environmental footprint, inference, screening method, API.
@@ -40,7 +40,11 @@ The environmental literature on large language models (LLMs) is expanding rapidl
 \section{Introduction}
 Environmental evaluation of LLMs is now discussed across several analytical levels: model training, prompt-level inference, service delivery, water use, hardware lifecycle, and data-center electricity demand \cite{strubell2019,rillig2023,luccioni2023,ren2024,morrison2025,elsworth2025,li2025water,iea2025}. Yet the practical bottleneck is no longer simply the absence of quantified values. The literature now contains many values, but they are difficult to compare, audit, and reuse because they differ in unit of analysis, system boundary, geography, and traceability.
 
-This paper addresses that bottleneck with a simple claim: in this domain, an open evidence infrastructure is itself a scientific contribution. \emph{ImpactLLM} does not introduce a new physical law of AI impacts. Instead, it stabilizes the factual layer on which comparative review, public observatories, and screening estimators depend. The project has two linked goals. The first is documentary: publish a source-linked corpus of quantitative indicators on LLM training, inference, infrastructure, and lifecycle effects. The second is methodological: show how this corpus can support a transparent inference-focused screening method for current LLM services, including proprietary APIs that do not expose direct telemetry.
+This paper addresses that bottleneck with a narrower claim than many AI-impact papers. \emph{ImpactLLM} is not presented as a precision measurement system for proprietary LLM services, and it does not claim to discover a universal law linking parameter counts to energy use. Its contribution is instead twofold.
+
+First, it provides an open observatory of environmental indicators for current LLMs. The observatory exposes source-linked records, model metadata, bibliographic references, and comparative views that remain inspectable by users. Second, it provides a rapid screening tool for application-level inference assessment. The user can describe an LLM-enabled application in natural language; the system extracts a compact scenario and returns an inference-focused estimate together with its assumptions, sources, and calculation details. This ``fast estimate from natural language'' design is deliberate: in many practical settings, users do not know dozens of technical serving parameters, but they can describe their application, model, country, and usage volume.
+
+The scientific claim of the paper is therefore modest but useful. In a field dominated either by low-level telemetry tools or by opaque provider-side information, an open, reusable observatory coupled with an explicit screening estimator can fill an important operational gap.
 
 \section{State of the Art}
 The current landscape can be grouped into four broad methodological families.
@@ -62,10 +66,14 @@ This structure separates three dimensions that are often conflated in narrative 
 
 The same evidence base is exposed through four reuse layers: a tabular dataset, a local HTTP API, an MCP server, and a bilingual public web observatory \cite{impactllmrepo2026}. The scientific point is not that each interface is novel on its own, but that they all reuse the same source-linked evidence base. This makes the web observatory, the programmatic interfaces, and the paper mutually auditable rather than loosely aligned artifacts.
 
+This observatory angle matters because, to our knowledge, openly accessible infrastructures that jointly provide (i) source-level environmental indicators for LLMs, (ii) comparative views of current models, and (iii) an application-oriented inference screening interface remain rare. Existing tools often provide either instrumentation, or estimation, or datasets, but not all three within one openly inspectable workflow.
+
 \section{Inference Screening Method}
 The main practical question addressed by the tool is straightforward: given a software feature using an LLM, can we produce an inference estimate that is useful for screening and comparison when direct provider telemetry is absent?
 
 The current answer is deliberately limited. The estimator is \emph{inference-only}. It excludes model training, embodied impacts, application-side software consumption, and ancillary infrastructure from the displayed result. This is not because those dimensions are unimportant, but because the available inference anchors are structured enough to support a transparent screening method, whereas mixing them with broader lifecycle terms would blur the meaning of the result.
+
+The design objective is also practical speed. Instead of asking users to fill a large technical form, the web interface starts from a natural-language description such as ``We use GPT-4o-mini for customer support, around 4{,}000 uses per month in France.'' A parser then maps this text to a compact scenario with model, request type, approximate tokens, usage volume, and country assumptions. The output is therefore fast to obtain, but every inferred parameter remains visible to the user and can be inspected or challenged.
 
 The current market-model release follows five rules.
 \begin{itemize}
@@ -100,12 +108,12 @@ The current implementation uses $\alpha_{low}=0.85$, $\alpha_{central}=0.95$, $\
 \end{equation}
 where $CI_c$ is the carbon intensity of country $c$ in gCO$_2$e/kWh.
 
-This method is not presented as a physical law of inference scaling. It is a traceable screening proxy anchored in observed prompt energy and explicit contextual assumptions.
+This method is not presented as a physical law of inference scaling. It is a traceable screening proxy anchored in observed prompt energy and explicit contextual assumptions. Its purpose is to provide a fast and inspectable estimate for comparative reasoning, not an audited declaration of real provider-side energy use.
 
 \section{Illustrative Results}
 The public observatory standardizes model comparison under one hour of active use corresponding to 1,000 input tokens, 550 output tokens, one LLM request per interaction, and approximately 34.6 interactions per hour, derived from a reading-speed convention \cite{brysbaert2019}. This provides a common comparison space before application-specific annualization.
 
-Table \ref{tab:short-results} summarizes a few illustrative outputs. The first block shows how the standardized observatory makes model orders of magnitude legible. The second block shows how the same proxy can be annualized at the software-feature level.
+Table \ref{tab:short-results} summarizes a few illustrative outputs. The first block shows how the standardized observatory makes model orders of magnitude legible. The second block shows how the same proxy can be annualized at the software-feature level from compact, natural-language scenarios.
 
 \begin{table}[htbp]
 \centering
@@ -129,7 +137,7 @@ Retrieval assistant, GPT-5 mini, 4{,}000 uses/month & 12.31 kWh/year & 4.74 kgCO
 \label{tab:short-results}
 \end{table}
 
-These examples illustrate three practical properties of the method. First, annualization matters: apparently small unit values become relevant when multiplied by real usage. Second, the chosen model profile matters materially. Third, the retained electricity mix can dominate the carbon interpretation, which is why country contextualization is explicitly shown in the interface.
+These examples illustrate three practical properties of the method. First, annualization matters: apparently small unit values become relevant when multiplied by real usage. Second, the chosen model profile matters materially. Third, the retained electricity mix can dominate the carbon interpretation, which is why country contextualization is explicitly shown in the interface. Just as importantly, these results can be obtained quickly from natural-language inputs while keeping the extracted scenario and assumptions visible in the interface.
 
 \section{Limitations}
 The main limitation is epistemic rather than computational. For proprietary hosted models, the evaluator does not observe the real serving stack, hardware, batch behavior, or data-center geography directly. The method therefore remains a proxy-informed estimate, not a direct measurement. The bounded interval is intended to make that limitation visible rather than to eliminate it.
@@ -138,10 +146,12 @@ A second limitation is corpus size. Prompt-level anchors remain scarce, and the 
 
 A third limitation concerns scope. The current user-facing estimate is inference-only. Training, embodied hardware impacts, software-system overheads, and water contextualization remain documented in the evidence base, but they are not yet integrated into the personalized screening output.
 
-\section{Conclusion}
-\emph{ImpactLLM} proposes a different kind of contribution to the LLM-environment literature. Its main novelty is not a new physical model, but an open, source-linked infrastructure that makes environmental evidence reusable across a dataset, an API, an MCP server, and a public observatory. On top of that evidence layer, the project implements a transparent inference-only screening method for current LLM services, including proprietary ones.
+A fourth limitation concerns natural-language scenario extraction. The ``fast estimate'' workflow improves usability, but it also introduces interpretation assumptions when users provide incomplete descriptions. For that reason, the extracted scenario, assumptions, and retained defaults are systematically displayed alongside the result.
 
-The value of the project lies precisely in this combination of restraint and reuse. It does not claim hidden provider telemetry, and it does not collapse heterogeneous evidence into a single opaque score. Instead, it publishes the records, the assumptions, the interfaces, and the extrapolative method together. In a field where the difficulty is increasingly one of comparability and traceability rather than raw numerical absence, this kind of infrastructure is a scientific object in its own right \cite{impactllmrepo2026}.
+\section{Conclusion}
+\emph{ImpactLLM} proposes a different kind of contribution to the LLM-environment literature. Its main novelty is not a new physical model, but an open, source-linked infrastructure that makes environmental evidence reusable across a dataset, an API, an MCP server, and a public observatory. On top of that evidence layer, the project implements a transparent inference-only screening method for current LLM services, including proprietary ones, and a rapid interface that starts from natural-language descriptions rather than long technical forms.
+
+The value of the project lies precisely in this combination of restraint and reuse. It does not claim hidden provider telemetry, and it does not collapse heterogeneous evidence into a single opaque score. Instead, it publishes the records, the assumptions, the interfaces, and the extrapolative method together. In a field where the difficulty is increasingly one of comparability, accessibility, and traceability rather than raw numerical absence, an open observatory plus a fast screening workflow is a legitimate scientific contribution in its own right \cite{impactllmrepo2026}.
 
 \bibliographystyle{plain}
 \bibliography{references_llm_environment_opendata}
