@@ -2506,6 +2506,7 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{PROJECT_NAME}</title>
+  <link rel="icon" type="image/svg+xml" href="{app_url('/favicon.svg')}">
   <script>
     window.MathJax = {{
       tex: {{
@@ -4276,6 +4277,16 @@ class Handler(BaseHTTPRequestHandler):
         normalized_path = self._normalized_path()
         if normalized_path is None:
             self._write_html(render_page(error_message="Page not found."), status=404, send_body=send_body)
+            return
+        if normalized_path == "/favicon.svg":
+            if LOGO_MARK_PATH.exists():
+                self._write_bytes(
+                    LOGO_MARK_PATH.read_bytes(),
+                    "image/svg+xml",
+                    send_body=send_body,
+                )
+                return
+            self._write_html(render_page(error_message="Favicon not found."), status=404, send_body=send_body)
             return
         if normalized_path == "/downloads/llm_environment_opendata_paper.pdf":
             if PAPER_PDF_PATH.exists():
