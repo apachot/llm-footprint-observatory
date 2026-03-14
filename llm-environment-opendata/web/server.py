@@ -42,6 +42,7 @@ BIB_PATH = ROOT.parent / "llm-environment-opendata-paper" / "references_llm_envi
 ANALYSIS_LOG_PATH = ROOT / "data" / "analysis_runs.json"
 PAPER_TEX_PATH = ROOT.parent / "llm-environment-opendata-paper" / "llm_environment_opendata_paper.tex"
 PAPER_PDF_PATH = ROOT.parent / "llm-environment-opendata-paper" / "llm_environment_opendata_paper.pdf"
+PAPER_PREVIEW_PATH = ROOT / "web" / "llm_environment_opendata_paper_preview.png"
 LOGO_PATH = ROOT / "web" / "impactllm-logo.svg"
 LOGO_MARK_PATH = ROOT / "web" / "impactllm-mark.svg"
 REFERENCE_PAGE_TOKENS = 750.0
@@ -1317,6 +1318,7 @@ def build_literature_catalog_rows():
                 "record_id": record.get("record_id", ""),
                 "study_key": record.get("study_key", ""),
                 "phase": record.get("phase", ""),
+                "impact_category": record.get("impact_category", ""),
                 "data_type": describe_record_type_fr(record),
                 "model_or_scope": record.get("llm_normalized", "") or "n.d.",
                 "model_parameters": record.get("model_parameters_normalized", "") or "n.d.",
@@ -1365,6 +1367,8 @@ def render_reference_catalog_sections():
 
     grouped = {"training": [], "inference": [], "other": []}
     for row in rows:
+        if str(row.get("impact_category", "")).strip().lower() == "water":
+            continue
         locator_html = ""
         if row["source_locator"]:
             locator_html = f'<div class="reference-locator">{escape(row["source_locator"])}</div>'
@@ -2364,6 +2368,13 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
           <p>The result is an auditable estimate intended for comparison, software design, and methodological discussion. It is useful precisely because the assumptions remain visible, inspectable, and source-backed.</p>
 
           <p><strong>Scientific paper.</strong> <a href="{app_url('/downloads/llm_environment_opendata_paper.pdf')}">Download the PDF</a></p>
+          <a class="paper-preview-card" href="{app_url('/downloads/llm_environment_opendata_paper.pdf')}" target="_blank" rel="noopener noreferrer" aria-label="Open the scientific paper PDF">
+            <span class="paper-preview-frame">
+              <img src="{app_url('/downloads/llm_environment_opendata_paper_preview.png')}" alt="Preview of the first page of the ImpactLLM scientific paper" loading="lazy">
+            </span>
+            <span class="paper-preview-caption">Preview the PDF and click to open it</span>
+          </a>
+          <p class="paper-preview-reference notranslate">Pachot, A., &amp; Petit, T. (2026, March 12). <em>ImpactLLM: An open tool for exploring and estimating the environmental footprint of large language models.</em> <a href="{app_url('/downloads/llm_environment_opendata_paper.pdf')}">{app_url('/downloads/llm_environment_opendata_paper.pdf')}</a></p>
         </div>
       </section>
     </section>
@@ -2443,7 +2454,6 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
     <section class="tab-panel is-active" id="tab-home-panel" data-tab-panel="home">
       <header class="hero">
         <h1>An Open Tool for Exploring and Estimating the Environmental Footprint of Large Language Models</h1>
-        <p class="subtitle">An open tool for exploring and estimating the environmental footprint of large language models.</p>
       </header>
       <form class="panel" method="post" action="{app_url('/')}" id="estimate-form">
         <label for="description">Describe your application in natural language to obtain an inference estimate, its assumptions, and its source-linked calculation details.</label>
@@ -2633,7 +2643,7 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
       background: #fff;
       color: #8c94a0;
       border-color: #c7ccd5;
-      cursor: wait;
+      cursor: not-allowed;
     }}
     .spinner {{
       width: 1rem;
@@ -3264,6 +3274,52 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
       max-width: none;
       width: 100%;
     }}
+    .paper-preview-card {{
+      display: flex;
+      flex-direction: column;
+      gap: 0.55rem;
+      margin: 0.85rem auto 0;
+      text-decoration: none;
+      color: inherit;
+      max-width: 260px;
+      width: 100%;
+    }}
+    .paper-preview-frame {{
+      display: block;
+      width: 100%;
+      aspect-ratio: 0.72;
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: 0.35rem;
+      background: rgba(140, 122, 91, 0.08);
+      box-shadow: 0 10px 24px rgba(31, 36, 48, 0.08);
+      transition: transform 120ms ease, box-shadow 120ms ease, border-color 120ms ease;
+    }}
+    .paper-preview-frame img {{
+      width: 100%;
+      height: 100%;
+      border: 0;
+      object-fit: cover;
+      background: #fff;
+    }}
+    .paper-preview-card:hover .paper-preview-frame {{
+      transform: translateY(-2px);
+      border-color: rgba(36,59,99,0.24);
+      box-shadow: 0 14px 28px rgba(31, 36, 48, 0.12);
+    }}
+    .paper-preview-caption {{
+      font-size: 0.86rem;
+      font-weight: 600;
+      color: var(--accent);
+    }}
+    .paper-preview-reference {{
+      margin: 0.85rem auto 0;
+      max-width: 620px;
+      text-align: center;
+      font-size: 0.9rem;
+      line-height: 1.6;
+      color: var(--muted);
+    }}
     .reference-table {{
       width: 100%;
       border-collapse: collapse;
@@ -3523,6 +3579,7 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
     const trainingChartControls = Array.from(document.querySelectorAll('[data-training-chart-control="metric-tab"]'));
     const LANGUAGE_STORAGE_KEY = 'llm-environment-language';
     const TAB_HASH_PREFIX = '#tab-';
+    const MIN_DESCRIPTION_LENGTH = 50;
     const textNodeOriginals = new WeakMap();
     const currentLanguage = {{ value: 'en' }};
     const uiText = {{
@@ -3610,7 +3667,7 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
       ['This annex brings together the quantified reference material used in the interface, along with everyday comparison benchmarks and country factors used for carbon and water recalculation.', 'Cette annexe rassemble les sources quantitatives mobilisées dans l’interface, ainsi que des repères de comparaison du quotidien et les facteurs pays utilisés pour le recalcul du carbone et de l’eau.'],
       ['This table lists the third-party sources used when a provider does not publish the parameter count of a closed model. Estimated values are marked with `*` throughout the interface.', 'Ce tableau recense les sources tierces utilisées lorsqu’un fournisseur ne publie pas le nombre de paramètres d’un modèle fermé. Les valeurs estimées sont signalées par `*` dans toute l’interface.'],
       ['Download PDF', 'Télécharger le PDF'],
-      ['An Open Tool for Exploring and Estimating the Environmental Footprint of Large Language Models', 'Un outil ouvert pour explorer et estimer l’empreinte environnementale des grands modèles de langage'],
+      ['An Open Tool for Exploring and Estimating the Environmental Footprint of Large Language Models', 'Un outil libre pour explorer et estimer l’empreinte environnementale des grands modèles de langage'],
       ['ImpactLLM is designed as a transparent screening tool, not as a black-box score. The core idea is to start from the few environmental values that are actually published in the literature, preserve their native units, and reuse them through explicit multiples rather than hidden heuristics.', 'ImpactLLM est conçu comme un outil transparent de screening, et non comme un score boîte noire. L’idée centrale consiste à partir des quelques valeurs environnementales réellement publiées dans la littérature, à préserver leurs unités natives, puis à les réutiliser via des multiples explicites plutôt que des heuristiques cachées.'],
       ['1. Source-linked literature anchors.', '1. Ancrages bibliographiques reliés aux sources.'],
       ['The application-level estimator starts from published inference indicators linked to an explicit source, model, geography, and system boundary. In the current release, the operational estimation flow relies primarily on the <code>Wh/prompt|request</code> family.', 'L’estimateur au niveau applicatif part d’indicateurs d’inférence publiés, reliés à une source, un modèle, une géographie et un périmètre système explicites. Dans la version actuelle, le flux d’estimation opérationnel repose principalement sur la famille <code>Wh/prompt|request</code>.'],
@@ -3627,7 +3684,7 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
       ['Download BibTeX entry', 'Télécharger l’entrée BibTeX'],
       ['Download the associated scientific publication PDF', 'Télécharger le PDF de la publication scientifique associée'],
       ['ImpactLLM', 'ImpactLLM'],
-      ['An open tool for exploring and estimating the environmental footprint of large language models.', 'Un outil ouvert pour explorer et estimer l’empreinte environnementale des grands modèles de langage.'],
+      ['An open tool for exploring and estimating the environmental footprint of large language models.', 'Un outil libre pour explorer et estimer l’empreinte environnementale des grands modèles de langage.'],
       ['Describe your application in natural language to obtain an inference estimate, its assumptions, and its source-linked calculation details.', 'Décrivez votre application en langage naturel pour obtenir une estimation d’inférence, ses hypothèses et les détails du calcul reliés aux sources.'],
       ['Install and run the project', 'Installer et lancer le projet'],
       ['GitHub repository.', 'Dépôt GitHub.'],
@@ -3844,11 +3901,30 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
       renderModelsChart();
       renderTrainingChart();
     }}
+    function hasEnoughDescriptionContent() {{
+      return (descriptionInput?.value || '').trim().length >= MIN_DESCRIPTION_LENGTH;
+    }}
+    function updateSubmitState() {{
+      if (!submitButton) return;
+      if (submitButton.classList.contains('is-loading')) {{
+        submitButton.disabled = true;
+        return;
+      }}
+      submitButton.disabled = !hasEnoughDescriptionContent();
+    }}
     if (estimateForm && submitButton) {{
-      estimateForm.addEventListener('submit', function () {{
+      estimateForm.addEventListener('submit', function (event) {{
+        if (!hasEnoughDescriptionContent()) {{
+          event.preventDefault();
+          submitButton.disabled = true;
+          return;
+        }}
         submitButton.disabled = true;
         submitButton.classList.add('is-loading');
       }});
+    }}
+    if (descriptionInput) {{
+      descriptionInput.addEventListener('input', updateSubmitState);
     }}
     examplePromptButtons.forEach((button) => {{
       button.addEventListener('click', function () {{
@@ -3857,8 +3933,10 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
         descriptionInput.value = value;
         descriptionInput.focus();
         descriptionInput.setSelectionRange(descriptionInput.value.length, descriptionInput.value.length);
+        updateSubmitState();
       }});
     }});
+    updateSubmitState();
     function activateTab(target) {{
       let matched = false;
       tabButtons.forEach((item) => {{
@@ -4217,6 +4295,16 @@ class Handler(BaseHTTPRequestHandler):
                 filename="llm_environment_opendata_paper.bib",
                 send_body=send_body,
             )
+            return
+        if normalized_path == "/downloads/llm_environment_opendata_paper_preview.png":
+            if PAPER_PREVIEW_PATH.exists():
+                self._write_bytes(
+                    PAPER_PREVIEW_PATH.read_bytes(),
+                    "image/png",
+                    send_body=send_body,
+                )
+                return
+            self._write_html(render_page(error_message="Publication preview not found."), status=404, send_body=send_body)
             return
         self._write_html(render_page(), send_body=send_body)
 
