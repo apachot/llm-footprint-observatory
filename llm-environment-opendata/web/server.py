@@ -4301,8 +4301,8 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
         return `<p class="lead">${{locale.noUsableValue}}</p>`;
       }}
       const maxValue = sorted[0].value || 1;
-      const barHeight = 26;
-      const rowGap = 18;
+      const barHeight = 28;
+      const rowGap = 22;
       const chartWidth = 980;
       const labelWidth = 320;
       const valueWidth = 150;
@@ -4315,10 +4315,10 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
         const valueText = formatChartValue(row.value, metric);
         const fill = row.kind === 'reference' ? '#8c7a5b' : '#3f5a49';
         return `
-          <text x="0" y="${{y + 17}}" font-size="13" fill="#212529">${{row.label}}</text>
-          <text x="0" y="${{y + 31}}" font-size="11" fill="#6c757d">${{row.provider}}</text>
+          <text x="0" y="${{y + 18}}" font-size="15" fill="#212529">${{row.label}}</text>
+          <text x="0" y="${{y + 34}}" font-size="13" fill="#6c757d">${{row.provider}}</text>
           <rect x="${{barStart}}" y="${{y}}" width="${{width}}" height="${{barHeight}}" rx="4" fill="${{fill}}"></rect>
-          <text x="${{barStart + width + 10}}" y="${{y + 17}}" font-size="12" fill="#212529">${{valueText}}</text>
+          <text x="${{barStart + width + 10}}" y="${{y + 18}}" font-size="14" fill="#212529">${{valueText}}</text>
         `;
       }}).join('');
       const titleMetric = metric === 'energy' ? locale.chartMetricEnergy : locale.chartMetricCarbon;
@@ -4384,8 +4384,8 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
         return `<p class="lead">${{locale.noUsableValue}}</p>`;
       }}
       const maxValue = sorted[0].value || 1;
-      const barHeight = 26;
-      const rowGap = 18;
+      const barHeight = 28;
+      const rowGap = 22;
       const chartWidth = 980;
       const labelWidth = 320;
       const valueWidth = 150;
@@ -4398,10 +4398,10 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
         const valueText = formatTrainingChartValue(row.value, metric);
         const fill = row.kind === 'reference' ? '#8c7a5b' : '#3f5a49';
         return `
-          <text x="0" y="${{y + 17}}" font-size="13" fill="#212529">${{row.label}}</text>
-          <text x="0" y="${{y + 31}}" font-size="11" fill="#6c757d">${{row.provider}}</text>
+          <text x="0" y="${{y + 18}}" font-size="15" fill="#212529">${{row.label}}</text>
+          <text x="0" y="${{y + 34}}" font-size="13" fill="#6c757d">${{row.provider}}</text>
           <rect x="${{barStart}}" y="${{y}}" width="${{width}}" height="${{barHeight}}" rx="4" fill="${{fill}}"></rect>
-          <text x="${{barStart + width + 10}}" y="${{y + 17}}" font-size="12" fill="#212529">${{valueText}}</text>
+          <text x="${{barStart + width + 10}}" y="${{y + 18}}" font-size="14" fill="#212529">${{valueText}}</text>
         `;
       }}).join('');
       const titleMetric = metric === 'direct_training_energy'
