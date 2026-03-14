@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 from datetime import datetime
 import json
+import os
 import re
 import sys
 from email.utils import formatdate
@@ -8,7 +9,7 @@ from functools import lru_cache
 from html import escape
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
-from urllib.parse import parse_qs
+from urllib.parse import parse_qs, urlsplit
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
@@ -36,7 +37,7 @@ from core.openai_parser import (
 )
 
 
-PROJECT_NAME = "LLM Environment Open Data"
+PROJECT_NAME = "ImpactLLM"
 BIB_PATH = ROOT.parent / "llm-environment-opendata-paper" / "references_llm_environment_opendata.bib"
 ANALYSIS_LOG_PATH = ROOT / "data" / "analysis_runs.json"
 PAPER_TEX_PATH = ROOT.parent / "llm-environment-opendata-paper" / "llm_environment_opendata_paper.tex"
@@ -44,13 +45,34 @@ PAPER_PDF_PATH = ROOT.parent / "llm-environment-opendata-paper" / "llm_environme
 REFERENCE_PAGE_TOKENS = 750.0
 DEFAULT_PROMPT_TOKENS = 1550.0
 PROJECT_PAPER_BIBTEX = """@misc{llm_environment_open_data_2026,
-  title = {An Open Tool for Exploring and Estimating the Environmental Footprint of Large Language Models: Dataset, Observatory, API, MCP Server, and Web Interface},
+  title = {ImpactLLM: An Open Tool for Exploring and Estimating the Environmental Footprint of Large Language Models},
   author = {Pachot, Arnault and Petit, Thierry},
   year = {2026},
   month = mar,
   note = {Working paper},
   url = {https://github.com/apachot/Publications-scientifiques}
 }"""
+
+
+def normalize_url_prefix(prefix):
+    prefix = (prefix or "").strip()
+    if not prefix:
+        return ""
+    prefix = "/" + prefix.strip("/")
+    return "" if prefix == "/" else prefix
+
+
+URL_PREFIX = normalize_url_prefix(os.environ.get("LLM_WEB_PREFIX", ""))
+
+
+def app_url(path="/"):
+    if not path.startswith("/"):
+        path = f"/{path}"
+    if not URL_PREFIX:
+        return path
+    if path == "/":
+        return f"{URL_PREFIX}/"
+    return f"{URL_PREFIX}{path}"
 SITE_CONTEXT_REFERENCES = [
     {
         "key": "brysbaert2019",
@@ -1552,6 +1574,7 @@ def render_documentation_tab():
         </div>
         <p class="summary-intro">The project combines a local dataset, an HTTP API, an MCP server, and a web calculation interface. The main scripts rely on Python 3 and the repository files.</p>
         <div class="summary-body">
+          <p><strong>GitHub repository.</strong> <a href="https://github.com/apachot/llm-footprint-observatory" target="_blank" rel="noreferrer">ImpactLLM on GitHub</a></p>
           <p><strong>Prerequisites.</strong> Python 3 is required. An OpenAI key is only needed for natural-language parsing in the web interface.</p>
           <p><strong>Move into the project.</strong></p>
           <pre style="margin:0; white-space:pre-wrap;"><code>cd "llm-environment-opendata"</code></pre>
@@ -2154,10 +2177,10 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
       <section class="panel reference-panel">
         <div class="summary-body">
           <p><strong>Short reference.</strong></p>
-          <p>Pachot, A., &amp; Petit, T. (2026, March 12). <em>An open tool for exploring and estimating the environmental footprint of large language models: Dataset, observatory, API, MCP server, and web interface.</em></p>
+          <p>Pachot, A., &amp; Petit, T. (2026, March 12). <em>ImpactLLM: An open tool for exploring and estimating the environmental footprint of large language models.</em></p>
           <p><strong>BibTeX.</strong></p>
           <pre style="margin:0; white-space:pre-wrap;"><code>{escape(PROJECT_PAPER_BIBTEX)}</code></pre>
-          <p><a href="/downloads/llm_environment_opendata_paper.pdf">Download PDF</a> | <a href="/downloads/llm_environment_opendata_paper.bib">Download BibTeX entry</a></p>
+          <p><a href="{app_url('/downloads/llm_environment_opendata_paper.pdf')}">Download PDF</a> | <a href="{app_url('/downloads/llm_environment_opendata_paper.bib')}">Download BibTeX entry</a></p>
         </div>
       </section>
     </section>
@@ -2205,10 +2228,10 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
     home_tab = f"""
     <section class="tab-panel is-active" id="tab-home-panel" data-tab-panel="home">
       <header class="hero">
-        <h1>An Open Tool for Exploring and Estimating the Environmental Footprint of Large Language Models</h1>
-        <p class="meta-inline"><a href="/downloads/llm_environment_opendata_paper.pdf">Download the associated scientific publication PDF</a> | <a href="/downloads/llm_environment_opendata_paper.bib">Download the BibTeX entry</a></p>
+        <h1>ImpactLLM</h1>
+        <p class="subtitle">An open tool for exploring and estimating the environmental footprint of large language models.</p>
       </header>
-      <form class="panel" method="post" action="/" id="estimate-form">
+      <form class="panel" method="post" action="{app_url('/')}" id="estimate-form">
         <label for="description">Describe your application in natural language to obtain an inference estimate, its assumptions, and its source-linked calculation details.</label>
         <textarea id="description" name="description" placeholder="Example: We have a RAG assistant on GPT-4 via API, used 4,000 times per month in France. Each request sends 2,200 input tokens and receives 500 output tokens. There is a vector database, embeddings, and logging.">{escape(description)}</textarea>
         <button type="submit" id="submit-button">
@@ -2644,6 +2667,7 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
     }}
     .tabs {{
       display: flex;
+      align-items: center;
       gap: 1rem;
       margin-bottom: 1.5rem;
       flex-wrap: wrap;
@@ -2669,6 +2693,29 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
       background: transparent;
       color: var(--accent);
       border-color: rgb(140, 122, 91);
+    }}
+    .language-control {{
+      margin-left: auto;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.55rem;
+    }}
+    .language-label {{
+      margin: 0;
+      font-size: 0.88rem;
+      font-weight: 600;
+      color: var(--muted);
+    }}
+    .language-select {{
+      width: auto;
+      min-width: 78px;
+      padding: 0.45rem 2rem 0.45rem 0.7rem;
+      background: #fff;
+      border: 1px solid var(--line);
+      border-radius: 0.2rem;
+      color: var(--ink);
+      font: inherit;
+      font-size: 0.9rem;
     }}
     .tab-panel {{
       display: none;
@@ -3027,6 +3074,8 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
     a:hover {{ text-decoration: underline; }}
     @media (max-width: 900px) {{
       .wrap {{ padding: 24px 18px 40px; }}
+      .tabs {{ align-items: flex-start; }}
+      .language-control {{ margin-left: 0; }}
       .submetrics {{ grid-template-columns: 1fr; }}
       .summary-header {{ flex-direction: column; align-items: flex-start; }}
       .result-method-metrics {{ grid-template-columns: 1fr; }}
@@ -3042,6 +3091,13 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
       <button type="button" class="tab-button" data-tab-target="cite">Cite</button>
       <button type="button" class="tab-button" data-tab-target="contact">Contact</button>
       <button type="button" class="tab-button" data-tab-target="bibliography">References</button>
+      <div class="language-control">
+        <label class="language-label" for="language-selector">Language</label>
+        <select id="language-selector" class="language-select" aria-label="Language selector">
+          <option value="en">EN</option>
+          <option value="fr">FR</option>
+        </select>
+      </div>
     </nav>
 
     {home_tab}
@@ -3054,6 +3110,7 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
   <script>
     const estimateForm = document.getElementById('estimate-form');
     const submitButton = document.getElementById('submit-button');
+    const languageSelector = document.getElementById('language-selector');
     const tabButtons = Array.from(document.querySelectorAll('[data-tab-target]'));
     const tabPanels = Array.from(document.querySelectorAll('[data-tab-panel]'));
     const subtabButtons = Array.from(document.querySelectorAll('[data-subtab-target]'));
@@ -3064,6 +3121,241 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
     const chartControls = Array.from(document.querySelectorAll('[data-model-chart-control="metric-tab"]'));
     const trainingChart = document.getElementById('training-impact-chart');
     const trainingChartControls = Array.from(document.querySelectorAll('[data-training-chart-control="metric-tab"]'));
+    const LANGUAGE_STORAGE_KEY = 'llm-environment-language';
+    const textNodeOriginals = new WeakMap();
+    const currentLanguage = {{ value: 'en' }};
+    const uiText = {{
+      en: {{
+        title: 'ImpactLLM',
+        navAriaLabel: 'Main navigation',
+        languageLabel: 'Language',
+        languageSelectorAria: 'Language selector',
+        estimatePlaceholder: 'Example: We have a RAG assistant on GPT-4 via API, used 4,000 times per month in France. Each request sends 2,200 input tokens and receives 500 output tokens. There is a vector database, embeddings, and logging.',
+        marketSearchPlaceholder: 'Example: GPT, Claude, Mistral, US, 70B',
+        trainingSearchPlaceholder: 'Example: GPT, Claude, 70B, Meta',
+        noData: 'No data available for this selection.',
+        noUsableValue: 'No usable value available for this selection.',
+        chartFamilyPrompt: 'prompt|request',
+        chartFamilyPage: 'page',
+        chartMetricEnergy: 'Energy',
+        chartMetricCarbon: 'Carbon',
+        trainingMetricCarbon: 'Direct training CO2e',
+        comparisonEstimatedPrefix: 'Comparison of estimated central values for the ',
+        comparisonEstimatedMiddle: ' indicator, using the ',
+        comparisonEstimatedSuffix: ' family.',
+        comparisonTrainingPrefix: 'Comparison of extrapolated central values for the ',
+        comparisonTrainingSuffix: ' indicator.',
+        modelsAriaLabel: 'Comparative chart of models',
+        trainingAriaLabel: 'Comparative chart of training impacts',
+      }},
+      fr: {{
+        title: 'Données ouvertes sur l’empreinte environnementale des LLM',
+        navAriaLabel: 'Navigation principale',
+        languageLabel: 'Langue',
+        languageSelectorAria: 'Sélecteur de langue',
+        estimatePlaceholder: 'Exemple : nous avons un assistant RAG sur GPT-4 via API, utilisé 4 000 fois par mois en France. Chaque requête envoie 2 200 tokens en entrée et reçoit 500 tokens en sortie. Il y a une base vectorielle, des embeddings et de la journalisation.',
+        marketSearchPlaceholder: 'Exemple : GPT, Claude, Mistral, US, 70B',
+        trainingSearchPlaceholder: 'Exemple : GPT, Claude, 70B, Meta',
+        noData: 'Aucune donnée disponible pour cette sélection.',
+        noUsableValue: 'Aucune valeur exploitable pour cette sélection.',
+        chartFamilyPrompt: 'prompt|requête',
+        chartFamilyPage: 'page',
+        chartMetricEnergy: 'Énergie',
+        chartMetricCarbon: 'Carbone',
+        trainingMetricCarbon: 'CO2e direct d’entraînement',
+        comparisonEstimatedPrefix: 'Comparaison des valeurs centrales estimées pour l’indicateur ',
+        comparisonEstimatedMiddle: ', selon la famille ',
+        comparisonEstimatedSuffix: '.',
+        comparisonTrainingPrefix: 'Comparaison des valeurs centrales extrapolées pour l’indicateur ',
+        comparisonTrainingSuffix: '.',
+        modelsAriaLabel: 'Graphique comparatif des modèles',
+        trainingAriaLabel: 'Graphique comparatif des impacts d’entraînement',
+      }}
+    }};
+    const textReplacements = [
+      ['Home', 'Accueil'],
+      ['Observatory', 'Observatoire'],
+      ['Documentation', 'Documentation'],
+      ['Cite', 'Citer'],
+      ['Contact', 'Contact'],
+      ['References', 'Références'],
+      ['Inference', 'Inférence'],
+      ['Training', 'Entraînement'],
+      ['Estimate application', 'Estimer l’application'],
+      ['Estimating...', 'Estimation...'],
+      ['Short reference.', 'Référence courte.'],
+      ['Download PDF', 'Télécharger le PDF'],
+      ['Download BibTeX entry', 'Télécharger l’entrée BibTeX'],
+      ['Download the associated scientific publication PDF', 'Télécharger le PDF de la publication scientifique associée'],
+      ['ImpactLLM', 'ImpactLLM'],
+      ['An open tool for exploring and estimating the environmental footprint of large language models.', 'Un outil ouvert pour explorer et estimer l’empreinte environnementale des grands modèles de langage.'],
+      ['Describe your application in natural language to obtain an inference estimate, its assumptions, and its source-linked calculation details.', 'Décrivez votre application en langage naturel pour obtenir une estimation d’inférence, ses hypothèses et les détails du calcul reliés aux sources.'],
+      ['Install and run the project', 'Installer et lancer le projet'],
+      ['GitHub repository.', 'Dépôt GitHub.'],
+      ['OpenAI key and .env files', 'Clé OpenAI et fichiers .env'],
+      ['Available endpoints', 'Endpoints disponibles'],
+      ['curl examples', 'Exemples curl'],
+      ['Tools exposed to agents', 'Outils exposés aux agents'],
+      ['Dataset, validation, and exports', 'Jeu de données, validation et exports'],
+      ['LaTeX compilation', 'Compilation LaTeX'],
+      ['Reuse conditions', 'Conditions de réutilisation'],
+      ['Email addresses are obfuscated in the page source to reduce basic scraping.', 'Les adresses e-mail sont obfusquées dans le code source de la page pour limiter le scraping basique.'],
+      ['Calculation details', 'Détails du calcul'],
+      ['Inference estimate based on source-linked scientific indicators and a traceable calculation.', 'Estimation d’inférence fondée sur des indicateurs scientifiques reliés aux sources et un calcul traçable.'],
+      ['Retained scope: only LLM inference externalities are included. Model training, software-system consumption, and ancillary infrastructure are excluded from the displayed estimate.', 'Périmètre retenu : seules les externalités d’inférence du LLM sont incluses. L’entraînement du modèle, la consommation du système logiciel et l’infrastructure annexe sont exclus de l’estimation affichée.'],
+      ['Evidence level: ', 'Niveau de preuve : '],
+      ['Method: ', 'Méthode : '],
+      ['Reference model: ', 'Modèle de référence : '],
+      ['Approx. active parameters: ', 'Paramètres actifs approx. : '],
+      ['Electricity mix: ', 'Mix électrique : '],
+      ['Search for a model', 'Rechercher un modèle'],
+      ['Comparative environmental impact of models', 'Impact environnemental comparatif des modèles'],
+      ['current models tracked by the project', 'modèles actuels suivis par le projet'],
+      ['Comparative training impacts of models', 'Impacts d’entraînement comparés des modèles'],
+      ['current models with estimated training impacts', 'modèles actuels avec impacts d’entraînement estimés'],
+      ['Source annex used in the site', 'Annexe des sources utilisées sur le site'],
+      ['Sources used to estimate proprietary LLM parameter counts', 'Sources utilisées pour estimer le nombre de paramètres des LLM propriétaires'],
+      ['Inference reference set', 'Jeu de références pour l’inférence'],
+      ['Training reference set', 'Jeu de références pour l’entraînement'],
+      ['Real-world comparison benchmarks', 'Repères de comparaison du monde réel'],
+      ['Country factors for carbon and water recalculation', 'Facteurs pays pour le recalcul du carbone et de l’eau'],
+      ['Model', 'Modèle'],
+      ['Parameters', 'Paramètres'],
+      ['Server country', 'Pays du serveur'],
+      ['Retained country', 'Pays retenu'],
+      ['Energy / h prompt-req', 'Énergie / h prompt-requête'],
+      ['Energy / h page', 'Énergie / h page'],
+      ['Carbon / h prompt-req', 'Carbone / h prompt-requête'],
+      ['Carbon / h page', 'Carbone / h page'],
+      ['Training energy', 'Énergie d’entraînement'],
+      ['Direct training CO2e', 'CO2e direct d’entraînement'],
+      ['Provider', 'Fournisseur'],
+      ['Confidence', 'Confiance'],
+      ['Estimation source', 'Source d’estimation'],
+      ['Notes', 'Notes'],
+      ['No.', 'N°'],
+      ['Domain', 'Domaine'],
+      ['Indicator', 'Indicateur'],
+      ['Reference', 'Référence'],
+      ['Data type', 'Type de donnée'],
+      ['LLM model', 'Modèle LLM'],
+      ['Country', 'Pays'],
+      ['Value', 'Valeur'],
+      ['Citation', 'Citation'],
+      ['Active parameters', 'Paramètres actifs'],
+      ['Total parameters', 'Paramètres totaux'],
+      ['Status', 'Statut'],
+      ['Source', 'Source'],
+      ['Electricity mix reference table', 'Table de référence du mix électrique'],
+      ['Model reference table', 'Table de référence des modèles'],
+      ['Annual energy', 'Énergie annuelle'],
+      ['Annual carbon', 'Carbone annuel'],
+      ['Fluorescent lamp 1 h', 'Lampe fluorescente 1 h'],
+      ['Laptop 1 h', 'Ordinateur portable 1 h'],
+      ['Electric heater 11 min', 'Radiateur électrique 11 min'],
+      ['Electric heater 10 min (US mix)', 'Radiateur électrique 10 min (mix US)'],
+      ['10,000 households (annual domestic use)', '10 000 foyers (usage domestique annuel)'],
+      ['4,955 full commercial flights', '4 955 vols commerciaux complets'],
+    ];
+    const attributeTranslations = [
+      ['#description', 'placeholder', 'estimatePlaceholder'],
+      ['#market-model-search', 'placeholder', 'marketSearchPlaceholder'],
+      ['#training-model-search', 'placeholder', 'trainingSearchPlaceholder'],
+      ['nav.tabs', 'aria-label', 'navAriaLabel'],
+      ['#language-selector', 'aria-label', 'languageSelectorAria'],
+      ['.language-label', 'textContent', 'languageLabel'],
+    ];
+    const benchmarkLabelMap = {{
+      'Lampe fluorescente 1 h': 'Fluorescent lamp 1 h',
+      'Ordinateur portable 1 h': 'Laptop 1 h',
+      'Fluorescent lamp 1 h': 'Fluorescent lamp 1 h',
+      'Laptop 1 h': 'Laptop 1 h',
+      'Electric heater 11 min': 'Electric heater 11 min',
+      'Electric heater 10 min (US mix)': 'Electric heater 10 min (US mix)',
+      '10,000 households (annual domestic use)': '10,000 households (annual domestic use)',
+      '4,955 full commercial flights': '4,955 full commercial flights',
+    }};
+    function normalizeLanguage(value) {{
+      return value === 'fr' ? 'fr' : 'en';
+    }}
+    function safeStorageGet(key) {{
+      try {{
+        return window.localStorage.getItem(key);
+      }} catch (error) {{
+        return null;
+      }}
+    }}
+    function safeStorageSet(key, value) {{
+      try {{
+        window.localStorage.setItem(key, value);
+      }} catch (error) {{
+        // Ignore browsers or privacy modes that block storage access.
+      }}
+    }}
+    function translateText(text, lang) {{
+      if (!text || lang === 'en') return text;
+      let translated = text;
+      textReplacements.forEach(([english, french]) => {{
+        translated = translated.split(english).join(french);
+      }});
+      return translated;
+    }}
+    function translateBenchmarkLabel(label, lang) {{
+      const canonical = benchmarkLabelMap[label] || label;
+      return translateText(canonical, lang);
+    }}
+    function applyAttributeTranslations(lang) {{
+      const locale = uiText[lang];
+      attributeTranslations.forEach(([selector, kind, key]) => {{
+        const element = document.querySelector(selector);
+        if (!element) return;
+        if (kind === 'textContent') {{
+          element.textContent = locale[key];
+          return;
+        }}
+        element.setAttribute(kind, locale[key]);
+      }});
+      document.title = locale.title;
+      document.documentElement.lang = lang;
+    }}
+    function applyTextTranslations(lang) {{
+      const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, {{
+        acceptNode(node) {{
+          if (!node.parentElement) return NodeFilter.FILTER_REJECT;
+          if (!node.nodeValue || !node.nodeValue.trim()) return NodeFilter.FILTER_REJECT;
+          if (node.parentElement.closest('script, style, textarea, pre, code, svg')) return NodeFilter.FILTER_REJECT;
+          return NodeFilter.FILTER_ACCEPT;
+        }}
+      }});
+      const nodes = [];
+      let currentNode;
+      while ((currentNode = walker.nextNode())) {{
+        nodes.push(currentNode);
+      }}
+      nodes.forEach((node) => {{
+        if (!textNodeOriginals.has(node)) {{
+          textNodeOriginals.set(node, node.nodeValue);
+        }}
+        node.nodeValue = translateText(textNodeOriginals.get(node), lang);
+      }});
+    }}
+    function preferredLanguage() {{
+      const stored = safeStorageGet(LANGUAGE_STORAGE_KEY);
+      if (stored === 'fr' || stored === 'en') return stored;
+      return (navigator.language || '').toLowerCase().startsWith('fr') ? 'fr' : 'en';
+    }}
+    function applyLanguage(lang) {{
+      const normalized = normalizeLanguage(lang);
+      currentLanguage.value = normalized;
+      if (languageSelector) {{
+        languageSelector.value = normalized;
+      }}
+      safeStorageSet(LANGUAGE_STORAGE_KEY, normalized);
+      applyAttributeTranslations(normalized);
+      applyTextTranslations(normalized);
+      renderModelsChart();
+      renderTrainingChart();
+    }}
     if (estimateForm && submitButton) {{
       estimateForm.addEventListener('submit', function () {{
         submitButton.disabled = true;
@@ -3138,6 +3430,11 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
         rows.forEach((row) => tbody.appendChild(row));
       }});
     }});
+    if (languageSelector) {{
+      languageSelector.addEventListener('change', function () {{
+        applyLanguage(languageSelector.value);
+      }});
+    }}
     const formatChartValue = (value, metric) => {{
       if (metric === 'energy') {{
         if (value >= 1000) return `${{(value / 1000).toFixed(1)}} kWh`;
@@ -3155,13 +3452,14 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
       return String(value);
     }};
     const buildChartMarkup = (rows, metric, family) => {{
+      const locale = uiText[currentLanguage.value];
       if (!rows.length) {{
-        return '<p class="lead">No data available for this selection.</p>';
+        return `<p class="lead">${{locale.noData}}</p>`;
       }}
       const key = `${{family}}_${{metric}}_${{metric === 'energy' ? 'wh' : metric === 'carbon' ? 'gco2e' : 'ml'}}`;
       const sorted = rows
         .map((row) => ({{
-          label: row.label,
+          label: translateBenchmarkLabel(row.label, currentLanguage.value),
           provider: row.provider,
           value: Number(row[key] || 0),
           kind: row.kind || 'model',
@@ -3169,7 +3467,7 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
         .filter((row) => row.value > 0)
         .sort((a, b) => b.value - a.value);
       if (!sorted.length) {{
-        return '<p class="lead">No usable value available for this selection.</p>';
+        return `<p class="lead">${{locale.noUsableValue}}</p>`;
       }}
       const maxValue = sorted[0].value || 1;
       const barHeight = 26;
@@ -3192,11 +3490,11 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
           <text x="${{barStart + width + 10}}" y="${{y + 17}}" font-size="12" fill="#212529">${{valueText}}</text>
         `;
       }}).join('');
-      const titleMetric = metric === 'energy' ? 'Energy' : metric === 'carbon' ? 'Carbon' : 'Water';
-      const titleFamily = family === 'prompt' ? 'prompt|request' : 'page';
+      const titleMetric = metric === 'energy' ? locale.chartMetricEnergy : locale.chartMetricCarbon;
+      const titleFamily = family === 'prompt' ? locale.chartFamilyPrompt : locale.chartFamilyPage;
       return `
-        <div class="summary-intro" style="margin-bottom:0.75rem;">Comparison of estimated central values for the <strong>${{titleMetric}}</strong> indicator, using the <strong>${{titleFamily}}</strong> family.</div>
-        <svg viewBox="0 0 ${{chartWidth}} ${{chartHeight}}" role="img" aria-label="Comparative chart of models">${{bars}}</svg>
+        <div class="summary-intro" style="margin-bottom:0.75rem;">${{locale.comparisonEstimatedPrefix}}<strong>${{titleMetric}}</strong>${{locale.comparisonEstimatedMiddle}}<strong>${{titleFamily}}</strong>${{locale.comparisonEstimatedSuffix}}</div>
+        <svg viewBox="0 0 ${{chartWidth}} ${{chartHeight}}" role="img" aria-label="${{locale.modelsAriaLabel}}">${{bars}}</svg>
       `;
     }};
     const renderModelsChart = () => {{
@@ -3235,15 +3533,16 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
       return `${{value.toFixed(2)}} tCO2e`;
     }};
     const buildTrainingChartMarkup = (rows, metric) => {{
+      const locale = uiText[currentLanguage.value];
       if (!rows.length) {{
-        return '<p class="lead">No data available for this selection.</p>';
+        return `<p class="lead">${{locale.noData}}</p>`;
       }}
       const key = metric === 'direct_training_energy'
         ? 'direct_training_energy_wh'
         : 'direct_training_carbon_tco2e';
       const sorted = rows
         .map((row) => ({{
-          label: row.label,
+          label: translateBenchmarkLabel(row.label, currentLanguage.value),
           provider: row.provider,
           value: Number(row[key] || 0),
           kind: row.kind || 'model',
@@ -3251,7 +3550,7 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
         .filter((row) => row.value > 0)
         .sort((a, b) => b.value - a.value);
       if (!sorted.length) {{
-        return '<p class="lead">No usable value available for this selection.</p>';
+        return `<p class="lead">${{locale.noUsableValue}}</p>`;
       }}
       const maxValue = sorted[0].value || 1;
       const barHeight = 26;
@@ -3275,11 +3574,11 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
         `;
       }}).join('');
       const titleMetric = metric === 'direct_training_energy'
-        ? "Training energy"
-        : "Direct training CO2e";
+        ? locale.chartMetricEnergy
+        : locale.trainingMetricCarbon;
       return `
-        <div class="summary-intro" style="margin-bottom:0.75rem;">Comparison of extrapolated central values for the <strong>${{titleMetric}}</strong> indicator.</div>
-        <svg viewBox="0 0 ${{chartWidth}} ${{chartHeight}}" role="img" aria-label="Comparative chart of training impacts">${{bars}}</svg>
+        <div class="summary-intro" style="margin-bottom:0.75rem;">${{locale.comparisonTrainingPrefix}}<strong>${{titleMetric}}</strong>${{locale.comparisonTrainingSuffix}}</div>
+        <svg viewBox="0 0 ${{chartWidth}} ${{chartHeight}}" role="img" aria-label="${{locale.trainingAriaLabel}}">${{bars}}</svg>
       `;
     }};
     const renderTrainingChart = () => {{
@@ -3305,12 +3604,24 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
       }});
     }});
     renderTrainingChart();
+    applyLanguage(preferredLanguage());
   </script>
 </body>
 </html>
 """
 class Handler(BaseHTTPRequestHandler):
-    def _write_bytes(self, body, content_type, filename=None, status=200):
+    def _normalized_path(self):
+        request_path = urlsplit(self.path).path
+        if URL_PREFIX:
+            if request_path == URL_PREFIX:
+                return "/"
+            if request_path.startswith(f"{URL_PREFIX}/"):
+                stripped = request_path[len(URL_PREFIX):]
+                return stripped or "/"
+            return None
+        return request_path
+
+    def _write_bytes(self, body, content_type, filename=None, status=200, send_body=True):
         self.send_response(status)
         self.send_header("Content-Type", content_type)
         self.send_header("Content-Length", str(len(body)))
@@ -3319,37 +3630,55 @@ class Handler(BaseHTTPRequestHandler):
         if filename:
             self.send_header("Content-Disposition", f'attachment; filename="{filename}"')
         self.end_headers()
-        self.wfile.write(body)
+        if send_body:
+            self.wfile.write(body)
 
-    def _write_html(self, html, status=200):
+    def _write_html(self, html, status=200, send_body=True):
         body = html.encode("utf-8")
         self.send_response(status)
         self.send_header("Content-Type", "text/html; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
-        self.wfile.write(body)
+        if send_body:
+            self.wfile.write(body)
 
-    def do_GET(self):
-        if self.path == "/downloads/llm_environment_opendata_paper.pdf":
+    def _handle_get_like(self, send_body=True):
+        normalized_path = self._normalized_path()
+        if normalized_path is None:
+            self._write_html(render_page(error_message="Page not found."), status=404, send_body=send_body)
+            return
+        if normalized_path == "/downloads/llm_environment_opendata_paper.pdf":
             if PAPER_PDF_PATH.exists():
                 self._write_bytes(
                     PAPER_PDF_PATH.read_bytes(),
                     "application/pdf",
                     filename="llm_environment_opendata_paper.pdf",
+                    send_body=send_body,
                 )
                 return
-            self._write_html(render_page(error_message="Publication PDF not found."), status=404)
+            self._write_html(render_page(error_message="Publication PDF not found."), status=404, send_body=send_body)
             return
-        if self.path == "/downloads/llm_environment_opendata_paper.bib":
+        if normalized_path == "/downloads/llm_environment_opendata_paper.bib":
             self._write_bytes(
                 PROJECT_PAPER_BIBTEX.encode("utf-8"),
                 "application/x-bibtex; charset=utf-8",
                 filename="llm_environment_opendata_paper.bib",
+                send_body=send_body,
             )
             return
-        self._write_html(render_page())
+        self._write_html(render_page(), send_body=send_body)
+
+    def do_GET(self):
+        self._handle_get_like()
+
+    def do_HEAD(self):
+        self._handle_get_like(send_body=False)
 
     def do_POST(self):
+        normalized_path = self._normalized_path()
+        if normalized_path != "/":
+            self._write_html(render_page(error_message="Page not found."), status=404)
+            return
         length = int(self.headers.get("Content-Length", "0"))
         raw = self.rfile.read(length).decode("utf-8")
         form = parse_qs(raw)
@@ -3380,6 +3709,8 @@ def apply_overrides(payload, form):
 
 
 if __name__ == "__main__":
-    server = HTTPServer(("127.0.0.1", 8080), Handler)
-    print(f"{PROJECT_NAME} web app running on http://127.0.0.1:8080")
+    host = os.environ.get("LLM_WEB_HOST", "127.0.0.1")
+    port = int(os.environ.get("LLM_WEB_PORT", "8080"))
+    server = HTTPServer((host, port), Handler)
+    print(f"{PROJECT_NAME} web app running on http://{host}:{port}")
     server.serve_forever()

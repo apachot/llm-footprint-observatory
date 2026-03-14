@@ -1,0 +1,19 @@
+[Unit]
+Description=ImpactLLM web server
+After=network.target
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=/opt/llm-environment-opendata
+Environment=PYTHONUNBUFFERED=1
+Environment=LLM_WEB_HOST=127.0.0.1
+Environment=LLM_WEB_PORT=8080
+Environment=LLM_WEB_PREFIX=/impact-llm
+ExecStart=/opt/llm-environment-opendata/.venv/bin/python web/server.py
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

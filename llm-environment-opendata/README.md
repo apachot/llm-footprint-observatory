@@ -1,6 +1,6 @@
-# EcoTrace LLM
+# ImpactLLM
 
-Open dataset, local API, MCP server, and OpenAI-backed parsing frontend for quantified environmental indicators extracted from the scientific and technical literature on LLMs.
+Open dataset, local API, MCP server, observatory, and OpenAI-backed parsing frontend for quantified environmental indicators extracted from the scientific and technical literature on LLMs.
 
 ## Scope
 
@@ -26,6 +26,10 @@ The dataset stores only extracted values with source attribution.
 - `docs/publication_integration.md`: how to describe the dataset and infrastructure in the paper
 - `docs/llm_externalities_estimator_method.md`: method for estimating prompt, feature, and software externalities
 - `docs/publication_plan_llm_externalities_method.md`: draft publication plan for the estimation method
+- `docs/deployment_vps.md`: production deployment notes for a Linux VPS
+- `deploy/systemd/llm-environment-opendata-web.service`: example `systemd` unit
+- `deploy/nginx/llm-environment-opendata.conf`: example `nginx` reverse-proxy config
+- `requirements.txt`: minimal Python dependency list for the web parser integration
 
 ## Data Model
 
@@ -96,10 +100,16 @@ Supported tools:
 
 ```bash
 cd "llm-environment-opendata"
+python3 -m pip install -r requirements.txt
 python3 web/server.py
 ```
 
 Default address: `http://127.0.0.1:8080`
+
+Optional environment variables:
+
+- `LLM_WEB_HOST`: bind address for the HTTP server
+- `LLM_WEB_PORT`: bind port for the HTTP server
 
 The frontend lets a user:
 
@@ -125,6 +135,10 @@ OPENAI_API_KEY=...
 OPENAI_MODEL=gpt-4.1-mini
 ```
 
+## Deploy on a VPS
+
+For a simple production setup with `systemd` and `nginx`, use [`docs/deployment_vps.md`](./docs/deployment_vps.md).
+
 ## Validation
 
 The API and MCP server use the CSV dataset as the single source of truth. The JSON file is an export for easier reuse.
@@ -137,14 +151,12 @@ python3 scripts/export_json.py
 
 ## GitHub Repository
 
-The local project is ready to be pushed as a dedicated GitHub repository. A typical sequence is:
+The dedicated GitHub repository for this project is:
+
+- `https://github.com/apachot/llm-footprint-observatory`
+
+To clone it directly:
 
 ```bash
-cd "llm-environment-opendata"
-git init
-git add .
-git commit -m "Initial open dataset, API, and MCP server"
-gh repo create llm-environment-opendata --public --source=. --push
+git clone https://github.com/apachot/llm-footprint-observatory.git
 ```
-
-Remote repository creation is not done automatically here because it depends on your GitHub authentication and preferred organization.
