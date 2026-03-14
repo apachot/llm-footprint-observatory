@@ -45,6 +45,8 @@ This paper addresses that bottleneck with a narrower claim than many AI-impact p
 
 First, it provides an open observatory of environmental indicators for current LLMs. The observatory exposes source-linked records, model metadata, bibliographic references, and comparative views that remain inspectable by users. Second, it provides a rapid screening tool for application-level inference assessment. The user can describe an LLM-enabled application in natural language; the system extracts a compact scenario and returns an inference-focused estimate together with its assumptions, sources, and calculation details. This ``fast estimate from natural language'' design is deliberate: in many practical settings, users do not know dozens of technical serving parameters, but they can describe their application, model, country, and usage volume.
 
+This gap is especially visible for proprietary LLMs. While some product-level figures and a few industrial anchors have recently become public, model-level environmental values for proprietary systems are still rarely published with enough methodological detail to support direct comparison or reuse. The most widely used systems are often the least transparent: the serving hardware, routing logic, batching behavior, architecture, and deployment geography needed for direct environmental attribution generally remain undisclosed.
+
 The scientific claim of the paper is therefore modest but useful. In a field dominated either by low-level telemetry tools or by opaque provider-side information, an open, reusable observatory coupled with an explicit screening estimator can fill an important operational gap.
 
 \section{State of the Art}
