@@ -42,6 +42,8 @@ BIB_PATH = ROOT.parent / "llm-environment-opendata-paper" / "references_llm_envi
 ANALYSIS_LOG_PATH = ROOT / "data" / "analysis_runs.json"
 PAPER_TEX_PATH = ROOT.parent / "llm-environment-opendata-paper" / "llm_environment_opendata_paper.tex"
 PAPER_PDF_PATH = ROOT.parent / "llm-environment-opendata-paper" / "llm_environment_opendata_paper.pdf"
+LOGO_PATH = ROOT / "web" / "impactllm-logo.svg"
+LOGO_MARK_PATH = ROOT / "web" / "impactllm-mark.svg"
 REFERENCE_PAGE_TOKENS = 750.0
 DEFAULT_PROMPT_TOKENS = 1550.0
 PROJECT_PAPER_BIBTEX = """@misc{llm_environment_open_data_2026,
@@ -50,7 +52,7 @@ PROJECT_PAPER_BIBTEX = """@misc{llm_environment_open_data_2026,
   year = {2026},
   month = mar,
   note = {Working paper},
-  url = {https://github.com/apachot/Publications-scientifiques}
+  url = {https://dev.emotia.com/impact-llm/downloads/llm_environment_opendata_paper.pdf}
 }"""
 
 
@@ -73,6 +75,20 @@ def app_url(path="/"):
     if path == "/":
         return f"{URL_PREFIX}/"
     return f"{URL_PREFIX}{path}"
+
+
+@lru_cache(maxsize=1)
+def render_logo_markup():
+    if not LOGO_PATH.exists():
+        return '<div class="hero-logo-fallback" aria-hidden="true">I&gt;</div>'
+    return LOGO_PATH.read_text(encoding="utf-8")
+
+
+@lru_cache(maxsize=1)
+def render_logo_mark_markup():
+    if not LOGO_MARK_PATH.exists():
+        return '<span class="nav-logo-fallback" aria-hidden="true">I&gt;</span>'
+    return LOGO_MARK_PATH.read_text(encoding="utf-8")
 SITE_CONTEXT_REFERENCES = [
     {
         "key": "brysbaert2019",
@@ -1899,12 +1915,12 @@ def render_market_models_table(records):
           <h3>Comparative environmental impact of models</h3>
         </div>
       </div>
-      <p class="summary-intro">The chart below shows the estimated central values for all catalog models under a standardized inference scenario corresponding to <strong>1 hour of active use</strong>: <strong>{requests_per_hour} interactions/hour</strong>, <strong>1000 input tokens</strong>, <strong>550 output tokens</strong>, and one LLM request per use. The hourly pace is derived from an average reading speed of <strong>{reading_wpm} words/min</strong> (Brysbaert, 2019) and a project convention of <strong>1 token ≈ {words_per_token} word</strong>.</p>
       <div class="chart-tabbar" role="tablist" aria-label="Inference chart indicator">
         <button type="button" class="chart-tab-button is-active" data-model-chart-control="metric-tab" data-metric-value="energy" aria-selected="true">Energy</button>
         <button type="button" class="chart-tab-button" data-model-chart-control="metric-tab" data-metric-value="carbon" aria-selected="false">Carbon</button>
       </div>
       <div id="models-impact-chart" class="models-impact-chart" data-chart-rows='{escape(json.dumps(chart_rows, ensure_ascii=False), quote=True)}'></div>
+      <p class="summary-intro">The chart below shows the estimated central values for all catalog models under a standardized inference scenario corresponding to <strong>1 hour of active use</strong>: <strong>{requests_per_hour} interactions/hour</strong>, <strong>1000 input tokens</strong>, <strong>550 output tokens</strong>, and one LLM request per use. The hourly pace is derived from an average reading speed of <strong>{reading_wpm} words/min</strong> (Brysbaert, 2019) and a project convention of <strong>1 token ≈ {words_per_token} word</strong>.</p>
       <p class="summary-intro models-benchmark-note">Benchmarks integrated into the chart, all expressed over one hour or rescaled to a comparable order of magnitude: household electricity from Purdue Extension measurements (fluorescent lamp ≈ 9.3 Wh over 1 h; laptop ≈ 32 Wh over 1 h) and a 1500 W electric space heater rescaled here to 11 minutes to obtain ≈ 275 Wh; for carbon, a 10-minute electric-heater benchmark recalculated with the US electricity mix retained by the project (0.25 kWh × 384 gCO2e/kWh ≈ 96 gCO2e), closer to the order of magnitude of the highest models in the inference scenario.</p>
     </section>
     <section class="panel reference-panel">
@@ -2158,14 +2174,47 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
     market_models_block = render_market_models_table(all_records)
     training_models_block = render_training_models_table(all_records)
     bibliography_tab = render_bibliography_tab()
-    documentation_tab = render_documentation_tab()
+    method_tab = f"""
+    <section class="tab-panel" id="tab-method-panel" data-tab-panel="method">
+      <section class="panel reference-panel">
+        <div class="summary-header">
+          <div>
+            <h3>Method</h3>
+          </div>
+        </div>
+        <p class="summary-intro">ImpactLLM is designed as a transparent screening tool, not as a black-box score. The core idea is to start from the few environmental values that are actually published in the literature, preserve their native units, and reuse them through explicit multiples rather than hidden heuristics.</p>
+        <div class="summary-body">
+          <p><strong>1. Source-linked literature anchors.</strong></p>
+          <p>The method starts from published indicators such as <code>Wh/prompt|request</code> and <code>Wh/page</code>, each linked to a source, a model, a geography, and a documented system boundary.</p>
+
+          <p><strong>2. A multiples-based extrapolation.</strong></p>
+          <p>When direct telemetry is unavailable for a target model, ImpactLLM uses model size as an explicit scaling variable. In practice, the engine computes an energy intensity per billion active parameters from literature anchors, then applies this multiple to the target model profile.</p>
+
+          <p><strong>3. Separate method families.</strong></p>
+          <p>The tool keeps the <code>Wh/prompt|request</code> family and the <code>Wh/page</code> family separate. This avoids creating a false sense of precision when the literature does not yet provide a robust bridge between prompt-based and page-based measurements.</p>
+
+          <p><strong>4. Carbon derived from context.</strong></p>
+          <p>Carbon is not copied mechanically from the source paper. It is recalculated from the retained energy estimate using the electricity mix associated with the selected country context.</p>
+
+          <p><strong>5. A research-oriented estimator.</strong></p>
+          <p>The result is an auditable estimate intended for comparison, software design, and methodological discussion. It is useful precisely because the assumptions remain visible, inspectable, and source-backed.</p>
+
+          <p><strong>Scientific paper.</strong> <a href="{app_url('/downloads/llm_environment_opendata_paper.pdf')}">Download the PDF</a></p>
+        </div>
+      </section>
+    </section>
+    """
     contact_tab = f"""
     <section class="tab-panel" id="tab-contact-panel" data-tab-panel="contact">
       <section class="panel reference-panel">
         <div class="summary-body">
+          <p><strong>About us</strong></p>
+          <p>We work on responsible AI with a focus on methodological rigor, traceability, and real-world decision support. Our work combines scientific research, product design, and operational deployment to make AI systems more transparent, more accountable, and more useful in practice.</p>
           <p><strong>Arnault Pachot</strong></p>
+          <p>Arnault Pachot is a researcher and entrepreneur, founder of OpenStudio and now founder of Emotia. He works on responsible digital transformation, Green IT, and decision-oriented AI systems. He co-authored the Dunod book <em>Intelligence artificielle et environnement : alliance ou nuisance ?</em>, dedicated to practical pathways for environmentally responsible AI.</p>
           <p><a href="mailto:{obfuscate_email('apachot@pollitics.com')}">{obfuscate_email('apachot@pollitics.com')}</a></p>
           <p><strong>Thierry Petit</strong></p>
+          <p>Thierry Petit is a senior AI researcher and scientific leader with more than twenty years of academic and R&amp;D experience in Europe and the United States. His work spans trustworthy AI, simulation, optimization, and decision-grade platforms. At Emotia and Pollitics, he leads the scientific direction of systems designed to remain both operationally useful and methodologically robust.</p>
           <p><a href="mailto:{obfuscate_email('tpetit@pollitics.com')}">{obfuscate_email('tpetit@pollitics.com')}</a></p>
           <p class="summary-intro">Email addresses are obfuscated in the page source to reduce basic scraping.</p>
         </div>
@@ -2228,12 +2277,16 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
     home_tab = f"""
     <section class="tab-panel is-active" id="tab-home-panel" data-tab-panel="home">
       <header class="hero">
-        <h1>ImpactLLM</h1>
+        <h1>An Open Tool for Exploring and Estimating the Environmental Footprint of Large Language Models</h1>
         <p class="subtitle">An open tool for exploring and estimating the environmental footprint of large language models.</p>
       </header>
       <form class="panel" method="post" action="{app_url('/')}" id="estimate-form">
         <label for="description">Describe your application in natural language to obtain an inference estimate, its assumptions, and its source-linked calculation details.</label>
-        <textarea id="description" name="description" placeholder="Example: We have a RAG assistant on GPT-4 via API, used 4,000 times per month in France. Each request sends 2,200 input tokens and receives 500 output tokens. There is a vector database, embeddings, and logging.">{escape(description)}</textarea>
+        <textarea id="description" name="description" placeholder="Example 1: We have a customer-support assistant based on GPT-4o-mini, used about 4,000 times per month in France by our support team.
+
+Example 2: We use Claude 3.5 Sonnet in our app to summarize internal documents for around 120 consultants, with about 15,000 summaries generated per month.
+
+Example 3: We have a RAG assistant based on Mistral Large, with a vector database and logging, used by about 800 employees and handling roughly 25,000 requests per month. If you know them, you can also add token volumes or request counts.">{escape(description)}</textarea>
         <button type="submit" id="submit-button">
           <span class="spinner" aria-hidden="true"></span>
           <span class="default-text">Estimate application</span>
@@ -2308,6 +2361,34 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
     }}
     .wrap {{ max-width: 920px; margin: 0 auto; padding: 32px 24px 56px; }}
     .hero {{ margin-bottom: 28px; }}
+    .hero-brand {{
+      display: flex;
+      align-items: center;
+      gap: 1.1rem;
+      margin-bottom: 0.9rem;
+    }}
+    .hero-logo {{
+      flex: 0 0 auto;
+      width: min(280px, 48vw);
+      max-width: 100%;
+    }}
+    .hero-logo svg {{
+      display: block;
+      width: 100%;
+      height: auto;
+    }}
+    .hero-logo-fallback {{
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 72px;
+      height: 72px;
+      border-radius: 18px;
+      background: #f7f8fa;
+      color: var(--accent);
+      font-size: 1.8rem;
+      font-weight: 800;
+    }}
     .eyebrow {{
       display: inline-block;
       margin-bottom: 8px;
@@ -2320,7 +2401,7 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
       letter-spacing: 0.08em;
       border-bottom: 1px solid var(--line);
     }}
-    h1 {{ margin: 0 0 10px; font-size: clamp(1.55rem, 3vw, 1.95rem); line-height: 1.24; font-weight: 700; color: var(--ink); }}
+    h1 {{ margin: 0 0 10px; font-size: clamp(1.18rem, 2.2vw, 1.45rem); line-height: 1.3; font-weight: 400; color: var(--ink); }}
     h2 {{ margin: 0 0 0.7rem; font-size: 1.22rem; line-height: 1.3; font-weight: 700; color: var(--ink); }}
     h3 {{ margin: 0 0 0.7rem; font-size: 1.1rem; line-height: 1.32; font-weight: 700; color: var(--ink); }}
     h4 {{ line-height: 1.35; }}
@@ -2679,11 +2760,12 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
       background: transparent;
       color: var(--muted);
       border-radius: 0;
-      padding: 0.3rem 0 0.55rem;
+      padding: 0.24rem 0 0.5rem;
       font: inherit;
+      font-size: 0.92rem;
       font-weight: 600;
       cursor: pointer;
-      margin: 0 1.2rem 0 0;
+      margin: 0 1rem 0 0;
     }}
     .tab-button:hover {{
       border-color: rgba(36,59,99,0.35);
@@ -2693,6 +2775,32 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
       background: transparent;
       color: var(--accent);
       border-color: rgb(140, 122, 91);
+    }}
+    .tab-button.logo-tab {{
+      padding: 0.28rem 0.6rem;
+      line-height: 1;
+    }}
+    .nav-logo {{
+      display: block;
+      width: 128px;
+      max-width: 22vw;
+      min-width: 96px;
+      height: auto;
+    }}
+    .nav-logo svg {{
+      display: block;
+      width: 100%;
+      height: 100%;
+    }}
+    .nav-logo-fallback {{
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 26px;
+      height: 26px;
+      color: var(--accent);
+      font-size: 0.9rem;
+      font-weight: 800;
     }}
     .language-control {{
       margin-left: auto;
@@ -2706,16 +2814,23 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
       font-weight: 600;
       color: var(--muted);
     }}
-    .language-select {{
-      width: auto;
-      min-width: 78px;
-      padding: 0.45rem 2rem 0.45rem 0.7rem;
-      background: #fff;
-      border: 1px solid var(--line);
-      border-radius: 0.2rem;
-      color: var(--ink);
-      font: inherit;
+    .language-links {{
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
       font-size: 0.9rem;
+    }}
+    .language-link {{
+      color: var(--muted);
+      text-decoration: none;
+      font-weight: 600;
+      cursor: pointer;
+    }}
+    .language-link.is-active {{
+      color: var(--accent);
+    }}
+    .language-separator {{
+      color: var(--line);
     }}
     .tab-panel {{
       display: none;
@@ -2890,7 +3005,7 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
       overflow-x: auto;
       border: 0;
       border-radius: 0.2rem;
-      background: var(--paper);
+      background: transparent;
     }}
     .reference-table {{
       width: 100%;
@@ -2910,6 +3025,9 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
       text-transform: none;
       letter-spacing: 0.01em;
       color: var(--muted);
+    }}
+    .reference-table tbody tr:nth-child(even) td {{
+      background: rgba(140, 122, 91, 0.08);
     }}
     .sort-button {{
       margin: 0;
@@ -3074,6 +3192,9 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
     a:hover {{ text-decoration: underline; }}
     @media (max-width: 900px) {{
       .wrap {{ padding: 24px 18px 40px; }}
+      .nav-logo {{ width: 108px; min-width: 84px; }}
+      .hero-brand {{ flex-direction: column; align-items: flex-start; gap: 0.6rem; }}
+      .hero-logo {{ width: min(240px, 68vw); }}
       .tabs {{ align-items: flex-start; }}
       .language-control {{ margin-left: 0; }}
       .submetrics {{ grid-template-columns: 1fr; }}
@@ -3085,24 +3206,26 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
   <body>
   <main class="wrap">
     <nav class="tabs" aria-label="Main navigation">
-      <button type="button" class="tab-button is-active" data-tab-target="home">Home</button>
+      <button type="button" class="tab-button logo-tab is-active" data-tab-target="home" aria-label="Home">
+        <span class="nav-logo" aria-hidden="true">{render_logo_markup()}</span>
+      </button>
       <button type="button" class="tab-button" data-tab-target="observatory">Observatory</button>
-      <button type="button" class="tab-button" data-tab-target="documentation">Documentation</button>
+      <button type="button" class="tab-button" data-tab-target="method">Method</button>
       <button type="button" class="tab-button" data-tab-target="cite">Cite</button>
       <button type="button" class="tab-button" data-tab-target="contact">Contact</button>
       <button type="button" class="tab-button" data-tab-target="bibliography">References</button>
       <div class="language-control">
-        <label class="language-label" for="language-selector">Language</label>
-        <select id="language-selector" class="language-select" aria-label="Language selector">
-          <option value="en">EN</option>
-          <option value="fr">FR</option>
-        </select>
+        <span class="language-links" aria-label="Language selector">
+          <a href="#" class="language-link is-active" data-language-option="en">EN</a>
+          <span class="language-separator" aria-hidden="true">|</span>
+          <a href="#" class="language-link" data-language-option="fr">FR</a>
+        </span>
       </div>
     </nav>
 
     {home_tab}
     {observatory_tab}
-    {documentation_tab}
+    {method_tab}
     {cite_tab}
     {contact_tab}
     {bibliography_tab}
@@ -3110,7 +3233,7 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
   <script>
     const estimateForm = document.getElementById('estimate-form');
     const submitButton = document.getElementById('submit-button');
-    const languageSelector = document.getElementById('language-selector');
+    const languageLinks = Array.from(document.querySelectorAll('[data-language-option]'));
     const tabButtons = Array.from(document.querySelectorAll('[data-tab-target]'));
     const tabPanels = Array.from(document.querySelectorAll('[data-tab-panel]'));
     const subtabButtons = Array.from(document.querySelectorAll('[data-subtab-target]'));
@@ -3122,15 +3245,16 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
     const trainingChart = document.getElementById('training-impact-chart');
     const trainingChartControls = Array.from(document.querySelectorAll('[data-training-chart-control="metric-tab"]'));
     const LANGUAGE_STORAGE_KEY = 'llm-environment-language';
+    const TAB_HASH_PREFIX = '#tab-';
     const textNodeOriginals = new WeakMap();
     const currentLanguage = {{ value: 'en' }};
     const uiText = {{
       en: {{
         title: 'ImpactLLM',
         navAriaLabel: 'Main navigation',
+        homeAriaLabel: 'Home',
         languageLabel: 'Language',
-        languageSelectorAria: 'Language selector',
-        estimatePlaceholder: 'Example: We have a RAG assistant on GPT-4 via API, used 4,000 times per month in France. Each request sends 2,200 input tokens and receives 500 output tokens. There is a vector database, embeddings, and logging.',
+        estimatePlaceholder: 'Example 1: We have a customer-support assistant based on GPT-4o-mini, used about 4,000 times per month in France by our support team.\\n\\nExample 2: We use Claude 3.5 Sonnet in our app to summarize internal documents for around 120 consultants, with about 15,000 summaries generated per month.\\n\\nExample 3: We have a RAG assistant based on Mistral Large, with a vector database and logging, used by about 800 employees and handling roughly 25,000 requests per month. If you know them, you can also add token volumes or request counts.',
         marketSearchPlaceholder: 'Example: GPT, Claude, Mistral, US, 70B',
         trainingSearchPlaceholder: 'Example: GPT, Claude, 70B, Meta',
         noData: 'No data available for this selection.',
@@ -3140,7 +3264,7 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
         chartMetricEnergy: 'Energy',
         chartMetricCarbon: 'Carbon',
         trainingMetricCarbon: 'Direct training CO2e',
-        comparisonEstimatedPrefix: 'Comparison of estimated central values for the ',
+        comparisonEstimatedPrefix: 'Comparison of estimated central values over 1 hour of active use for the ',
         comparisonEstimatedMiddle: ' indicator, using the ',
         comparisonEstimatedSuffix: ' family.',
         comparisonTrainingPrefix: 'Comparison of extrapolated central values for the ',
@@ -3151,9 +3275,9 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
       fr: {{
         title: 'Données ouvertes sur l’empreinte environnementale des LLM',
         navAriaLabel: 'Navigation principale',
+        homeAriaLabel: 'Accueil',
         languageLabel: 'Langue',
-        languageSelectorAria: 'Sélecteur de langue',
-        estimatePlaceholder: 'Exemple : nous avons un assistant RAG sur GPT-4 via API, utilisé 4 000 fois par mois en France. Chaque requête envoie 2 200 tokens en entrée et reçoit 500 tokens en sortie. Il y a une base vectorielle, des embeddings et de la journalisation.',
+        estimatePlaceholder: 'Exemple 1 : nous avons un assistant de support client basé sur GPT-4o-mini, utilisé environ 4 000 fois par mois en France par notre équipe support.\\n\\nExemple 2 : nous utilisons Claude 3.5 Sonnet dans notre application pour résumer des documents internes pour environ 120 consultants, avec près de 15 000 résumés générés par mois.\\n\\nExemple 3 : nous avons un assistant RAG basé sur Mistral Large, avec une base vectorielle et de la journalisation, utilisé par environ 800 collaborateurs et traitant près de 25 000 requêtes par mois. Si vous les connaissez, vous pouvez aussi ajouter des volumes de tokens ou des nombres de requêtes.',
         marketSearchPlaceholder: 'Exemple : GPT, Claude, Mistral, US, 70B',
         trainingSearchPlaceholder: 'Exemple : GPT, Claude, 70B, Meta',
         noData: 'Aucune donnée disponible pour cette sélection.',
@@ -3163,7 +3287,7 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
         chartMetricEnergy: 'Énergie',
         chartMetricCarbon: 'Carbone',
         trainingMetricCarbon: 'CO2e direct d’entraînement',
-        comparisonEstimatedPrefix: 'Comparaison des valeurs centrales estimées pour l’indicateur ',
+        comparisonEstimatedPrefix: 'Comparaison des valeurs centrales estimées sur 1 heure d’utilisation active pour l’indicateur ',
         comparisonEstimatedMiddle: ', selon la famille ',
         comparisonEstimatedSuffix: '.',
         comparisonTrainingPrefix: 'Comparaison des valeurs centrales extrapolées pour l’indicateur ',
@@ -3175,9 +3299,15 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
     const textReplacements = [
       ['Home', 'Accueil'],
       ['Observatory', 'Observatoire'],
+      ['Method', 'Méthode'],
       ['Documentation', 'Documentation'],
       ['Cite', 'Citer'],
       ['Contact', 'Contact'],
+      ['About us', 'À propos'],
+      ['We work on responsible AI with a focus on methodological rigor, traceability, and real-world decision support. Our work combines scientific research, product design, and operational deployment to make AI systems more transparent, more accountable, and more useful in practice.', 'Nous travaillons sur l’IA responsable avec un accent mis sur la rigueur méthodologique, la traçabilité et l’aide à la décision dans des contextes réels. Notre travail combine recherche scientifique, conception produit et déploiement opérationnel pour rendre les systèmes d’IA plus transparents, plus responsables et plus utiles en pratique.'],
+      ['Arnault Pachot is a researcher and entrepreneur, founder of OpenStudio and now founder of Emotia. He works on responsible digital transformation, Green IT, and decision-oriented AI systems. He co-authored the Dunod book ', 'Arnault Pachot est chercheur et entrepreneur, fondateur d’OpenStudio puis d’Emotia. Il travaille sur la transformation numérique responsable, le Green IT et les systèmes d’IA orientés décision. Il a coécrit chez Dunod l’ouvrage '],
+      [' dedicated to practical pathways for environmentally responsible AI.', ', consacré à des trajectoires concrètes pour une IA écologiquement responsable.'],
+      ['Thierry Petit is a senior AI researcher and scientific leader with more than twenty years of academic and R&D experience in Europe and the United States. His work spans trustworthy AI, simulation, optimization, and decision-grade platforms. At Emotia and Pollitics, he leads the scientific direction of systems designed to remain both operationally useful and methodologically robust.', 'Thierry Petit est chercheur senior en intelligence artificielle et directeur scientifique, avec plus de vingt ans d’expérience académique et de R&D en Europe et aux États-Unis. Ses travaux couvrent l’IA de confiance, la simulation, l’optimisation et les plateformes d’aide à la décision. Chez Emotia et Pollitics, il pilote la direction scientifique de systèmes conçus pour rester à la fois utiles opérationnellement et robustes méthodologiquement.'],
       ['References', 'Références'],
       ['Inference', 'Inférence'],
       ['Training', 'Entraînement'],
@@ -3185,6 +3315,22 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
       ['Estimating...', 'Estimation...'],
       ['Short reference.', 'Référence courte.'],
       ['Download PDF', 'Télécharger le PDF'],
+      ['ImpactLLM is designed as a transparent screening tool, not as a black-box score. The core idea is to start from the few environmental values that are actually published in the literature, preserve their native units, and reuse them through explicit multiples rather than hidden heuristics.', 'ImpactLLM est conçu comme un outil transparent de screening, et non comme un score boîte noire. L’idée centrale consiste à partir des quelques valeurs environnementales réellement publiées dans la littérature, à préserver leurs unités natives, puis à les réutiliser via des multiples explicites plutôt que des heuristiques cachées.'],
+      ['1. Source-linked literature anchors.', '1. Ancrages bibliographiques reliés aux sources.'],
+      ['The method starts from published indicators such as ', 'La méthode part d’indicateurs publiés tels que '],
+      [', each linked to a source, a model, a geography, and a documented system boundary.', ', chacun relié à une source, un modèle, une géographie et un périmètre système documenté.'],
+      ['2. A multiples-based extrapolation.', '2. Une extrapolation fondée sur les multiples.'],
+      ['When direct telemetry is unavailable for a target model, ImpactLLM uses model size as an explicit scaling variable. In practice, the engine computes an energy intensity per billion active parameters from literature anchors, then applies this multiple to the target model profile.', 'Quand aucune télémétrie directe n’est disponible pour un modèle cible, ImpactLLM utilise la taille du modèle comme variable explicite de mise à l’échelle. En pratique, le moteur calcule une intensité énergétique par milliard de paramètres actifs à partir d’ancrages bibliographiques, puis applique ce multiple au profil du modèle cible.'],
+      ['3. Separate method families.', '3. Des familles de méthode séparées.'],
+      ['The tool keeps the ', 'L’outil conserve séparément la famille '],
+      [' family and the ', ' et la famille '],
+      [' separate. This avoids creating a false sense of precision when the literature does not yet provide a robust bridge between prompt-based and page-based measurements.', ' distinctes. Cela évite de créer une fausse impression de précision lorsque la littérature ne fournit pas encore de passerelle robuste entre les mesures fondées sur les prompts et celles fondées sur les pages.'],
+      ['4. Carbon derived from context.', '4. Un carbone dérivé du contexte.'],
+      ['Carbon is not copied mechanically from the source paper. It is recalculated from the retained energy estimate using the electricity mix associated with the selected country context.', 'Le carbone n’est pas repris mécaniquement depuis l’article source. Il est recalculé à partir de l’estimation énergétique retenue en utilisant le mix électrique associé au contexte pays sélectionné.'],
+      ['5. A research-oriented estimator.', '5. Un estimateur orienté recherche.'],
+      ['The result is an auditable estimate intended for comparison, software design, and methodological discussion. It is useful precisely because the assumptions remain visible, inspectable, and source-backed.', 'Le résultat est une estimation auditable destinée à la comparaison, à la conception logicielle et à la discussion méthodologique. Son intérêt vient précisément du fait que les hypothèses restent visibles, inspectables et reliées aux sources.'],
+      ['Scientific paper.', 'Article scientifique.'],
+      ['Download the PDF', 'Télécharger le PDF'],
       ['Download BibTeX entry', 'Télécharger l’entrée BibTeX'],
       ['Download the associated scientific publication PDF', 'Télécharger le PDF de la publication scientifique associée'],
       ['ImpactLLM', 'ImpactLLM'],
@@ -3203,6 +3349,42 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
       ['Calculation details', 'Détails du calcul'],
       ['Inference estimate based on source-linked scientific indicators and a traceable calculation.', 'Estimation d’inférence fondée sur des indicateurs scientifiques reliés aux sources et un calcul traçable.'],
       ['Retained scope: only LLM inference externalities are included. Model training, software-system consumption, and ancillary infrastructure are excluded from the displayed estimate.', 'Périmètre retenu : seules les externalités d’inférence du LLM sont incluses. L’entraînement du modèle, la consommation du système logiciel et l’infrastructure annexe sont exclus de l’estimation affichée.'],
+      ['Retained assumptions', 'Hypothèses retenues'],
+      ['Inference-only estimate: training and software-system overheads excluded', 'Estimation limitée à l’inférence : entraînement et surcoûts du système logiciel exclus'],
+      ['Request type classified as chat_generation', 'Type de requête classé comme chat_generation'],
+      ['1 LLM request(s) per feature use', '1 requête LLM par usage de fonctionnalité'],
+      ['feature uses per year', 'usages de fonctionnalité par an'],
+      ['Energy is the primary quantity, and carbon is contextualized with the retained electricity mix.', 'L’énergie est la quantité primaire, et le carbone est contextualisé avec le mix électrique retenu.'],
+      ['Model-size scaling enabled with target profile at', 'Mise à l’échelle par taille de modèle activée avec un profil cible à'],
+      ['active parameters', 'paramètres actifs'],
+      ['Carbon is recalculated using the publisher-country electricity mix for', 'Le carbone est recalculé à partir du mix électrique du pays de l’éditeur pour'],
+      ['because the model is treated as a hosted proprietary service.', 'car le modèle est traité comme un service propriétaire hébergé.'],
+      ['A prompt/query calibration is computed from the mean Wh per parameter observed in prompt/query inference records', 'Une calibration prompt/requête est calculée à partir du Wh moyen par paramètre observé dans les enregistrements d’inférence prompt/requête'],
+      ['The page-family method was marked as not applicable for this scenario by the parser.', 'La méthode de la famille page a été marquée comme non applicable à ce scénario par le parseur.'],
+      ['Average Wh/prompt|request', 'Moyenne Wh/prompt|requête'],
+      ['Average Wh/parameter energy intensities calibrated on prompt/request anchors.', 'Moyenne des intensités énergétiques Wh/paramètre calibrées sur les ancrages prompt/requête.'],
+      ['1. Scenario input data', '1. Données d’entrée du scénario'],
+      ['The interpreted scenario uses', 'Le scénario interprété utilise'],
+      ['input tokens and', 'tokens en entrée et'],
+      ['output tokens per call.', 'tokens en sortie par appel.'],
+      ['The annual call volume is calculated as:', 'Le volume annuel d’appels est calculé ainsi :'],
+      ['In the Wh/prompt|request family, one LLM request directly corresponds to one inference unit. Annualization therefore relies on the number of LLM calls per year.', 'Dans la famille Wh/prompt|requête, une requête LLM correspond directement à une unité d’inférence. L’annualisation repose donc sur le nombre d’appels LLM par an.'],
+      ['2. Literature anchors and extrapolation', '2. Ancrages bibliographiques et extrapolation'],
+      ['The method starts from literature energy values published for the', 'La méthode part de valeurs d’énergie publiées dans la littérature pour la famille'],
+      ['family, then applies scaling by parameter count.', ', puis applique une mise à l’échelle selon le nombre de paramètres.'],
+      ['Observed literature value:', 'Valeur observée dans la littérature :'],
+      ['Source parameter count:', 'Nombre de paramètres de la source :'],
+      ['Target parameter count:', 'Nombre de paramètres cible :'],
+      ['Applied parameter factor:', 'Facteur de paramètres appliqué :'],
+      ['Extrapolated energy for one inference unit:', 'Énergie extrapolée pour une unité d’inférence :'],
+      ['When several anchors exist in the same family, the engine computes an average energy intensity per billion parameters to obtain the central value shown in the result block.', 'Lorsque plusieurs ancrages existent dans une même famille, le moteur calcule une intensité énergétique moyenne par milliard de paramètres pour obtenir la valeur centrale affichée dans le bloc de résultat.'],
+      ['3. Carbon derivation from the country mix', '3. Dérivation du carbone à partir du mix pays'],
+      ['Carbon is not reused directly from the literature. It is derived from extrapolated energy using the retained country electricity mix, here', 'Le carbone n’est pas réutilisé directement depuis la littérature. Il est dérivé de l’énergie extrapolée à partir du mix électrique du pays retenu, ici'],
+      ['The unit result retained for this method then leads to the following annualized values: energy', 'Le résultat unitaire retenu pour cette méthode conduit ensuite aux valeurs annualisées suivantes : énergie'],
+      ['and carbon', 'et carbone'],
+      ['4. Final annualization', '4. Annualisation finale'],
+      ['The final annual projection is based on', 'La projection annuelle finale est basée sur'],
+      ['inference unit(s) per year.', 'unité(s) d’inférence par an.'],
       ['Evidence level: ', 'Niveau de preuve : '],
       ['Method: ', 'Méthode : '],
       ['Reference model: ', 'Modèle de référence : '],
@@ -3262,7 +3444,7 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
       ['#market-model-search', 'placeholder', 'marketSearchPlaceholder'],
       ['#training-model-search', 'placeholder', 'trainingSearchPlaceholder'],
       ['nav.tabs', 'aria-label', 'navAriaLabel'],
-      ['#language-selector', 'aria-label', 'languageSelectorAria'],
+      ['[data-tab-target="home"]', 'aria-label', 'homeAriaLabel'],
       ['.language-label', 'textContent', 'languageLabel'],
     ];
     const benchmarkLabelMap = {{
@@ -3347,9 +3529,11 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
     function applyLanguage(lang) {{
       const normalized = normalizeLanguage(lang);
       currentLanguage.value = normalized;
-      if (languageSelector) {{
-        languageSelector.value = normalized;
-      }}
+      languageLinks.forEach((link) => {{
+        const isActive = link.getAttribute('data-language-option') === normalized;
+        link.classList.toggle('is-active', isActive);
+        link.setAttribute('aria-current', isActive ? 'true' : 'false');
+      }});
       safeStorageSet(LANGUAGE_STORAGE_KEY, normalized);
       applyAttributeTranslations(normalized);
       applyTextTranslations(normalized);
@@ -3362,24 +3546,73 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
         submitButton.classList.add('is-loading');
       }});
     }}
+    function activateTab(target) {{
+      let matched = false;
+      tabButtons.forEach((item) => {{
+        const isActive = item.getAttribute('data-tab-target') === target;
+        item.classList.toggle('is-active', isActive);
+        if (isActive) matched = true;
+      }});
+      tabPanels.forEach((panel) => {{
+        panel.classList.toggle('is-active', panel.getAttribute('data-tab-panel') === target);
+      }});
+      return matched;
+    }}
+    function activateSubtab(target) {{
+      let matched = false;
+      subtabButtons.forEach((item) => {{
+        const isActive = item.getAttribute('data-subtab-target') === target;
+        item.classList.toggle('is-active', isActive);
+        if (item.hasAttribute('aria-selected')) {{
+          item.setAttribute('aria-selected', isActive ? 'true' : 'false');
+        }}
+        if (isActive) matched = true;
+      }});
+      subtabPanels.forEach((panel) => {{
+        panel.classList.toggle('is-active', panel.getAttribute('data-subtab-panel') === target);
+      }});
+      return matched;
+    }}
+    function setTabHash(value) {{
+      const nextHash = `${{TAB_HASH_PREFIX}}${{value}}`;
+      if (window.location.hash === nextHash) return;
+      window.history.replaceState(null, '', nextHash);
+    }}
+    function applyHashNavigation() {{
+      const hash = window.location.hash || '';
+      if (!hash.startsWith(TAB_HASH_PREFIX)) return false;
+      const target = hash.slice(TAB_HASH_PREFIX.length);
+      if (!target) return false;
+      if (target.startsWith('observatory-')) {{
+        activateTab('observatory');
+        return activateSubtab(target);
+      }}
+      return activateTab(target);
+    }}
     tabButtons.forEach((button) => {{
       button.addEventListener('click', function () {{
         const target = button.getAttribute('data-tab-target');
-        tabButtons.forEach((item) => item.classList.toggle('is-active', item === button));
-        tabPanels.forEach((panel) => {{
-          panel.classList.toggle('is-active', panel.getAttribute('data-tab-panel') === target);
-        }});
+        activateTab(target);
+        if (target === 'observatory') {{
+          const activeSubtab = document.querySelector('[data-subtab-target].is-active');
+          setTabHash(activeSubtab ? activeSubtab.getAttribute('data-subtab-target') : 'observatory-inference');
+          return;
+        }}
+        setTabHash(target);
       }});
     }});
     subtabButtons.forEach((button) => {{
       button.addEventListener('click', function () {{
         const target = button.getAttribute('data-subtab-target');
-        subtabButtons.forEach((item) => item.classList.toggle('is-active', item === button));
-        subtabPanels.forEach((panel) => {{
-          panel.classList.toggle('is-active', panel.getAttribute('data-subtab-panel') === target);
-        }});
+        activateTab('observatory');
+        activateSubtab(target);
+        setTabHash(target);
       }});
     }});
+    window.addEventListener('hashchange', () => {{
+      applyHashNavigation();
+    }});
+    applyHashNavigation();
     searchInputs.forEach((input) => {{
       input.addEventListener('input', function () {{
         const tableId = input.getAttribute('data-table-search');
@@ -3430,11 +3663,12 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
         rows.forEach((row) => tbody.appendChild(row));
       }});
     }});
-    if (languageSelector) {{
-      languageSelector.addEventListener('change', function () {{
-        applyLanguage(languageSelector.value);
+    languageLinks.forEach((link) => {{
+      link.addEventListener('click', function (event) {{
+        event.preventDefault();
+        applyLanguage(link.getAttribute('data-language-option'));
       }});
-    }}
+    }});
     const formatChartValue = (value, metric) => {{
       if (metric === 'energy') {{
         if (value >= 1000) return `${{(value / 1000).toFixed(1)}} kWh`;

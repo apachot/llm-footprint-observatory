@@ -25,7 +25,7 @@
 
 \title{ImpactLLM:\\An Open Tool for Exploring and Estimating the Environmental Footprint of Large Language Models}
 \author{Arnault Pachot \and Thierry Petit}
-\date{March 12, 2026}
+\date{March 14, 2026}
 
 \begin{document}
 
@@ -38,14 +38,14 @@ The literature on the environmental footprint of large language models is growin
 \textbf{Keywords:} LLMs, open data, dataset, environmental footprint, API, MCP, quantitative review.
 
 \section{Introduction}
-Debate on the environmental footprint of LLMs has intensified as publications have multiplied on training, inference, water use, data centers, and hardware lifecycle effects \cite{strubell2019,rillig2023,luccioni2023,ren2024,morrison2025,elsworth2025,li2025water}. Yet the field still suffers from a simple methodological bottleneck: the quantified evidence is dispersed across articles, model cards, reports, and technical notes with incompatible units of analysis and uneven traceability. As a result, even when strong values are published, they are difficult to compare, reuse, or audit across studies.
+Debate on the environmental footprint of LLMs has intensified as publications have multiplied on training, inference, water use, data centers, and hardware lifecycle effects \cite{strubell2019,rillig2023,luccioni2023,ren2024,morrison2025,elsworth2025,li2025water}. This debate also sits within a broader responsible-AI and sustainable-AI discussion that includes practitioner-oriented synthesis and cross-sectoral reflection beyond LLM measurement alone \cite{pachot2022book,pachot2023sustainableai}. Yet the field still suffers from a simple methodological bottleneck: the quantified evidence is dispersed across articles, model cards, reports, and technical notes with incompatible units of analysis and uneven traceability. As a result, even when strong values are published, they are difficult to compare, reuse, or audit across studies.
 
 This paper addresses that bottleneck. Its central contribution is not a new physical model of AI impacts, but an open scientific infrastructure that makes the quantitative evidence reusable. We argue that, in this domain, the construction of a source-linked evidence base is itself a research contribution because it determines what kinds of comparative claims, screening tools, and cumulative reviews become possible.
 
 The project therefore has two linked objectives. The first is documentary: to publish an auditable corpus of extracted indicators on LLM training, inference, infrastructure, and lifecycle effects. The second is methodological: to show how this corpus can support a transparent, limited, inference-focused screening method for current LLM services when direct provider telemetry is absent.
 
 \section{State of the Art}
-The recent literature establishes three robust findings. First, AI environmental impacts are multi-dimensional: operational electricity, carbon, water, hardware, and infrastructure effects must be distinguished rather than collapsed into a single number \cite{rillig2023}. Second, both training and inference can reach non-trivial orders of magnitude, but their measurement units vary strongly across publications. Third, the main obstacle to cumulative interpretation is often not the absence of numbers, but the heterogeneity of the numbers that do exist.
+The recent literature establishes three robust findings. First, AI environmental impacts are multi-dimensional: operational electricity, carbon, water, hardware, and infrastructure effects must be distinguished rather than collapsed into a single number \cite{rillig2023}. This broader framing is also visible in more synthetic contributions on sustainable AI and environmentally responsible AI adoption \cite{pachot2022book,pachot2023sustainableai}. Second, both training and inference can reach non-trivial orders of magnitude, but their measurement units vary strongly across publications. Third, the main obstacle to cumulative interpretation is often not the absence of numbers, but the heterogeneity of the numbers that do exist.
 
 The methodological landscape is broader than LLM-only reporting. A first family of approaches consists of direct experiment- or run-level accounting. In this tradition, authors report energy use or carbon emissions associated with concrete training or experimentation settings, often from measured hardware usage or cloud-region assumptions. Strubell et al. are emblematic of this approach in NLP, combining model experiments with emissions estimates tied to electricity assumptions \cite{strubell2019}. A second family consists of model- or system-specific disclosures, where developers publish environmental indicators for a given model or service. Luccioni et al. for BLOOM \cite{luccioni2023}, Meta for Llama 3.1 \cite{meta2024llama}, and Elsworth et al. for Google-scale inference delivery \cite{elsworth2025} all belong to this family, even though they use different units and system boundaries.
 
@@ -151,7 +151,7 @@ The project provides a local HTTP API for rapid exploration of the dataset. The 
 \item \texttt{/models}, \texttt{/market-models}, and \texttt{/energy-mix} to expose the model and country catalogs used by the estimator.
 \end{itemize}
 
-This API is not intended to replace a full open-data platform. Rather, it provides a minimal programmatic reuse layer directly associated with the manuscript and the data repository \cite{software2026api}. The estimation endpoints extend the role of the dataset: it is no longer only an archive of reported values, but also a support for traceable calculations grounded in literature-derived factors.
+This API is not intended to replace a full open-data platform. Rather, it provides a minimal programmatic reuse layer directly associated with the manuscript and the public project repository \cite{impactllmrepo2026}. The estimation endpoints extend the role of the dataset: it is no longer only an archive of reported values, but also a support for traceable calculations grounded in literature-derived factors.
 
 \section{MCP Server}
 The project also provides an MCP server over \texttt{stdio}. Its purpose differs from that of the API: it enables software agents to query the dataset directly as structured context, without scraping or heuristic reading of tables in the manuscript.
@@ -173,14 +173,40 @@ The current version exposes thirteen tools:
 \item \texttt{estimate\_feature\_externalities}.
 \end{itemize}
 
-This design addresses a precise need: enabling an assistant or software tool to recover a source-backed quantitative value, verify its analytical phase, and trace it back to the underlying publication without returning to an unrestricted reading of the PDF \cite{software2026mcp}.
+This design addresses a precise need: enabling an assistant or software tool to recover a source-backed quantitative value, verify its analytical phase, and trace it back to the underlying publication without returning to an unrestricted reading of the PDF \cite{impactllmrepo2026}.
 
 \section{Web Application Layer}
-The project now includes a local web interface that exposes the same evidence base to non-programmatic users \cite{software2026web}. The interface organizes the project into four views. The \emph{Home} view accepts a natural-language description of a software feature and returns an inference-only estimate together with explicit assumptions and a step-by-step calculation. The \emph{Observatory} view compares current LLM services under a standardized usage convention and presents parameter-based screening estimates for current models using the available training anchors. The \emph{How it works} view documents the estimation pipeline, its equations, and the specific literature anchors mobilized by the predictor. Finally, the \emph{References} view centralizes the source annexes used across the site, including LLM indicators and everyday comparison benchmarks.
+The project now includes a bilingual web interface that exposes the same evidence base to non-programmatic users \cite{impactllmrepo2026}. The interface is organized around six main tabs. The \emph{Home} view accepts a natural-language description of an AI-enabled software feature and returns an inference-only estimate together with explicit retained assumptions and a source-linked step-by-step calculation. The \emph{Observatory} view is divided into \emph{Inference} and \emph{Training} subtabs and compares the maintained model catalog under standardized conventions. The \emph{Method} tab summarizes the multiples-based estimation logic and provides direct access to the paper PDF. The \emph{Cite} tab exposes a short reference and a BibTeX entry. The \emph{Contact} tab presents the responsible-AI positioning of the project and its authors. Finally, the \emph{References} tab centralizes the documentary annexes used by the site, including model-size proxies, inference anchors, training anchors, contextual country factors, and everyday benchmarks.
 
-This web layer extends the role of the dataset in three ways. First, it makes the distinction between observed values and derived values directly visible to readers. Second, it exposes comparative views over a maintained model catalog, including proprietary models for which no direct environmental telemetry is publicly disclosed. Third, it stores past analyses as timestamped JSON records, turning user queries into a small but auditable corpus of application scenarios that can later support methodological review or replication.
+This web layer extends the role of the dataset in five ways. First, it makes the distinction between observed values and derived values directly visible to readers. Second, it exposes comparative views over a maintained model catalog, including proprietary services for which no direct environmental telemetry is publicly disclosed. Third, it stores past analyses as JSON records, turning user queries into a small but auditable corpus of application scenarios that can later support methodological review or replication. Fourth, it now supports English and French from the same interface, which is useful for dissemination beyond a purely academic audience. Fifth, its tab state is encoded in the URL fragment, so a given analytical view can be shared directly (for example the home view, the method tab, or one of the two observatory subtabs).
 
 The interface is intentionally conservative. It does not collapse all evidence into a single hidden score. Instead, it preserves the separation between the \texttt{Wh/prompt|query} and \texttt{Wh/page} families, displays the retained assumptions, and links all cited factors back to the underlying records. It also restricts user-facing screening outputs to energy and carbon, while keeping water indicators in the documentary layers of the site until a more robust country-contextualized method is implemented.
+
+\begin{table}[htbp]
+\centering
+\small
+\begin{tabularx}{\textwidth}{|L{2.4cm}|Y|Y|}
+\hline
+Tab or feature & Current role in the site & Research value \\
+\hline
+Home & Natural-language input, source-linked inference estimate, retained assumptions, and full calculation trace & Makes the estimator usable without programming while preserving auditability \\
+\hline
+Observatory / Inference & Searchable and sortable model catalog with energy and carbon comparisons under one hour of active use & Makes intermediate extrapolations inspectable before any project-specific annualization \\
+\hline
+Observatory / Training & Searchable and sortable training projections by parameter count with chart-based order-of-magnitude benchmarks & Makes scarce training anchors reusable across current model families \\
+\hline
+Method & Short explanation of the multiples-based method and direct download of the paper PDF & Aligns interface use with the scientific framing of the estimator \\
+\hline
+Cite & Ready-to-reuse project citation and BibTeX entry & Facilitates academic and professional reuse \\
+\hline
+References & Source annexes for model sizes, inference anchors, training anchors, benchmarks, and country factors & Keeps the documentary layer visible rather than hidden behind the UI \\
+\hline
+Shared URL fragments and EN/FR toggle & Direct linking to analytical views and bilingual access & Improves dissemination, reproducibility, and collaborative review \\
+\hline
+\end{tabularx}
+\caption{Main web-application functionalities reflected in the current release of \emph{ImpactLLM}.}
+\label{tab:web-features}
+\end{table}
 
 \subsection{The Observatory as an Intermediate Analytical Layer}
 The \emph{Observatory} should not be understood as a simple visualization layer. Methodologically, it plays an intermediate role between the raw extraction base and the final user-facing estimate. It exposes two intermediate spaces of calculation.
@@ -190,6 +216,52 @@ First, on the inference side, it projects the current model catalog under a comm
 Second, on the training side, it applies the same logic of parameter-based screening to the limited set of training and lifecycle anchors available in the literature. Here again, the aim is not to claim direct telemetry for all current models, but to make explicit the intermediate extrapolative step that transforms a sparse corpus into a comparable catalog.
 
 This intermediate layer is scientifically useful for two reasons. It reveals the structure of the predictor before scenario-specific multiplication by usage volume, and it makes the extrapolative assumptions auditable at the level of the model catalog itself. In that sense, the observatory is part of the method, not merely part of the interface.
+
+The current observatory already yields interpretable comparative results. In the standardized inference scenario, low-parameter models retained with a low-carbon electricity context remain very small in prompt/query terms. For example, \emph{Ministral 3B} retained with a French country proxy is estimated at 0.14 Wh and 0.0035 gCO$_2$e for one active hour of use in the \texttt{Wh/prompt|query} family, whereas \emph{Llama 3.1 8B} retained with the US reference country reaches 0.37 Wh and 0.14 gCO$_2$e under the same convention. At the other end of the catalog, \emph{Claude Opus 4} reaches 276.8 Wh and 106.3 gCO$_2$e in the prompt/query family, and more than 30 kWh and 11.6 kgCO$_2$e in the page family, which immediately shows why the two families should remain visible separately.
+
+\begin{table}[htbp]
+\centering
+\small
+\begin{tabularx}{\textwidth}{|L{3.1cm}|L{1.4cm}|L{1.4cm}|L{2.0cm}|L{1.7cm}|L{1.7cm}|}
+\hline
+Model & Params & Country & Energy / h prompt-query & Carbon / h prompt-query & Carbon / h page \\
+\hline
+Ministral 3B & 3B & FR proxy & 0.14 Wh & 0.0035 gCO$_2$e & 0.33 gCO$_2$e \\
+\hline
+Llama 3.1 8B & 8B & US reference & 0.37 Wh & 0.14 gCO$_2$e & 15.53 gCO$_2$e \\
+\hline
+GPT-5 mini & 95B* & US proxy & 4.38 Wh & 1.68 gCO$_2$e & 184.46 gCO$_2$e \\
+\hline
+Qwen2.5 72B & 72B & CN proxy & 3.32 Wh & 1.86 gCO$_2$e & 203.88 gCO$_2$e \\
+\hline
+Claude Opus 4 & 6000B* & US proxy & 276.8 Wh & 106.29 gCO$_2$e & 11\,650.28 gCO$_2$e \\
+\hline
+\end{tabularx}
+\caption{Illustrative outputs from the inference observatory under the standardized one-hour active-use convention. `*` denotes a parameter count estimated from external proxies rather than provider disclosure.}
+\label{tab:observatory-inference}
+\end{table}
+
+The training observatory reveals a second type of result. Because the training corpus is much sparser than the inference corpus, the values are more openly extrapolative, but still useful for understanding order-of-magnitude differences across current model families. For instance, \emph{Llama 3.1 8B} and \emph{Ministral 8B} converge by construction to the same parameter-based screening estimate, around 55.3 MWh and 139.4 tCO$_2$e for direct training. \emph{GPT-5.2} is projected at about 2.08 GWh and 5\,226 tCO$_2$e, while \emph{Claude Opus 4} reaches approximately 41.5 GWh and 104\,528 tCO$_2$e.
+
+\begin{table}[htbp]
+\centering
+\small
+\begin{tabularx}{\textwidth}{|L{3.2cm}|L{1.4cm}|L{2.0cm}|L{2.3cm}|Y|}
+\hline
+Model & Params & Training energy & Direct training CO$_2$e & Interpretation \\
+\hline
+Llama 3.1 8B & 8B & 55.3 MWh & 139.4 tCO$_2$e & Lower-end open-weight reference in the current catalog \\
+\hline
+Llama 3.1 70B & 70B & 484.3 MWh & 1\,219.5 tCO$_2$e & Mid-scale frontier open model \\
+\hline
+GPT-5.2 & 300B* & 2.08 GWh & 5\,226.4 tCO$_2$e & Large proprietary service estimated from external size proxy \\
+\hline
+Claude Opus 4 & 6000B* & 41.5 GWh & 104\,528.4 tCO$_2$e & Extremely large proprietary estimate showing the growth of training orders of magnitude \\
+\hline
+\end{tabularx}
+\caption{Illustrative outputs from the training observatory. These values are screening extrapolations based on the limited training anchors currently available in the literature.}
+\label{tab:observatory-training}
+\end{table}
 
 \section{From Data to Estimation}
 One of the central use cases of the project is the following question: ``Here is my application and the LLM it uses. Can you estimate the environmental externalities of inference?'' The central difficulty is that providers of proprietary services rarely publish direct telemetry. The estimator therefore does not claim to measure hidden provider data. Instead, it constructs a transparent extrapolation from the inference indicators that are actually available in the literature.
@@ -264,15 +336,34 @@ The current release includes a first-level estimator designed for screening use.
 
 Consider first the comparative observatory. It standardizes model comparison under a one-hour active-use scenario corresponding to 1,000 input tokens, 550 output tokens, and approximately 34.6 interactions per hour, derived from \cite{brysbaert2019}. This view is designed to make the orders of magnitude legible and to place them next to everyday benchmarks such as household electricity use, road mobility, or a full commercial flight. In the workflow of the project, this is an intermediate calculation layer: the observatory exposes the normalized model-level estimates before they are reused in a user-specific application scenario.
 
-Consider next a user-facing application scenario corresponding to GPT-4o-mini, 1\,200 input tokens, 350 output tokens, one LLM request per feature use, 10\,000 feature uses per month, and a French project context. In the current catalog, GPT-4o-mini is associated with an approximate 8B active-parameter profile and is treated as a proprietary hosted service. The country retained for contextualization is therefore the publisher country rather than France itself.
+Consider next a user-facing application scenario corresponding to GPT-5 mini, 2\,200 input tokens, 500 output tokens, one LLM request per feature use, 4\,000 feature uses per month, and a French project context. In the current catalog, GPT-5 mini is associated with an approximate 95B active-parameter profile and is treated as a proprietary hosted service. The country retained for contextualization is therefore the publisher country rather than France itself.
 
 In the current corpus, the prompt/query family is anchored by the Gemini Apps production measurement reported by Elsworth et al. \cite{elsworth2025}, while the page family is anchored by the Gemma-2B-it and Llama 3 70B measurements reported by Ren et al. \cite{ren2024}. For this reason, the API, the MCP server, and the web interface return two distinct annualized inference estimates instead of one merged figure. The prompt/query estimate remains close to the operational prompt-serving measurement, whereas the page estimate reflects a different measurement family and therefore a different order of magnitude.
 
-This implementation is deliberately conservative. It does not claim to provide an auditable environmental assessment in the sense of formal carbon accounting. Rather, it provides a traceable, reproducible, and extensible estimate that is useful for eco-design, service comparison, and the progressive construction of a broader evidence base on inference impacts. The web interface strengthens this point by keeping the observatory views, the explanatory ``How it works'' page, and the source-linked calculation details consistent with the same underlying data model.
+This implementation is deliberately conservative. It does not claim to provide an auditable environmental assessment in the sense of formal carbon accounting. Rather, it provides a traceable, reproducible, and extensible estimate that is useful for eco-design, service comparison, and the progressive construction of a broader evidence base on inference impacts. The web interface strengthens this point by keeping the observatory views, the method page, the references annex, and the source-linked calculation details consistent with the same underlying data model.
 
 \section{Evaluation Across Three Software Scenarios}
-To assess the usefulness of the proposed framework, we applied the estimator to three representative software scenarios: a support chatbot, a retrieval-augmented assistant, and a batch-generation workflow. All scenarios rely on the same inference-only estimation logic, but differ in token volume, number of LLM calls per use, and monthly usage volume.
-Across these scenarios, the method exhibits three stable properties. First, moving from unit-level usage to annualized software features substantially changes the relevant order of magnitude for decision-making. Second, the choice of target model profile and country mix has a material effect on the result even when the user-facing task remains the same. Third, the prompt/query and page families should still be interpreted as parallel screening estimates rather than as interchangeable measurements of one single latent quantity. For that reason, the current web application and model catalog keep both families visible rather than collapsing them into one allegedly definitive value. In contrast, water is not displayed as a personalized screening result because the project does not yet maintain a country-level water-intensity table robust enough for such contextualization.
+To assess the usefulness of the proposed framework, we applied the estimator to three representative software scenarios aligned with the current examples suggested by the interface itself: a support chatbot, a retrieval-augmented assistant, and a batch-generation workflow. All scenarios rely on the same inference-only estimation logic, but differ in target model, token volume, number of LLM calls per use, and monthly usage volume.
+
+\begin{table}[htbp]
+\centering
+\small
+\begin{tabularx}{\textwidth}{|L{3.1cm}|L{2.1cm}|Y|L{1.9cm}|L{1.9cm}|}
+\hline
+Scenario & Model & Main usage assumptions & Annual energy & Annual carbon \\
+\hline
+Retrieval-augmented assistant & GPT-5 mini & 4\,000 uses/month, 2\,200 input tokens, 500 output tokens, 1 call/use, France as project context & 6.08 kWh & 2.33 kgCO$_2$e \\
+\hline
+Support chatbot & Ministral 8B & 20\,000 conversations/month, 900 input tokens, 250 output tokens, 1 call/use, France & 2.57 kWh & 48 gCO$_2$e \\
+\hline
+Batch document generation & Claude 3.5 Haiku & 5\,000 documents/month, 3\,000 input tokens, 900 output tokens, 3 calls/document, France as project context & 5.27 kWh & 2.03 kgCO$_2$e \\
+\hline
+\end{tabularx}
+\caption{Examples of annualized prompt/query estimates returned by the current estimator for three software scenarios.}
+\label{tab:scenario-examples}
+\end{table}
+
+Across these scenarios, the method exhibits four stable properties. First, moving from unit-level usage to annualized software features substantially changes the relevant order of magnitude for decision-making. Second, the choice of target model profile has a material effect on the result even when the user-facing task remains similar. Third, the retained electricity mix can dominate the carbon interpretation: the French support-chatbot scenario remains low in carbon despite substantial annual usage because the model and the retained country proxy lead to a comparatively low carbon intensity. Fourth, the prompt/query and page families should still be interpreted as parallel screening estimates rather than as interchangeable measurements of one single latent quantity. For that reason, the current web application and model catalog keep both families visible rather than collapsing them into one allegedly definitive value. In contrast, water is not displayed as a personalized screening result because the project does not yet maintain a country-level water-intensity table robust enough for such contextualization.
 
 \section{Scientific Contribution}
 The main contribution is not algorithmic but infrastructural. The publication associated with the dataset transforms a literature review into a reusable evidence base. This changes the nature of the scientific deliverable in five ways.
@@ -285,9 +376,9 @@ The dataset does not eliminate the underlying heterogeneity of the literature; i
 The current release is also partial. It primarily covers the values mobilized in the associated review paper and the major sources identified so far. The objective is not to claim immediate exhaustiveness, but to provide an open infrastructure that can be enriched, audited, and corrected over time.
 
 \section{Conclusion}
-This paper accompanies the release of \emph{ImpactLLM}, a structured dataset on quantified environmental impacts of LLMs and their infrastructure. By combining an open dataset, a layer of comparability metadata, an HTTP API, and an MCP server, it proposes an augmented form of scientific publication: readers receive not only a synthesis, but also the evidence layer that makes that synthesis verifiable, extensible, and automatable \cite{dataset2026,software2026api,software2026mcp}.
+This paper accompanies the release of \emph{ImpactLLM}, a structured dataset on quantified environmental impacts of LLMs and their infrastructure. By combining an open dataset, a layer of comparability metadata, an HTTP API, and an MCP server, it proposes an augmented form of scientific publication: readers receive not only a synthesis, but also the evidence layer that makes that synthesis verifiable, extensible, and automatable \cite{impactllmrepo2026}.
 
-The next logical step is to expand the source corpus and publish the dataset with a persistent identifier. At this stage, the project already provides the necessary scaffolding to treat the dataset as a scientific object in its own right, while also serving as the starting point for a method of environmental accounting for software systems integrating LLMs.
+The current release goes further than a static companion website. It already exposes a bilingual public interface, a shareable observatory, explicit methodological notes, downloadable citation material, and searchable result tables that make the extrapolative core of the project inspectable. The next logical step is to expand the source corpus, publish the dataset with a persistent identifier, and continue strengthening the bridge between documentary extraction, comparative observatory, and practical software-feature estimation. At this stage, the project already provides the necessary scaffolding to treat the dataset as a scientific object in its own right, while also serving as the starting point for a method of environmental accounting for software systems integrating LLMs.
 
 \bibliographystyle{plain}
 \bibliography{references_llm_environment_opendata}
