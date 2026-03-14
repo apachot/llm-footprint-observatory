@@ -203,6 +203,14 @@ REAL_WORLD_INDICATOR_ROWS = [
     },
     {
         "domain": "Carbon",
+        "indicator": "Average gasoline car for 0.5 km",
+        "value": "117.5 gCO2e",
+        "citation": "International Council on Clean Transportation. (2025). Life-cycle greenhouse gas emissions from passenger cars in the European Union: A 2025 update and key factors to consider. https://theicct.org/publication/electric-cars-life-cycle-analysis-emissions-europe-jul25/",
+        "locator": "Project derivation from the ICCT benchmark of 235 gCO2e/km for an average gasoline car, rescaled here to 0.5 km to align with the order of magnitude of the highest inference-model estimates.",
+        "url": "https://theicct.org/publication/electric-cars-life-cycle-analysis-emissions-europe-jul25/",
+    },
+    {
+        "domain": "Carbon",
         "indicator": "Average full commercial flight (derived value)",
         "value": "≈ 21.1 tCO2 per flight",
         "citation": "Gössling, S., Klöwer, M., Leitão, J. C., Hirsch, S., Brockhagen, D., & Humpe, A. (2026). Large carbon dioxide emissions avoidance potential in improved commercial air transport efficiency. Communications Earth & Environment, 7, 13. https://www.nature.com/articles/s43247-025-03069-4",
