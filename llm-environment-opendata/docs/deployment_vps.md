@@ -12,7 +12,7 @@ This web app is a plain Python HTTP server. The simplest production setup is:
 ```bash
 sudo mkdir -p /opt/llm-environment-opendata-parent
 sudo chown "$USER":"$USER" /opt/llm-environment-opendata-parent
-git clone https://github.com/apachot/Publications-scientifiques.git /opt/llm-environment-opendata-parent
+git clone https://github.com/apachot/ImpactLLM.git /opt/llm-environment-opendata-parent
 cp -R /opt/llm-environment-opendata-parent/llm-environment-opendata /opt/llm-environment-opendata
 cd /opt/llm-environment-opendata
 ```

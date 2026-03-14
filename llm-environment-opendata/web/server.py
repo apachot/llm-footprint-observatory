@@ -1717,7 +1717,7 @@ def render_documentation_tab():
         </div>
         <p class="summary-intro">The project combines a local dataset, an HTTP API, an MCP server, and a web calculation interface. The main scripts rely on Python 3 and the repository files.</p>
         <div class="summary-body">
-          <p><strong>GitHub repository.</strong> <a href="https://github.com/apachot/Publications-scientifiques" target="_blank" rel="noreferrer">ImpactLLM on GitHub</a></p>
+          <p><strong>GitHub repository.</strong> <a href="https://github.com/apachot/ImpactLLM" target="_blank" rel="noreferrer">ImpactLLM on GitHub</a></p>
           <p><strong>Prerequisites.</strong> Python 3 is required. An OpenAI key is only needed for natural-language parsing in the web interface.</p>
           <p><strong>Move into the project.</strong></p>
           <pre style="margin:0; white-space:pre-wrap;"><code>cd "llm-environment-opendata"</code></pre>
@@ -2378,6 +2378,10 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
           <p><strong>BibTeX</strong></p>
           <pre class="citation-block"><code>{escape(PROJECT_PAPER_BIBTEX)}</code></pre>
           <p><a href="{app_url('/downloads/llm_environment_opendata_paper.pdf')}">Download PDF</a> | <a href="{app_url('/downloads/llm_environment_opendata_paper.bib')}">Download BibTeX entry</a></p>
+          <p><strong>GitHub repository</strong></p>
+          <p>The project repository is available on GitHub: <a href="https://github.com/apachot/ImpactLLM" target="_blank" rel="noreferrer">https://github.com/apachot/ImpactLLM</a>.</p>
+          <p><strong>License</strong></p>
+          <p>ImpactLLM is distributed under the GNU GPL. Reuse, modification, and redistribution should remain compatible with the obligations of that free-software license.</p>
           <p><strong>Arnault Pachot</strong></p>
           <p>Arnault Pachot is a researcher and entrepreneur, founder of OpenStudio and now founder of Emotia. He works on responsible digital transformation, Green IT, and decision-oriented AI systems. He co-authored the Dunod book <em>Intelligence artificielle et environnement : alliance ou nuisance ?</em>, dedicated to practical pathways for environmentally responsible AI.</p>
           <p><strong>Thierry Petit</strong></p>
@@ -3595,6 +3599,10 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
       ['Estimate application', 'Estimer l’application'],
       ['Estimating...', 'Estimation...'],
       ['How to cite ImpactLLM', 'Comment citer ImpactLLM'],
+      ['GitHub repository', 'Dépôt GitHub'],
+      ['The project repository is available on GitHub: ', 'Le dépôt du projet est disponible sur GitHub : '],
+      ['License', 'Licence'],
+      ['ImpactLLM is distributed under the GNU GPL. Reuse, modification, and redistribution should remain compatible with the obligations of that free-software license.', 'ImpactLLM est distribué sous licence GNU GPL. La réutilisation, la modification et la redistribution doivent rester compatibles avec les obligations de cette licence libre.'],
       ['About us', 'À propos de nous'],
       ['Selected references on AI and the environment', 'Références choisies sur l’IA et l’environnement'],
       ['This annex brings together the quantified reference material used in the interface, along with everyday comparison benchmarks and country factors used for carbon and water recalculation.', 'Cette annexe rassemble les sources quantitatives mobilisées dans l’interface, ainsi que des repères de comparaison du quotidien et les facteurs pays utilisés pour le recalcul du carbone et de l’eau.'],

@@ -153,10 +153,10 @@ python3 scripts/export_json.py
 
 The dedicated GitHub repository for this project is:
 
-- `https://github.com/apachot/Publications-scientifiques`
+- `https://github.com/apachot/ImpactLLM`
 
 To clone it directly:
 
 ```bash
-git clone https://github.com/apachot/Publications-scientifiques.git
+git clone https://github.com/apachot/ImpactLLM.git
 ```
