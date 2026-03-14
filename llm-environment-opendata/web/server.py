@@ -1574,7 +1574,7 @@ def render_documentation_tab():
         </div>
         <p class="summary-intro">The project combines a local dataset, an HTTP API, an MCP server, and a web calculation interface. The main scripts rely on Python 3 and the repository files.</p>
         <div class="summary-body">
-          <p><strong>GitHub repository.</strong> <a href="https://github.com/apachot/llm-footprint-observatory" target="_blank" rel="noreferrer">ImpactLLM on GitHub</a></p>
+          <p><strong>GitHub repository.</strong> <a href="https://github.com/apachot/Publications-scientifiques" target="_blank" rel="noreferrer">ImpactLLM on GitHub</a></p>
           <p><strong>Prerequisites.</strong> Python 3 is required. An OpenAI key is only needed for natural-language parsing in the web interface.</p>
           <p><strong>Move into the project.</strong></p>
           <pre style="margin:0; white-space:pre-wrap;"><code>cd "llm-environment-opendata"</code></pre>
