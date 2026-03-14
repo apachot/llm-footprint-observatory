@@ -2909,12 +2909,12 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
       background: #fff;
     }}
     .result-method-metric-energy {{
-      background: #eef8f1;
-      border-color: #b7dcc1;
+      background: rgba(140, 122, 91, 0.08);
+      border-color: rgba(140, 122, 91, 0.16);
     }}
     .result-method-metric-carbon {{
-      background: #fff1ef;
-      border-color: #efc2bb;
+      background: rgba(140, 122, 91, 0.08);
+      border-color: rgba(140, 122, 91, 0.16);
     }}
     .result-method-label {{
       display: block;
