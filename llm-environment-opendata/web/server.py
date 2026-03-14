@@ -356,6 +356,128 @@ def format_bib_entry_apa(entry):
     return " ".join(part for part in parts if part)
 
 
+def build_analysis_bibliography_entries(factor_rows, result):
+    entries = []
+    seen = set()
+
+    for row in factor_rows or []:
+        citation = format_apa_citation(row)
+        url = str((row or {}).get("source_url", "") or "").strip()
+        locator = str((row or {}).get("source_locator", "") or "").strip()
+        entry_key = str((row or {}).get("record_id", "") or "").strip()
+        dedupe_key = ("literature", entry_key, citation, url, locator)
+        if not citation or dedupe_key in seen:
+            continue
+        seen.add(dedupe_key)
+        entries.append(
+            {
+                "key": entry_key or f"literature-{len(entries) + 1}",
+                "label": "Observed literature value",
+                "citation": citation,
+                "url": url,
+                "locator": locator,
+            }
+        )
+
+    market_profile = (
+        (result or {}).get("market_model_profile")
+        or (result or {}).get("model_profile")
+        or {}
+    )
+    parameter_source = str(market_profile.get("parameter_source", "") or "").strip()
+    parameter_url = str(market_profile.get("parameter_source_url", "") or "").strip()
+    parameter_note = str(market_profile.get("notes", "") or "").strip()
+    parameter_dedupe_key = ("parameters", parameter_source, parameter_url, parameter_note)
+    if parameter_source and parameter_dedupe_key not in seen:
+        seen.add(parameter_dedupe_key)
+        entries.append(
+            {
+                "key": "parameters",
+                "label": "Model parameter estimate",
+                "citation": parameter_source,
+                "url": parameter_url,
+                "locator": parameter_note,
+            }
+        )
+
+    country_mix = (result or {}).get("country_energy_mix") or {}
+    mix_citation = str(country_mix.get("source_citation", "") or "").strip()
+    mix_url = str(country_mix.get("source_url", "") or "").strip()
+    mix_note = str(country_mix.get("notes", "") or "").strip()
+    mix_dedupe_key = ("mix", mix_citation, mix_url, mix_note)
+    if mix_citation and mix_dedupe_key not in seen:
+        seen.add(mix_dedupe_key)
+        entries.append(
+            {
+                "key": "mix",
+                "label": "Electricity mix",
+                "citation": mix_citation,
+                "url": mix_url,
+                "locator": mix_note,
+            }
+        )
+
+    for index, entry in enumerate(entries, start=1):
+        entry["number"] = index
+        entry["anchor_id"] = f"analysis-ref-{index}"
+        entry["title"] = f"{entry['label']}. {entry['citation']}"
+        if entry["locator"]:
+            entry["title"] += f". {entry['locator']}"
+
+    return entries
+
+
+def build_analysis_bibliography_map(entries):
+    return {
+        str(entry.get("key", "")).strip(): entry
+        for entry in entries or []
+        if str(entry.get("key", "")).strip()
+    }
+
+
+def render_analysis_entry_ref(entry_key, entries_by_key):
+    if not entry_key:
+        return ""
+    entry = (entries_by_key or {}).get(str(entry_key).strip())
+    if not entry:
+        return ""
+    return (
+        f'<a class="inline-ref" href="#{escape(entry["anchor_id"], quote=True)}" '
+        f'title="{escape(entry["title"])}">[{entry["number"]}]</a>'
+    )
+
+
+def render_analysis_bibliography(entries):
+    if not entries:
+        return ""
+
+    items = []
+    for entry in entries or []:
+        citation_html = escape(entry["citation"])
+        if entry["url"]:
+            citation_html = f'<a href="{escape(entry["url"], quote=True)}" target="_blank" rel="noopener noreferrer">{citation_html}</a>'
+        locator_html = f'<div class="reference-locator">{escape(entry["locator"])}</div>' if entry["locator"] else ""
+        items.append(
+            f"""
+            <li class="analysis-bibliography-item" id="{escape(entry['anchor_id'], quote=True)}">
+              <span class="analysis-bibliography-number">[{entry['number']}]</span>
+              <span class="analysis-bibliography-label">{escape(entry['label'])}.</span>
+              {citation_html}
+              {locator_html}
+            </li>
+            """
+        )
+
+    return f"""
+    <section class="analysis-bibliography">
+      <div class="math-label">Bibliography for this analysis</div>
+      <ul class="analysis-bibliography-list">
+        {''.join(items)}
+      </ul>
+    </section>
+    """
+
+
 def reference_anchor_id(row):
     record_id = str((row or {}).get("record_id", "")).strip()
     if not record_id:
@@ -824,7 +946,7 @@ def infer_source_intensity(energy_record, metric_record, metric_kind):
     return None
 
 
-def build_method_modal_body(method):
+def build_method_modal_body(method, analysis_refs=None):
     annual_requests = float(method.get("annual_requests", 0.0) or 0.0)
     annual_feature_uses = float(method.get("annual_feature_uses", 0.0) or 0.0)
     requests_per_feature = float(method.get("requests_per_feature", 0.0) or 0.0)
@@ -838,6 +960,8 @@ def build_method_modal_body(method):
     detail = method.get("detail", {})
     factor_rows = method.get("factor_rows") or []
     row_by_id = {row.get("record_id"): row for row in factor_rows}
+    parameter_ref = render_analysis_entry_ref("parameters", analysis_refs)
+    mix_ref = render_analysis_entry_ref("mix", analysis_refs)
     sections = []
 
     if detail.get("kind") == "wh_parameter_model":
@@ -883,13 +1007,13 @@ def build_method_modal_body(method):
         anchor_lines = []
         for anchor in detail.get("anchors", []):
             row = row_by_id.get(anchor.get("record_id"))
-            ref = render_single_source_ref(row)
+            literature_ref = render_analysis_entry_ref(anchor.get("record_id"), analysis_refs)
             anchor_lines.append(
                 f"""
                 <li>
-                  <p><strong>{escape(anchor.get('source_model', 'source'))}</strong> {ref}</p>
-                  <p>Observed literature value: <code>{escape(anchor.get('source_energy', 'n.d.'))}</code> {ref}</p>
-                  <p>Source parameter count: <code>{format_scalar(anchor.get('source_params'))}B</code>. Target parameter count: <code>{format_scalar(anchor.get('target_params'))}B</code>.</p>
+                  <p><strong>{escape(anchor.get('source_model', 'source'))}</strong></p>
+                  <p>Observed literature value: <code>{escape(anchor.get('source_energy', 'n.d.'))}</code> {literature_ref}</p>
+                  <p>Source parameter count: <code>{format_scalar(anchor.get('source_params'))}B</code>. Target parameter count: <code>{format_scalar(anchor.get('target_params'))}B</code>. {parameter_ref}</p>
                   <p>Applied parameter factor:</p>
                   <p>\\[
                   r_P = \\frac{{P_t}}{{P_s}} = \\frac{{{format_scalar(anchor.get('target_params'))}}}{{{format_scalar(anchor.get('source_params'))}}} = {format_scalar(anchor.get('parameter_factor'), 4)}
@@ -915,11 +1039,11 @@ def build_method_modal_body(method):
             f"""
             <div class="method-modal-section">
               <div class="math-label">3. Carbon derivation from the country mix</div>
-              <p>Carbon is not reused directly from the literature. It is derived from extrapolated energy using the retained country electricity mix, here <strong>{escape(target_country)}</strong>.</p>
+              <p>Carbon is not reused directly from the literature. It is derived from extrapolated energy using the retained country electricity mix, here <strong>{escape(target_country)}</strong> {mix_ref}.</p>
               <p>\\[
               CO2_{{unitaire}} = \\frac{{E_{{unitaire}}}}{{1000}} \\times CI_c
               \\]</p>
-              <p>Avec \\(CI_c = {format_scalar(target_carbon)}\\ \\text{{gCO2e/kWh}}\\).</p>
+              <p>Avec \\(CI_c = {format_scalar(target_carbon)}\\ \\text{{gCO2e/kWh}}\\) {mix_ref}.</p>
               <p>The unit result retained for this method then leads to the following annualized values: energy <code>{escape(method['energy'])}</code> and carbon <code>{escape(method['carbon'])}</code>.</p>
             </div>
             <div class="method-modal-section">
@@ -948,6 +1072,7 @@ def build_method_modal_body(method):
     ratio_value = detail.get("ratio")
     anchor_lines = []
     for anchor in anchors:
+        literature_ref = render_analysis_entry_ref(anchor.get("record_id"), analysis_refs)
         carbon_note = ""
         if anchor.get("source_carbon_intensity") is not None and target_carbon is not None:
             carbon_note = (
@@ -958,7 +1083,7 @@ def build_method_modal_body(method):
             f"""
             <li>
               <strong>{escape(anchor.get('source_model', 'source'))}</strong> ({escape(anchor.get('source_country', 'n.d.'))}) :
-              published energy <code>{escape(anchor.get('source_energy', 'n.d.'))}</code>,
+              published energy <code>{escape(anchor.get('source_energy', 'n.d.'))}</code> {literature_ref},
               applied ratio <code>{format_scalar(ratio_value)}</code>,
               energy per request <code>{escape(format_range_display(anchor.get('per_request_energy', {'low':0,'high':0}), 'energy'))}</code>,
               carbon per request <code>{escape(format_range_display(anchor.get('per_request_carbon', {'low':0,'high':0}), 'carbon'))}</code> ({carbon_note.strip() or 'target mix applied'}).
@@ -979,7 +1104,7 @@ def build_method_modal_body(method):
         <div class="method-modal-section">
           <div class="math-label">3. Averaging and annualization</div>
           <p>Retained annual energy: average of recalculated indicators × <code>{format_count(annual_requests)}</code> calls/year = <code>{escape(method['energy'])}</code>.</p>
-          <p>Retained annual carbon: average of recalculated indicators for <strong>{escape(target_country)}</strong> = <code>{escape(method['carbon'])}</code>.</p>
+          <p>Retained annual carbon: average of recalculated indicators for <strong>{escape(target_country)}</strong> {mix_ref} = <code>{escape(method['carbon'])}</code>.</p>
         </div>
         """
     )
@@ -1007,7 +1132,6 @@ def build_method_comparisons(records, parsed_payload, result):
                 "basis": translate_method_text(method.get("basis", "")),
                 "energy": format_result_card_display(method["annual_energy_wh"], "energy"),
                 "carbon": format_result_card_display(method["annual_carbon_gco2e"], "carbon"),
-                "refs": render_source_refs(rows),
                 "factor_rows": rows,
                 "annual_requests": annual_requests,
                 "annual_feature_uses": annual_feature_uses,
@@ -1019,6 +1143,7 @@ def build_method_comparisons(records, parsed_payload, result):
                 "target_country": target_country,
                 "target_grid_carbon_intensity": float(target_carbon) if target_carbon not in (None, "") else None,
                 "target_mix": target_mix,
+                "model_profile": result.get("model_profile") or {},
                 "detail": detail,
             }
         )
@@ -1036,7 +1161,6 @@ def render_method_comparisons(methods):
               <div class="result-method-kicker">Result</div>
               <h4>{escape(method['label'])}</h4>
             </div>
-            <div class="result-method-refs">{method['refs']}</div>
           </div>
           <p class="result-method-basis">{escape(method['basis'])}</p>
           <div class="result-method-metrics">
@@ -1062,7 +1186,7 @@ def render_method_comparisons(methods):
     """
 
 
-def render_method_calculation_details(methods):
+def render_method_calculation_details(methods, analysis_refs=None):
     if not methods:
         return ""
     blocks = "".join(
@@ -1073,10 +1197,9 @@ def render_method_calculation_details(methods):
               <div class="summary-kicker">Calculation details</div>
               <h3>{escape(method['label'])}</h3>
             </div>
-            <div class="result-method-refs">{method['refs']}</div>
           </div>
           <p class="summary-intro">{escape(method['basis'])}</p>
-          {build_method_modal_body(method)}
+          {build_method_modal_body(method, analysis_refs)}
         </article>
         """
         for method in methods
@@ -1407,7 +1530,7 @@ def render_bibliography_tab():
       <section class="panel reference-panel">
         <div class="summary-header">
             <div>
-            <div class="summary-kicker">References</div>
+            <div class="summary-kicker">Biliography</div>
             <h3>Source annex used in the site</h3>
           </div>
         </div>
@@ -1920,8 +2043,8 @@ def render_market_models_table(records):
         <button type="button" class="chart-tab-button" data-model-chart-control="metric-tab" data-metric-value="carbon" aria-selected="false">Carbon</button>
       </div>
       <div id="models-impact-chart" class="models-impact-chart" data-chart-rows='{escape(json.dumps(chart_rows, ensure_ascii=False), quote=True)}'></div>
-      <p class="summary-intro">The chart below shows the estimated central values for all catalog models under a standardized inference scenario corresponding to <strong>1 hour of active use</strong>: <strong>{requests_per_hour} interactions/hour</strong>, <strong>1000 input tokens</strong>, <strong>550 output tokens</strong>, and one LLM request per use. The hourly pace is derived from an average reading speed of <strong>{reading_wpm} words/min</strong> (Brysbaert, 2019) and a project convention of <strong>1 token ≈ {words_per_token} word</strong>.</p>
-      <p class="summary-intro models-benchmark-note">Benchmarks integrated into the chart, all expressed over one hour or rescaled to a comparable order of magnitude: household electricity from Purdue Extension measurements (fluorescent lamp ≈ 9.3 Wh over 1 h; laptop ≈ 32 Wh over 1 h) and a 1500 W electric space heater rescaled here to 11 minutes to obtain ≈ 275 Wh; for carbon, a 10-minute electric-heater benchmark recalculated with the US electricity mix retained by the project (0.25 kWh × 384 gCO2e/kWh ≈ 96 gCO2e), closer to the order of magnitude of the highest models in the inference scenario.</p>
+      <p class="summary-intro">The chart below shows the estimated central values for all catalog models under a standardized inference scenario corresponding to <strong>1 hour of active use</strong>: <strong>{requests_per_hour} interactions/hour</strong>, <strong>1000 input tokens</strong>, <strong>550 output tokens</strong>, and one LLM request per use. The hourly pace is derived from an average reading speed of <strong>{reading_wpm} words/min</strong> (<a href="https://www.sciencedirect.com/science/article/pii/S0749596X19300786" target="_blank" rel="noopener noreferrer">Brysbaert, 2019</a>) and a project convention of <strong>1 token ≈ {words_per_token} word</strong>.</p>
+      <p class="summary-intro models-benchmark-note">Benchmarks integrated into the chart, all expressed over one hour or rescaled to a comparable order of magnitude: household electricity from <a href="https://www.extension.purdue.edu/extmedia/4H/4-H-1015-W.pdf" target="_blank" rel="noopener noreferrer">Purdue Extension</a> measurements (fluorescent lamp ≈ 9.3 Wh over 1 h; laptop ≈ 32 Wh over 1 h) and a 1500 W electric space heater rescaled here to 11 minutes to obtain ≈ 275 Wh; for carbon, a 10-minute electric-heater benchmark recalculated with the <a href="https://ember-energy.org/latest-insights/us-electricity-2025-special-report/insight-4-rising-demand-pushes-up-emissions-slight/" target="_blank" rel="noopener noreferrer">US electricity mix retained by the project</a> (0.25 kWh × 384 gCO2e/kWh ≈ 96 gCO2e), closer to the order of magnitude of the highest models in the inference scenario.</p>
     </section>
     <section class="panel reference-panel">
       <div class="summary-header">
@@ -2106,8 +2229,49 @@ def factor_details(records, factor_ids):
     return rows
 
 
+def normalize_description_cache_key(description):
+    text = str(description or "").strip().lower()
+    return re.sub(r"\s+", " ", text)
+
+
+def load_analysis_runs():
+    if not ANALYSIS_LOG_PATH.exists():
+        return []
+    try:
+        current = json.loads(ANALYSIS_LOG_PATH.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return []
+    return current if isinstance(current, list) else []
+
+
+def find_cached_analysis(description):
+    cache_key = normalize_description_cache_key(description)
+    if not cache_key:
+        return None
+    for entry in reversed(load_analysis_runs()):
+        if entry.get("description_cache_key") == cache_key:
+            return entry
+        if normalize_description_cache_key(entry.get("description", "")) == cache_key:
+            return entry
+    return None
+
+
 def process_description(form):
     description = form.get("description", [""])[0]
+    cached_entry = find_cached_analysis(description)
+    if cached_entry:
+        parser_meta = dict(cached_entry.get("parser_meta") or {})
+        parser_meta["cache"] = {"hit": True}
+        return (
+            cached_entry.get("description", description),
+            cached_entry.get("parsed_payload") or {},
+            cached_entry.get("parser_notes") or [],
+            parser_meta,
+            cached_entry.get("result") or {},
+            cached_entry.get("factor_rows") or [],
+            cached_entry.get("method_comparisons") or [],
+        )
+
     moderation = moderate_application_description_with_openai(description)
     if moderation["decision"] != "allow":
         guidance = (
@@ -2127,31 +2291,26 @@ def process_description(form):
     result = estimate_feature_externalities(records, parsed_payload)
     rows = factor_details(records, result["selected_factors"])
     parser_meta["evidence"] = classify_evidence_level(parsed_payload, rows)
-    return description, parsed_payload, parser_notes, parser_meta, result, rows
+    parser_meta["cache"] = {"hit": False}
+    method_comparisons = build_method_comparisons(records, parsed_payload, result)
+    return description, parsed_payload, parser_notes, parser_meta, result, rows, method_comparisons
 
 
-def persist_analysis_run(description, parsed_payload, parser_notes, parser_meta, result, factor_rows):
+def persist_analysis_run(description, parsed_payload, parser_notes, parser_meta, result, factor_rows, method_comparisons):
     entry = {
         "analysis_date": datetime.now().astimezone().isoformat(),
         "description": description,
+        "description_cache_key": normalize_description_cache_key(description),
         "parsed_payload": parsed_payload,
         "parser_notes": parser_notes or [],
         "parser_meta": parser_meta or {},
         "result": result,
         "factor_rows": factor_rows or [],
+        "method_comparisons": method_comparisons or [],
     }
 
     ANALYSIS_LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
-    if ANALYSIS_LOG_PATH.exists():
-        try:
-            current = json.loads(ANALYSIS_LOG_PATH.read_text(encoding="utf-8"))
-            if not isinstance(current, list):
-                current = []
-        except json.JSONDecodeError:
-            current = []
-    else:
-        current = []
-
+    current = load_analysis_runs()
     current.append(entry)
     ANALYSIS_LOG_PATH.write_text(
         json.dumps(current, ensure_ascii=False, indent=2),
@@ -2159,7 +2318,7 @@ def persist_analysis_run(description, parsed_payload, parser_notes, parser_meta,
     )
 
 
-def render_page(result=None, description="", parsed_payload=None, parser_notes=None, parser_meta=None, factor_rows=None, error_message=None):
+def render_page(result=None, description="", parsed_payload=None, parser_notes=None, parser_meta=None, factor_rows=None, error_message=None, method_comparisons=None):
     error_block = ""
     if error_message:
         error_block = f"""
@@ -2238,7 +2397,10 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
     result_methods_block = ""
     if result:
         annual = result["annual_llm"]
-        method_comparisons = build_method_comparisons(load_records(), parsed_payload, result)
+        if method_comparisons is None:
+            method_comparisons = build_method_comparisons(load_records(), parsed_payload, result)
+        analysis_bibliography_entries = build_analysis_bibliography_entries(factor_rows, result)
+        analysis_bibliography_map = build_analysis_bibliography_map(analysis_bibliography_entries)
         result_methods_block = render_method_comparisons(method_comparisons)
         evidence = (parser_meta or {}).get("evidence", {})
         method_label = {
@@ -2267,10 +2429,11 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
           <p class="scope-note">Retained scope: only LLM inference externalities are included. Model training, software-system consumption, and ancillary infrastructure are excluded from the displayed estimate.</p>
           <p class="meta-inline">Evidence level: <strong>{escape(evidence.get('label', 'Unqualified'))}</strong></p>
           <p class="meta-inline">Method: <strong>{escape(method_label)}</strong></p>
-          <p class="meta-inline">Reference model: <strong>{escape(model_profile.get('model_id', parsed_payload.get('model_id', 'not specified')))}</strong>{' | Approx. active parameters: <strong>' + escape(format_parameter_billions(model_profile.get('active_parameters_billion'), is_estimated_parameter_status(model_profile.get('parameter_value_status')))) + '</strong>' if model_profile.get('active_parameters_billion') else ''}</p>
-          <p class="meta-inline">Electricity mix: <strong>{escape(country_mix.get('country_code', parsed_payload.get('country', 'not specified')))}</strong> <span class="method-basis">({escape(country_resolution_label)})</span>{' | ' + escape(country_mix.get('grid_carbon_intensity_gco2_per_kwh', '')) + ' gCO2e/kWh' if country_mix.get('grid_carbon_intensity_gco2_per_kwh') else ''}</p>
+          <p class="meta-inline">Reference model: <strong>{escape(model_profile.get('model_id', parsed_payload.get('model_id', 'not specified')))}</strong>{' | Approx. active parameters: <strong>' + escape(format_parameter_billions(model_profile.get('active_parameters_billion'), is_estimated_parameter_status(model_profile.get('parameter_value_status')))) + '</strong>' if model_profile.get('active_parameters_billion') else ''} {render_analysis_entry_ref('parameters', analysis_bibliography_map)}</p>
+          <p class="meta-inline">Electricity mix: <strong>{escape(country_mix.get('country_code', parsed_payload.get('country', 'not specified')))}</strong> <span class="method-basis">({escape(country_resolution_label)})</span>{' | ' + escape(country_mix.get('grid_carbon_intensity_gco2_per_kwh', '')) + ' gCO2e/kWh' if country_mix.get('grid_carbon_intensity_gco2_per_kwh') else ''} {render_analysis_entry_ref('mix', analysis_bibliography_map)}</p>
           {render_assumptions_summary(result)}
-          {render_method_calculation_details(method_comparisons)}
+          {render_method_calculation_details(method_comparisons, analysis_bibliography_map)}
+          {render_analysis_bibliography(analysis_bibliography_entries)}
         </section>
         """
 
@@ -2282,36 +2445,46 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
       </header>
       <form class="panel" method="post" action="{app_url('/')}" id="estimate-form">
         <label for="description">Describe your application in natural language to obtain an inference estimate, its assumptions, and its source-linked calculation details.</label>
-        <textarea id="description" name="description" placeholder="Example 1: We have a customer-support assistant based on GPT-4o-mini, used about 4,000 times per month in France by our support team.
-
-Example 2: We use Claude 3.5 Sonnet in our app to summarize internal documents for around 120 consultants, with about 15,000 summaries generated per month.
-
-Example 3: We have a RAG assistant based on Mistral Large, with a vector database and logging, used by about 800 employees and handling roughly 25,000 requests per month. If you know them, you can also add token volumes or request counts.">{escape(description)}</textarea>
+        <textarea id="description" name="description" placeholder="Describe your AI-enabled application in natural language...">{escape(description)}</textarea>
+        <div class="example-prompts" aria-label="Application examples">
+          <p class="example-prompts-label">Examples</p>
+          <button type="button" class="example-prompt" data-example-prompt="We have a customer-support assistant based on GPT-4o-mini, used about 4,000 times per month in France by our support team.">We have a customer-support assistant based on GPT-4o-mini, used about 4,000 times per month in France by our support team.</button>
+          <button type="button" class="example-prompt" data-example-prompt="We use Claude 3.5 Sonnet in our app to summarize internal documents for around 120 consultants, with about 15,000 summaries generated per month.">We use Claude 3.5 Sonnet in our app to summarize internal documents for around 120 consultants, with about 15,000 summaries generated per month.</button>
+          <button type="button" class="example-prompt" data-example-prompt="We have a RAG assistant based on Mistral Large, with a vector database and logging, used by about 800 employees and handling roughly 25,000 requests per month. If you know them, you can also add token volumes or request counts.">We have a RAG assistant based on Mistral Large, with a vector database and logging, used by about 800 employees and handling roughly 25,000 requests per month. If you know them, you can also add token volumes or request counts.</button>
+        </div>
         <button type="submit" id="submit-button">
           <span class="spinner" aria-hidden="true"></span>
           <span class="default-text">Estimate application</span>
           <span class="loading-text">Estimating...</span>
         </button>
       </form>
-      {result_methods_block}
-      {error_block}
-      {result_block}
+      <div id="results-anchor">
+        {result_methods_block}
+        {error_block}
+        {result_block}
+      </div>
     </section>
     """
     observatory_tab = f"""
     <section class="tab-panel" id="tab-observatory-panel" data-tab-panel="observatory">
-      <nav class="subtabs" aria-label="Observatory">
-        <button type="button" class="subtab-button is-active" data-subtab-target="observatory-inference">Inference</button>
-        <button type="button" class="subtab-button" data-subtab-target="observatory-training">Training</button>
-      </nav>
+      <div class="observatory-layout">
+        <aside class="observatory-sidebar">
+          <nav class="subtabs" aria-label="Referential">
+            <button type="button" class="subtab-button is-active" data-subtab-target="observatory-inference">Inference</button>
+            <button type="button" class="subtab-button" data-subtab-target="observatory-training">Training</button>
+          </nav>
+        </aside>
 
-      <section class="subtab-panel is-active" id="subtab-observatory-inference-panel" data-subtab-panel="observatory-inference">
-        {market_models_block}
-      </section>
+        <div class="observatory-content">
+          <section class="subtab-panel is-active" id="subtab-observatory-inference-panel" data-subtab-panel="observatory-inference">
+            {market_models_block}
+          </section>
 
-      <section class="subtab-panel" id="subtab-observatory-training-panel" data-subtab-panel="observatory-training">
-        {training_models_block}
-      </section>
+          <section class="subtab-panel" id="subtab-observatory-training-panel" data-subtab-panel="observatory-training">
+            {training_models_block}
+          </section>
+        </div>
+      </div>
     </section>
     """
 
@@ -2838,31 +3011,51 @@ Example 3: We have a RAG assistant based on Mistral Large, with a vector databas
     .tab-panel.is-active {{
       display: block;
     }}
+    .observatory-layout {{
+      display: grid;
+      grid-template-columns: 190px minmax(0, 1fr);
+      gap: 2rem;
+      align-items: start;
+    }}
+    .observatory-sidebar {{
+      position: sticky;
+      top: 1.25rem;
+      align-self: start;
+    }}
+    .observatory-content {{
+      min-width: 0;
+    }}
     .subtabs {{
       display: flex;
-      gap: 1rem;
-      margin: 0 0 1.5rem;
-      flex-wrap: wrap;
+      flex-direction: column;
+      gap: 0.45rem;
+      margin: 0;
+      padding-right: 1rem;
+      border-right: 1px solid var(--line);
     }}
     .subtab-button {{
       appearance: none;
-      border: 0;
-      border-bottom: 1px solid transparent;
+      border: 1px solid transparent;
+      border-radius: 0.4rem;
       background: transparent;
       color: var(--muted);
-      padding: 0.25rem 0 0.45rem;
+      padding: 0.72rem 0.85rem;
       font: inherit;
       font-size: 0.98rem;
       font-weight: 600;
       cursor: pointer;
-      margin: 0 1.1rem 0 0;
+      margin: 0;
+      text-align: left;
+      transition: border-color 120ms ease, color 120ms ease, background 120ms ease;
     }}
     .subtab-button:hover {{
-      border-color: rgba(36,59,99,0.35);
+      border-color: rgba(36,59,99,0.18);
+      background: rgba(36,59,99,0.04);
     }}
     .subtab-button.is-active {{
       color: var(--accent);
-      border-color: rgb(140, 122, 91);
+      border-color: rgba(140, 122, 91, 0.55);
+      background: rgba(140, 122, 91, 0.08);
     }}
     .subtab-panel {{
       display: none;
@@ -2923,6 +3116,58 @@ Example 3: We have a RAG assistant based on Mistral Large, with a vector databas
     .table-search-input {{
       max-width: 420px;
       padding: 0.8rem 0.9rem;
+    }}
+    .example-prompts {{
+      display: grid;
+      gap: 0.65rem;
+      margin: 0.9rem 0 1rem;
+    }}
+    .example-prompts-label {{
+      margin: 0;
+      font-size: 0.84rem;
+      font-weight: 700;
+      letter-spacing: 0.01em;
+      color: var(--ink);
+    }}
+    .example-prompt {{
+      appearance: none;
+      border: 1px solid rgba(140, 122, 91, 0.28);
+      border-radius: 0.45rem;
+      background: rgba(140, 122, 91, 0.08);
+      color: var(--ink);
+      padding: 0.85rem 0.95rem;
+      font: inherit;
+      font-size: 0.95rem;
+      line-height: 1.6;
+      text-align: left;
+      cursor: pointer;
+      transition: border-color 120ms ease, background 120ms ease;
+    }}
+    .example-prompt:hover {{
+      border-color: rgba(36,59,99,0.28);
+      background: rgba(36,59,99,0.05);
+    }}
+    .analysis-bibliography {{
+      margin-top: 1.5rem;
+      padding-top: 1rem;
+      border-top: 1px solid var(--line);
+    }}
+    .analysis-bibliography-list {{
+      margin: 0.55rem 0 0;
+      padding-left: 1.15rem;
+      color: var(--ink);
+    }}
+    .analysis-bibliography-item + .analysis-bibliography-item {{
+      margin-top: 0.65rem;
+    }}
+    .analysis-bibliography-number {{
+      font-weight: 700;
+      margin-right: 0.35rem;
+      color: var(--ink);
+    }}
+    .analysis-bibliography-label {{
+      font-weight: 700;
+      color: var(--ink);
     }}
     .models-chart-panel {{
       margin-bottom: 1.5rem;
@@ -3197,6 +3442,20 @@ Example 3: We have a RAG assistant based on Mistral Large, with a vector databas
       .hero-logo {{ width: min(240px, 68vw); }}
       .tabs {{ align-items: flex-start; }}
       .language-control {{ margin-left: 0; }}
+      .observatory-layout {{ grid-template-columns: 1fr; gap: 1.25rem; }}
+      .observatory-sidebar {{ position: static; }}
+      .subtabs {{
+        flex-direction: row;
+        flex-wrap: wrap;
+        gap: 0.75rem;
+        padding-right: 0;
+        padding-bottom: 0.8rem;
+        border-right: 0;
+        border-bottom: 1px solid var(--line);
+      }}
+      .subtab-button {{
+        padding: 0.55rem 0.75rem;
+      }}
       .submetrics {{ grid-template-columns: 1fr; }}
       .summary-header {{ flex-direction: column; align-items: flex-start; }}
       .result-method-metrics {{ grid-template-columns: 1fr; }}
@@ -3209,11 +3468,11 @@ Example 3: We have a RAG assistant based on Mistral Large, with a vector databas
       <button type="button" class="tab-button logo-tab is-active" data-tab-target="home" aria-label="Home">
         <span class="nav-logo" aria-hidden="true">{render_logo_markup()}</span>
       </button>
-      <button type="button" class="tab-button" data-tab-target="observatory">Observatory</button>
+      <button type="button" class="tab-button" data-tab-target="observatory">Referential</button>
       <button type="button" class="tab-button" data-tab-target="method">Method</button>
       <button type="button" class="tab-button" data-tab-target="cite">Cite</button>
       <button type="button" class="tab-button" data-tab-target="contact">Contact</button>
-      <button type="button" class="tab-button" data-tab-target="bibliography">References</button>
+      <button type="button" class="tab-button" data-tab-target="bibliography">Biliography</button>
       <div class="language-control">
         <span class="language-links" aria-label="Language selector">
           <a href="#" class="language-link is-active" data-language-option="en">EN</a>
@@ -3232,7 +3491,10 @@ Example 3: We have a RAG assistant based on Mistral Large, with a vector databas
   </main>
   <script>
     const estimateForm = document.getElementById('estimate-form');
+    const descriptionInput = document.getElementById('description');
+    const resultsAnchor = document.getElementById('results-anchor');
     const submitButton = document.getElementById('submit-button');
+    const examplePromptButtons = Array.from(document.querySelectorAll('[data-example-prompt]'));
     const languageLinks = Array.from(document.querySelectorAll('[data-language-option]'));
     const tabButtons = Array.from(document.querySelectorAll('[data-tab-target]'));
     const tabPanels = Array.from(document.querySelectorAll('[data-tab-panel]'));
@@ -3254,7 +3516,8 @@ Example 3: We have a RAG assistant based on Mistral Large, with a vector databas
         navAriaLabel: 'Main navigation',
         homeAriaLabel: 'Home',
         languageLabel: 'Language',
-        estimatePlaceholder: 'Example 1: We have a customer-support assistant based on GPT-4o-mini, used about 4,000 times per month in France by our support team.\\n\\nExample 2: We use Claude 3.5 Sonnet in our app to summarize internal documents for around 120 consultants, with about 15,000 summaries generated per month.\\n\\nExample 3: We have a RAG assistant based on Mistral Large, with a vector database and logging, used by about 800 employees and handling roughly 25,000 requests per month. If you know them, you can also add token volumes or request counts.',
+        estimatePlaceholder: 'Describe your AI-enabled application in natural language...',
+        examplePromptsLabel: 'Examples',
         marketSearchPlaceholder: 'Example: GPT, Claude, Mistral, US, 70B',
         trainingSearchPlaceholder: 'Example: GPT, Claude, 70B, Meta',
         noData: 'No data available for this selection.',
@@ -3271,13 +3534,17 @@ Example 3: We have a RAG assistant based on Mistral Large, with a vector databas
         comparisonTrainingSuffix: ' indicator.',
         modelsAriaLabel: 'Comparative chart of models',
         trainingAriaLabel: 'Comparative chart of training impacts',
+        examplePrompt1: 'We have a customer-support assistant based on GPT-4o-mini, used about 4,000 times per month in France by our support team.',
+        examplePrompt2: 'We use Claude 3.5 Sonnet in our app to summarize internal documents for around 120 consultants, with about 15,000 summaries generated per month.',
+        examplePrompt3: 'We have a RAG assistant based on Mistral Large, with a vector database and logging, used by about 800 employees and handling roughly 25,000 requests per month. If you know them, you can also add token volumes or request counts.',
       }},
       fr: {{
         title: 'Données ouvertes sur l’empreinte environnementale des LLM',
         navAriaLabel: 'Navigation principale',
         homeAriaLabel: 'Accueil',
         languageLabel: 'Langue',
-        estimatePlaceholder: 'Exemple 1 : nous avons un assistant de support client basé sur GPT-4o-mini, utilisé environ 4 000 fois par mois en France par notre équipe support.\\n\\nExemple 2 : nous utilisons Claude 3.5 Sonnet dans notre application pour résumer des documents internes pour environ 120 consultants, avec près de 15 000 résumés générés par mois.\\n\\nExemple 3 : nous avons un assistant RAG basé sur Mistral Large, avec une base vectorielle et de la journalisation, utilisé par environ 800 collaborateurs et traitant près de 25 000 requêtes par mois. Si vous les connaissez, vous pouvez aussi ajouter des volumes de tokens ou des nombres de requêtes.',
+        estimatePlaceholder: 'Décrivez votre application intégrant de l’IA en langage naturel...',
+        examplePromptsLabel: 'Exemples',
         marketSearchPlaceholder: 'Exemple : GPT, Claude, Mistral, US, 70B',
         trainingSearchPlaceholder: 'Exemple : GPT, Claude, 70B, Meta',
         noData: 'Aucune donnée disponible pour cette sélection.',
@@ -3294,11 +3561,15 @@ Example 3: We have a RAG assistant based on Mistral Large, with a vector databas
         comparisonTrainingSuffix: '.',
         modelsAriaLabel: 'Graphique comparatif des modèles',
         trainingAriaLabel: 'Graphique comparatif des impacts d’entraînement',
+        examplePrompt1: 'Nous avons un assistant de support client basé sur GPT-4o-mini, utilisé environ 4 000 fois par mois en France par notre équipe support.',
+        examplePrompt2: 'Nous utilisons Claude 3.5 Sonnet dans notre application pour résumer des documents internes pour environ 120 consultants, avec près de 15 000 résumés générés par mois.',
+        examplePrompt3: 'Nous avons un assistant RAG basé sur Mistral Large, avec une base vectorielle et de la journalisation, utilisé par environ 800 collaborateurs et traitant près de 25 000 requêtes par mois.',
       }}
     }};
     const textReplacements = [
       ['Home', 'Accueil'],
-      ['Observatory', 'Observatoire'],
+      ['Observatory', 'Référentiel'],
+      ['Referential', 'Référentiel'],
       ['Method', 'Méthode'],
       ['Documentation', 'Documentation'],
       ['Cite', 'Citer'],
@@ -3308,13 +3579,15 @@ Example 3: We have a RAG assistant based on Mistral Large, with a vector databas
       ['Arnault Pachot is a researcher and entrepreneur, founder of OpenStudio and now founder of Emotia. He works on responsible digital transformation, Green IT, and decision-oriented AI systems. He co-authored the Dunod book ', 'Arnault Pachot est chercheur et entrepreneur, fondateur d’OpenStudio puis d’Emotia. Il travaille sur la transformation numérique responsable, le Green IT et les systèmes d’IA orientés décision. Il a coécrit chez Dunod l’ouvrage '],
       [' dedicated to practical pathways for environmentally responsible AI.', ', consacré à des trajectoires concrètes pour une IA écologiquement responsable.'],
       ['Thierry Petit is a senior AI researcher and scientific leader with more than twenty years of academic and R&D experience in Europe and the United States. His work spans trustworthy AI, simulation, optimization, and decision-grade platforms. At Emotia and Pollitics, he leads the scientific direction of systems designed to remain both operationally useful and methodologically robust.', 'Thierry Petit est chercheur senior en intelligence artificielle et directeur scientifique, avec plus de vingt ans d’expérience académique et de R&D en Europe et aux États-Unis. Ses travaux couvrent l’IA de confiance, la simulation, l’optimisation et les plateformes d’aide à la décision. Chez Emotia et Pollitics, il pilote la direction scientifique de systèmes conçus pour rester à la fois utiles opérationnellement et robustes méthodologiquement.'],
-      ['References', 'Références'],
+      ['References', 'Bibliographie'],
+      ['Biliography', 'Bibliographie'],
       ['Inference', 'Inférence'],
       ['Training', 'Entraînement'],
       ['Estimate application', 'Estimer l’application'],
       ['Estimating...', 'Estimation...'],
       ['Short reference.', 'Référence courte.'],
       ['Download PDF', 'Télécharger le PDF'],
+      ['An Open Tool for Exploring and Estimating the Environmental Footprint of Large Language Models', 'Un outil ouvert pour explorer et estimer l’empreinte environnementale des grands modèles de langage'],
       ['ImpactLLM is designed as a transparent screening tool, not as a black-box score. The core idea is to start from the few environmental values that are actually published in the literature, preserve their native units, and reuse them through explicit multiples rather than hidden heuristics.', 'ImpactLLM est conçu comme un outil transparent de screening, et non comme un score boîte noire. L’idée centrale consiste à partir des quelques valeurs environnementales réellement publiées dans la littérature, à préserver leurs unités natives, puis à les réutiliser via des multiples explicites plutôt que des heuristiques cachées.'],
       ['1. Source-linked literature anchors.', '1. Ancrages bibliographiques reliés aux sources.'],
       ['The method starts from published indicators such as ', 'La méthode part d’indicateurs publiés tels que '],
@@ -3441,6 +3714,7 @@ Example 3: We have a RAG assistant based on Mistral Large, with a vector databas
     ];
     const attributeTranslations = [
       ['#description', 'placeholder', 'estimatePlaceholder'],
+      ['.example-prompts-label', 'textContent', 'examplePromptsLabel'],
       ['#market-model-search', 'placeholder', 'marketSearchPlaceholder'],
       ['#training-model-search', 'placeholder', 'trainingSearchPlaceholder'],
       ['nav.tabs', 'aria-label', 'navAriaLabel'],
@@ -3500,6 +3774,15 @@ Example 3: We have a RAG assistant based on Mistral Large, with a vector databas
       document.title = locale.title;
       document.documentElement.lang = lang;
     }}
+    function updateExamplePrompts(lang) {{
+      const locale = uiText[lang] || uiText.en;
+      const prompts = [locale.examplePrompt1, locale.examplePrompt2, locale.examplePrompt3];
+      examplePromptButtons.forEach((button, index) => {{
+        const value = prompts[index] || '';
+        button.textContent = value;
+        button.setAttribute('data-example-prompt', value);
+      }});
+    }}
     function applyTextTranslations(lang) {{
       const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, {{
         acceptNode(node) {{
@@ -3536,6 +3819,7 @@ Example 3: We have a RAG assistant based on Mistral Large, with a vector databas
       }});
       safeStorageSet(LANGUAGE_STORAGE_KEY, normalized);
       applyAttributeTranslations(normalized);
+      updateExamplePrompts(normalized);
       applyTextTranslations(normalized);
       renderModelsChart();
       renderTrainingChart();
@@ -3546,6 +3830,15 @@ Example 3: We have a RAG assistant based on Mistral Large, with a vector databas
         submitButton.classList.add('is-loading');
       }});
     }}
+    examplePromptButtons.forEach((button) => {{
+      button.addEventListener('click', function () {{
+        if (!descriptionInput) return;
+        const value = button.getAttribute('data-example-prompt') || '';
+        descriptionInput.value = value;
+        descriptionInput.focus();
+        descriptionInput.setSelectionRange(descriptionInput.value.length, descriptionInput.value.length);
+      }});
+    }});
     function activateTab(target) {{
       let matched = false;
       tabButtons.forEach((item) => {{
@@ -3613,6 +3906,11 @@ Example 3: We have a RAG assistant based on Mistral Large, with a vector databas
       applyHashNavigation();
     }});
     applyHashNavigation();
+    if (resultsAnchor && resultsAnchor.textContent.trim()) {{
+      window.requestAnimationFrame(() => {{
+        resultsAnchor.scrollIntoView({{ behavior: 'smooth', block: 'start' }});
+      }});
+    }}
     searchInputs.forEach((input) => {{
       input.addEventListener('input', function () {{
         const tableId = input.getAttribute('data-table-search');
@@ -3919,12 +4217,13 @@ class Handler(BaseHTTPRequestHandler):
         description = form.get("description", [""])[0]
 
         try:
-            description, parsed_payload, parser_notes, parser_meta, result, rows = process_description(form)
+            description, parsed_payload, parser_notes, parser_meta, result, rows, method_comparisons = process_description(form)
         except (OpenAIModerationError, OpenAIParserError) as exc:
             self._write_html(render_page(description=description, error_message=str(exc)), status=502)
             return
 
-        persist_analysis_run(description, parsed_payload, parser_notes, parser_meta, result, rows)
+        if not ((parser_meta or {}).get("cache") or {}).get("hit"):
+            persist_analysis_run(description, parsed_payload, parser_notes, parser_meta, result, rows, method_comparisons)
 
         self._write_html(
             render_page(
@@ -3934,6 +4233,7 @@ class Handler(BaseHTTPRequestHandler):
                 parser_notes=parser_notes,
                 parser_meta=parser_meta,
                 factor_rows=rows,
+                method_comparisons=method_comparisons,
             )
         )
 
