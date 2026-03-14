@@ -1,17 +1,21 @@
-# Publications scientifiques
+# ImpactLLM
 
-Each publication project should live in its own dedicated folder at the repository root.
+ImpactLLM is an open project for exploring and estimating the environmental footprint of large language models.
 
-Recommended layout:
+This repository currently brings together:
 
-- one folder per publication project
-- one main `.tex` file per project
-- one `.bib` file per project
-- generated artifacts kept inside the same project folder
+- `llm-environment-opendata/`: the web application, dataset, local API, MCP server, and estimation logic
+- `llm-environment-opendata-paper/`: the scientific paper and bibliography
 
-Current projects:
+Main public entry points:
 
-- `synthetic-populations-llms-state-of-the-art/`
-- `ia-et-environnement-etat-de-l-art/`
-- `llm-environment-opendata/`
-- `llm-environment-opendata-paper/`
+- Demo: `https://dev.emotia.com/impact-llm/`
+- Paper PDF: `https://dev.emotia.com/impact-llm/downloads/llm_environment_opendata_paper.pdf`
+
+To start with the software stack, see:
+
+- [`llm-environment-opendata/README.md`](/Users/apachot/Documents/GitHub/Publications%20scientifiques/llm-environment-opendata/README.md)
+
+To start with the publication materials, see:
+
+- [`llm-environment-opendata-paper/README.md`](/Users/apachot/Documents/GitHub/Publications%20scientifiques/llm-environment-opendata-paper/README.md)
