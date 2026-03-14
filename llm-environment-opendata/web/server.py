@@ -2363,6 +2363,9 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
       </section>
     </section>
     """
+    contact_refs = load_bibliography_index()
+    contact_book_ref = format_bib_entry_apa(contact_refs.get("pachot2022book", {}))
+    contact_article_ref = format_bib_entry_apa(contact_refs.get("pachot2023sustainableai", {}))
     contact_tab = f"""
     <section class="tab-panel" id="tab-contact-panel" data-tab-panel="contact">
       <section class="panel reference-panel">
@@ -2371,11 +2374,13 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
           <p>We work on responsible AI with a focus on methodological rigor, traceability, and real-world decision support. Our work combines scientific research, product design, and operational deployment to make AI systems more transparent, more accountable, and more useful in practice.</p>
           <p><strong>Arnault Pachot</strong></p>
           <p>Arnault Pachot is a researcher and entrepreneur, founder of OpenStudio and now founder of Emotia. He works on responsible digital transformation, Green IT, and decision-oriented AI systems. He co-authored the Dunod book <em>Intelligence artificielle et environnement : alliance ou nuisance ?</em>, dedicated to practical pathways for environmentally responsible AI.</p>
-          <p><a href="mailto:{obfuscate_email('apachot@pollitics.com')}">{obfuscate_email('apachot@pollitics.com')}</a></p>
           <p><strong>Thierry Petit</strong></p>
           <p>Thierry Petit is a senior AI researcher and scientific leader with more than twenty years of academic and R&amp;D experience in Europe and the United States. His work spans trustworthy AI, simulation, optimization, and decision-grade platforms. At Emotia and Pollitics, he leads the scientific direction of systems designed to remain both operationally useful and methodologically robust.</p>
-          <p><a href="mailto:{obfuscate_email('tpetit@pollitics.com')}">{obfuscate_email('tpetit@pollitics.com')}</a></p>
-          <p class="summary-intro">Email addresses are obfuscated in the page source to reduce basic scraping.</p>
+          <p><strong>Selected references</strong></p>
+          <ul class="analysis-bibliography-list">
+            <li class="analysis-bibliography-item">{escape(contact_book_ref)}</li>
+            <li class="analysis-bibliography-item">{escape(contact_article_ref)}</li>
+          </ul>
         </div>
       </section>
     </section>
