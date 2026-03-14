@@ -242,11 +242,12 @@ def get_model_profile(model_id=None, provider=None, estimated_active_parameters_
             result["matching_strategy"] = "model_id"
             return result
 
-    for profile in load_models():
-        if normalized_provider and normalize_identifier(profile.get("provider")) == normalized_provider:
-            result = dict(profile)
-            result["matching_strategy"] = "provider_family"
-            return result
+    if not normalized_model:
+        for profile in load_models():
+            if normalized_provider and normalize_identifier(profile.get("provider")) == normalized_provider:
+                result = dict(profile)
+                result["matching_strategy"] = "provider_family"
+                return result
 
     return None
 
@@ -779,6 +780,7 @@ def build_inference_method_set(records, payload):
     annual_feature_uses = feature_uses_per_month * months_per_year
     annual_requests = annual_feature_uses * requests_per_feature
     total_tokens = input_tokens + output_tokens
+    prompt_token_ratio = compute_token_ratio(input_tokens, output_tokens)
     reference_page_tokens = REFERENCE_PAGE_TOKENS
     page_method_applicable = bool(payload.get("page_method_applicable", False))
     parser_page_equivalent = to_float(payload.get("output_page_equivalents_per_request", 0.0), default=0.0)
@@ -846,7 +848,9 @@ def build_inference_method_set(records, payload):
             family_groups[family].append(anchor)
 
     if family_groups["prompt_query"]:
-        assumptions.append("A prompt/query calibration is computed from the mean Wh per parameter observed in prompt/query inference records")
+        assumptions.append(
+            f"A prompt/query proxy is calibrated from {len(family_groups['prompt_query'])} prompt/query anchor(s), then adjusted by a token ratio relative to {int(REFERENCE_PROMPT_TOKENS)} tokens"
+        )
     if family_groups["page"]:
         if page_method_applicable:
             assumptions.append("A page calibration is computed from the mean Wh per parameter observed in page-generation inference records")
@@ -867,20 +871,27 @@ def build_inference_method_set(records, payload):
             continue
         mean_intensity = sum(intensities) / len(intensities)
         target_energy_wh = (mean_intensity * target_params) if target_params not in (None, 0) else sum(anchor["source_energy_wh"] for anchor in family_anchors) / len(family_anchors)
+        if family_name == "prompt_query":
+            target_energy_wh *= prompt_token_ratio
         target_carbon = wh_to_gco2e(target_energy_wh, grid_carbon_intensity) if grid_carbon_intensity is not None else 0.0
         target_water = wh_to_liters(target_energy_wh, water_intensity) * 1000.0 if water_intensity is not None else 0.0
         annual_multiplier = annual_requests if family_name == "prompt_query" else annual_page_equivalents
         scaled_family_anchors = []
         for anchor in family_anchors:
             parameter_factor = (target_params / anchor["source_params"]) if (target_params not in (None, 0) and anchor.get("source_params") not in (None, 0)) else 1.0
+            token_factor = prompt_token_ratio if family_name == "prompt_query" else 1.0
+            anchor_energy = anchor["source_energy_wh"] * parameter_factor * token_factor
+            anchor_carbon = wh_to_gco2e(anchor_energy, grid_carbon_intensity) if grid_carbon_intensity is not None else 0.0
+            anchor_water = wh_to_liters(anchor_energy, water_intensity) * 1000.0 if water_intensity is not None else 0.0
             scaled_family_anchors.append(
                 {
                     **anchor,
                     "target_params": target_params,
                     "parameter_factor": parameter_factor,
-                    "per_request_energy": rounded_range(anchor["source_energy_wh"] * parameter_factor, anchor["source_energy_wh"] * parameter_factor, anchor["source_energy_wh"] * parameter_factor),
-                    "per_request_carbon": rounded_range(wh_to_gco2e(anchor["source_energy_wh"] * parameter_factor, grid_carbon_intensity) if grid_carbon_intensity is not None else 0.0, wh_to_gco2e(anchor["source_energy_wh"] * parameter_factor, grid_carbon_intensity) if grid_carbon_intensity is not None else 0.0, wh_to_gco2e(anchor["source_energy_wh"] * parameter_factor, grid_carbon_intensity) if grid_carbon_intensity is not None else 0.0),
-                    "per_request_water": rounded_range(wh_to_liters(anchor["source_energy_wh"] * parameter_factor, water_intensity) * 1000.0 if water_intensity is not None else 0.0, wh_to_liters(anchor["source_energy_wh"] * parameter_factor, water_intensity) * 1000.0 if water_intensity is not None else 0.0, wh_to_liters(anchor["source_energy_wh"] * parameter_factor, water_intensity) * 1000.0 if water_intensity is not None else 0.0),
+                    "token_factor": token_factor,
+                    "per_request_energy": rounded_range(anchor_energy, anchor_energy, anchor_energy),
+                    "per_request_carbon": rounded_range(anchor_carbon, anchor_carbon, anchor_carbon),
+                    "per_request_water": rounded_range(anchor_water, anchor_water, anchor_water),
                     "source_carbon_intensity": None,
                     "source_water_intensity": None,
                 }
@@ -889,8 +900,8 @@ def build_inference_method_set(records, payload):
         methods.append(
             {
                 "method_id": method_id,
-                "label": "Moyenne Wh/prompt|requête" if family_name == "prompt_query" else "Moyenne Wh/page",
-                "basis": "Moyenne des intensités énergétiques Wh/paramètre calibrées sur les ancrages prompt/requête." if family_name == "prompt_query" else "Moyenne des intensités énergétiques Wh/paramètre calibrées sur les ancrages page.",
+                "label": "Proxy Wh/prompt|requête" if family_name == "prompt_query" else "Proxy Wh/page",
+                "basis": "Proxy paramétrique Wh/prompt|requête calibré sur les ancrages de la littérature, avec ajustement simple au volume de tokens." if family_name == "prompt_query" else "Proxy paramétrique Wh/page calibré sur les ancrages de génération de pages de la littérature.",
                 "record_ids": [anchor["record_id"] for anchor in family_anchors],
                 "annual_energy_wh": scale_range(rounded_range(target_energy_wh, target_energy_wh, target_energy_wh), annual_multiplier),
                 "annual_carbon_gco2e": scale_range(rounded_range(target_carbon, target_carbon, target_carbon), annual_multiplier),
@@ -909,7 +920,9 @@ def build_inference_method_set(records, payload):
                     "standard_request": standard_request,
                     "aggregation": "mean_wh_per_parameter",
                     "family": family_name,
+                    "family_anchor_count": len(family_anchors),
                     "mean_intensity_wh_per_billion": mean_intensity,
+                    "prompt_token_ratio": prompt_token_ratio if family_name == "prompt_query" else None,
                     "reference_page_tokens": reference_page_tokens,
                     "pages_per_request_equivalent": pages_per_request_equivalent,
                     "annual_page_equivalents": annual_page_equivalents,
@@ -1325,7 +1338,10 @@ def build_training_market_predictions(records):
 
 
 def compute_token_ratio(input_tokens, output_tokens):
-    return 1.0
+    total_tokens = to_float(input_tokens, default=0.0) + to_float(output_tokens, default=0.0)
+    if total_tokens <= 0:
+        total_tokens = REFERENCE_PROMPT_TOKENS
+    return clamp(total_tokens / REFERENCE_PROMPT_TOKENS, 0.25, 6.0)
 
 
 def clamp(value, low, high):

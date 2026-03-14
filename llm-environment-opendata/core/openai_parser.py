@@ -72,7 +72,6 @@ def parse_application_description_with_openai(text):
         "country": parsed.get("country", "FR"),
         "grid_carbon_intensity_gco2_per_kwh": to_float(parsed.get("grid_carbon_intensity_gco2_per_kwh"), 40.0),
         "water_intensity_l_per_kwh": to_float(parsed.get("water_intensity_l_per_kwh"), 0.4),
-        "software_components": normalize_components(parsed.get("software_components")),
     }
     parser_notes = parsed.get("parser_notes", [])
     if not isinstance(parser_notes, list):
@@ -200,13 +199,6 @@ def build_messages(text):
         "country": "FR",
         "grid_carbon_intensity_gco2_per_kwh": 40,
         "water_intensity_l_per_kwh": 0.4,
-        "software_components": [
-            {
-                "component_type": "application_server",
-                "energy_wh_per_feature": 0.08,
-                "description": "application server and orchestration"
-            }
-        ],
         "parser_notes": [
             "List every assumption or default introduced by the model."
         ]
@@ -218,7 +210,7 @@ def build_messages(text):
         "If the user omits a value, insert a conservative default and explain it in parser_notes. "
         "Estimate whether the page-based method is relevant. Set page_method_applicable to true only when the scenario plausibly generates or transforms document-like outputs that can be expressed in 500-word pages. "
         "Estimate output_page_equivalents_per_request as the number of generated 500-word pages per LLM request. For support chat, assistant, or short-answer scenarios, this value should usually be well below 1. "
-        "Always provide a non-empty software_components list. "
+        "Do not estimate non-LLM software components: this parser supports inference-only screening. "
         "Return numeric values as numbers, not strings. "
         "Do not output markdown or prose outside JSON."
     )

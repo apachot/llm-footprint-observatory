@@ -686,6 +686,8 @@ def humanize_assumption(text):
         "because the model is treated as a proprietary hosted service": "because the model is treated as a hosted proprietary service.",
         "Carbon and water recalculated with the project country mix for": "Carbon is recalculated using the project-country electricity mix for",
         "because the model is treated as open-weight or self-hosted": "because the model is treated as open-weight or self-hosted.",
+        "A prompt/query proxy is calibrated from": "A prompt/query proxy is calibrated from",
+        "prompt/query anchor(s), then adjusted by a token ratio relative to": "prompt/query anchor(s), then adjusted by a token ratio relative to",
         "Page-based method anchored on the nearest available source model in parameter count:": "Page-based method anchored on the nearest available source model by parameter count:",
         "Final central result uses the prompt-based method only because no empirical prompt-to-page conversion is available and the target model is treated as a hosted proprietary service": "The final central result uses only the prompt-based method because no empirical prompt-to-page conversion is available and the target model is treated as a hosted proprietary service.",
         "Final central result uses the page-based method only because no empirical prompt-to-page conversion is available and the target model is treated as open-weight or self-hosted": "The final central result uses only the page-based method because no empirical prompt-to-page conversion is available and the target model is treated as open-weight or self-hosted.",
@@ -869,10 +871,10 @@ def render_assumptions_summary(result):
 def translate_method_text(value):
     text = str(value or "")
     replacements = {
-        "Moyenne Wh/prompt|requête": "Average Wh/prompt|request",
-        "Moyenne Wh/page": "Average Wh/page",
-        "Moyenne des intensités énergétiques Wh/paramètre calibrées sur les ancrages prompt/requête.": "Average Wh/parameter energy intensities calibrated on prompt/request anchors.",
-        "Moyenne des intensités énergétiques Wh/paramètre calibrées sur les ancrages page.": "Average Wh/parameter energy intensities calibrated on page anchors.",
+        "Proxy Wh/prompt|requête": "Wh/prompt|request proxy",
+        "Proxy Wh/page": "Wh/page proxy",
+        "Proxy paramétrique Wh/prompt|requête calibré sur les ancrages de la littérature, avec ajustement simple au volume de tokens.": "Parametric Wh/prompt|request proxy calibrated on literature anchors, with a simple token-volume adjustment.",
+        "Proxy paramétrique Wh/page calibré sur les ancrages de génération de pages de la littérature.": "Parametric Wh/page proxy calibrated on literature page-generation anchors.",
         "Wh/prompt|requête": "Wh/prompt|request",
     }
     for source, target in replacements.items():
@@ -993,7 +995,7 @@ def build_method_modal_body(method, analysis_refs=None):
             )
         else:
             annualization_sentence += (
-                "<p>In the <code>Wh/prompt|request</code> family, one LLM request directly corresponds to one inference unit. "
+                "<p>In the <code>Wh/prompt|request</code> family, one LLM request remains the base inference unit, then the proxy is adjusted with a simple token ratio relative to the project reference prompt. "
                 "Annualization therefore relies on the number of LLM calls per year.</p>"
             )
         sections.append(
@@ -1009,6 +1011,17 @@ def build_method_modal_body(method, analysis_refs=None):
         for anchor in detail.get("anchors", []):
             row = row_by_id.get(anchor.get("record_id"))
             literature_ref = render_analysis_entry_ref(anchor.get("record_id"), analysis_refs)
+            token_factor = float(anchor.get("token_factor", 1.0) or 1.0)
+            token_factor_block = ""
+            energy_formula_suffix = ""
+            energy_multiplier_suffix = ""
+            if token_factor != 1.0:
+                token_factor_block = (
+                    "<p>Applied token factor:</p>"
+                    f"<p>\\[r_T = {format_scalar(token_factor, 4)}\\]</p>"
+                )
+                energy_formula_suffix = " \\times r_T"
+                energy_multiplier_suffix = f" \\times {format_scalar(token_factor, 4)}"
             anchor_lines.append(
                 f"""
                 <li>
@@ -1019,9 +1032,10 @@ def build_method_modal_body(method, analysis_refs=None):
                   <p>\\[
                   r_P = \\frac{{P_t}}{{P_s}} = \\frac{{{format_scalar(anchor.get('target_params'))}}}{{{format_scalar(anchor.get('source_params'))}}} = {format_scalar(anchor.get('parameter_factor'), 4)}
                   \\]</p>
+                  {token_factor_block}
                   <p>Extrapolated energy for one inference unit:</p>
                   <p>\\[
-                  E_t = E_s \\times r_P = {escape(anchor.get('source_energy', 'n.d.'))} \\times {format_scalar(anchor.get('parameter_factor'), 4)} = {escape(format_range_display(anchor.get('per_request_energy', {'low':0,'high':0}), 'energy'))}
+                  E_t = E_s \\times r_P{energy_formula_suffix} = {escape(anchor.get('source_energy', 'n.d.'))} \\times {format_scalar(anchor.get('parameter_factor'), 4)}{energy_multiplier_suffix} = {escape(format_range_display(anchor.get('per_request_energy', {'low':0,'high':0}), 'energy'))}
                   \\]</p>
                 </li>
                 """
@@ -1032,7 +1046,7 @@ def build_method_modal_body(method, analysis_refs=None):
               <div class="math-label">2. Literature anchors and extrapolation</div>
               <p>The method starts from literature energy values published for the <code>{escape(detail.get('unit_basis', 'Wh'))}</code> family, then applies scaling by parameter count.</p>
               <ul class="extrapolation-list">{''.join(anchor_lines) or '<li>n.d.</li>'}</ul>
-              <p>When several anchors exist in the same family, the engine computes an average energy intensity per billion parameters to obtain the central value shown in the result block.</p>
+              <p>{'This family currently relies on a single literature anchor, so the displayed central value is a calibrated proxy rather than a cross-study average.' if int(detail.get('family_anchor_count', 0) or 0) == 1 else 'When several anchors exist in the same family, the engine computes an average energy intensity per billion parameters to obtain the central value shown in the result block.'}</p>
             </div>
             """
         )
@@ -2061,7 +2075,7 @@ def render_market_models_table(records):
           <h3>{len(rows)} current models tracked by the project</h3>
         </div>
       </div>
-      <p class="summary-intro">The table below compares the models tracked by the project under the same inference scenario. For each model, the application shows separately the estimate derived from the <strong>Wh/prompt|request</strong> average and the estimate derived from the <strong>Wh/page</strong> average, along with their carbon counterparts.</p>
+      <p class="summary-intro">The table below compares the models tracked by the project under the same inference scenario. For each model, the application shows separately the estimate derived from the <strong>Wh/prompt|request</strong> proxy and the estimate derived from the <strong>Wh/page</strong> proxy, along with their carbon counterparts.</p>
       <div class="table-toolbar">
         <label class="table-search-label" for="market-model-search">Search for a model</label>
         <input id="market-model-search" class="table-search-input" type="search" placeholder="Example: GPT, Claude, Mistral, US, 70B" data-table-search="market-models-table">
@@ -2292,8 +2306,6 @@ def process_description(form):
         )
     parsed_payload, parser_notes, parser_meta = parse_application_description_with_openai(description)
     parser_meta["moderation"] = moderation
-    parsed_payload["software_components"] = []
-    parser_notes.append("The estimate was restricted to LLM consumption; non-LLM software components were excluded from the calculation.")
     apply_overrides(parsed_payload, form)
     records = load_records()
     result = estimate_feature_externalities(records, parsed_payload)
@@ -2353,13 +2365,14 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
         </div>
         <div class="summary-body">
           <p><strong>1. Source-linked literature anchors.</strong></p>
-          <p>The application-level estimator starts from published inference indicators linked to an explicit source, model, geography, and system boundary. In the current release, the operational estimation flow relies primarily on the <code>Wh/prompt|request</code> family.</p>
+          <p>The application-level estimator starts from published inference indicators linked to an explicit source, model, geography, and system boundary. In the current release, the operational estimation flow relies primarily on a <code>Wh/prompt|request</code> proxy calibrated on the available prompt-level literature anchors.</p>
 
           <p><strong>2. A multiples-based extrapolation.</strong></p>
           <p>When direct telemetry is unavailable for a target model, ImpactLLM uses model size as an explicit scaling variable. In practice, the engine computes an energy intensity per billion active parameters from literature anchors, then applies this multiple to the target model profile.</p>
 
           <p><strong>3. A primary prompt/request method for application estimates.</strong></p>
           <p>When <code>Wh/prompt|request</code> anchors are available, ImpactLLM uses this family as the primary method for application-level estimates. This avoids mixing prompt/request and page-generation units in one final result when no robust empirical bridge has been established between them.</p>
+          <p>The current prompt-level branch is a screening proxy, not an audited benchmark. If only one prompt-level anchor is available for the retained family, the result should be read as a calibrated order-of-magnitude estimate rather than as a cross-study average.</p>
 
           <p><strong>4. Carbon derived from context.</strong></p>
           <p>Carbon is not copied mechanically from the source paper. It is recalculated from the retained energy estimate using the electricity mix associated with the selected country context.</p>
@@ -2438,7 +2451,7 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
               <h3>Calculation details</h3>
             </div>
           </div>
-          <p class="lead">Inference estimate based on source-linked scientific indicators and a traceable calculation.</p>
+          <p class="lead">Inference-only estimate based on source-linked scientific indicators and a traceable screening calculation.</p>
           <p class="scope-note">Retained scope: only LLM inference externalities are included. Model training, software-system consumption, and ancillary infrastructure are excluded from the displayed estimate.</p>
           <p class="meta-inline">Evidence level: <strong>{escape(evidence.get('label', 'Unqualified'))}</strong></p>
           <p class="meta-inline">Method: <strong>{escape(method_label)}</strong></p>
@@ -3671,11 +3684,12 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
       ['An Open Tool for Exploring and Estimating the Environmental Footprint of Large Language Models', 'Un outil libre pour explorer et estimer l’empreinte environnementale des grands modèles de langage'],
       ['ImpactLLM is designed as a transparent screening tool, not as a black-box score. The core idea is to start from the few environmental values that are actually published in the literature, preserve their native units, and reuse them through explicit multiples rather than hidden heuristics.', 'ImpactLLM est conçu comme un outil transparent de screening, et non comme un score boîte noire. L’idée centrale consiste à partir des quelques valeurs environnementales réellement publiées dans la littérature, à préserver leurs unités natives, puis à les réutiliser via des multiples explicites plutôt que des heuristiques cachées.'],
       ['1. Source-linked literature anchors.', '1. Ancrages bibliographiques reliés aux sources.'],
-      ['The application-level estimator starts from published inference indicators linked to an explicit source, model, geography, and system boundary. In the current release, the operational estimation flow relies primarily on the <code>Wh/prompt|request</code> family.', 'L’estimateur au niveau applicatif part d’indicateurs d’inférence publiés, reliés à une source, un modèle, une géographie et un périmètre système explicites. Dans la version actuelle, le flux d’estimation opérationnel repose principalement sur la famille <code>Wh/prompt|request</code>.'],
+      ['The application-level estimator starts from published inference indicators linked to an explicit source, model, geography, and system boundary. In the current release, the operational estimation flow relies primarily on a <code>Wh/prompt|request</code> proxy calibrated on the available prompt-level literature anchors.', 'L’estimateur au niveau applicatif part d’indicateurs d’inférence publiés, reliés à une source, un modèle, une géographie et un périmètre système explicites. Dans la version actuelle, le flux d’estimation opérationnel repose principalement sur un proxy <code>Wh/prompt|request</code> calibré sur les ancrages de la littérature disponibles au niveau prompt.'],
       ['2. A multiples-based extrapolation.', '2. Une extrapolation fondée sur les multiples.'],
       ['When direct telemetry is unavailable for a target model, ImpactLLM uses model size as an explicit scaling variable. In practice, the engine computes an energy intensity per billion active parameters from literature anchors, then applies this multiple to the target model profile.', 'Quand aucune télémétrie directe n’est disponible pour un modèle cible, ImpactLLM utilise la taille du modèle comme variable explicite de mise à l’échelle. En pratique, le moteur calcule une intensité énergétique par milliard de paramètres actifs à partir d’ancrages bibliographiques, puis applique ce multiple au profil du modèle cible.'],
       ['3. A primary prompt/request method for application estimates.', '3. Une méthode primaire prompt/requête pour les estimations applicatives.'],
       ['When <code>Wh/prompt|request</code> anchors are available, ImpactLLM uses this family as the primary method for application-level estimates. This avoids mixing prompt/request and page-generation units in one final result when no robust empirical bridge has been established between them.', 'Lorsque des ancrages <code>Wh/prompt|request</code> sont disponibles, ImpactLLM utilise cette famille comme méthode primaire pour les estimations au niveau applicatif. Cela évite de mélanger des unités prompt/requête et page générée dans un même résultat final lorsqu’aucune passerelle empirique robuste n’a été établie entre elles.'],
+      ['The current prompt-level branch is a screening proxy, not an audited benchmark. If only one prompt-level anchor is available for the retained family, the result should be read as a calibrated order-of-magnitude estimate rather than as a cross-study average.', 'La branche actuelle au niveau prompt est un proxy de screening, pas un benchmark audité. Si un seul ancrage prompt est disponible pour la famille retenue, le résultat doit être lu comme un ordre de grandeur calibré plutôt que comme une moyenne inter-études.'],
       ['4. Carbon derived from context.', '4. Un carbone dérivé du contexte.'],
       ['Carbon is not copied mechanically from the source paper. It is recalculated from the retained energy estimate using the electricity mix associated with the selected country context.', 'Le carbone n’est pas repris mécaniquement depuis l’article source. Il est recalculé à partir de l’estimation énergétique retenue en utilisant le mix électrique associé au contexte pays sélectionné.'],
       ['5. A research-oriented estimator.', '5. Un estimateur orienté recherche.'],
@@ -3698,7 +3712,7 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
       ['Reuse conditions', 'Conditions de réutilisation'],
       ['Email addresses are obfuscated in the page source to reduce basic scraping.', 'Les adresses e-mail sont obfusquées dans le code source de la page pour limiter le scraping basique.'],
       ['Calculation details', 'Détails du calcul'],
-      ['Inference estimate based on source-linked scientific indicators and a traceable calculation.', 'Estimation d’inférence fondée sur des indicateurs scientifiques reliés aux sources et un calcul traçable.'],
+      ['Inference-only estimate based on source-linked scientific indicators and a traceable screening calculation.', 'Estimation limitée à l’inférence, fondée sur des indicateurs scientifiques reliés aux sources et un calcul de screening traçable.'],
       ['Retained scope: only LLM inference externalities are included. Model training, software-system consumption, and ancillary infrastructure are excluded from the displayed estimate.', 'Périmètre retenu : seules les externalités d’inférence du LLM sont incluses. L’entraînement du modèle, la consommation du système logiciel et l’infrastructure annexe sont exclus de l’estimation affichée.'],
       ['Retained assumptions', 'Hypothèses retenues'],
       ['Inference-only estimate: training and software-system overheads excluded', 'Estimation limitée à l’inférence : entraînement et surcoûts du système logiciel exclus'],
@@ -3710,16 +3724,16 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
       ['active parameters', 'paramètres actifs'],
       ['Carbon is recalculated using the publisher-country electricity mix for', 'Le carbone est recalculé à partir du mix électrique du pays de l’éditeur pour'],
       ['because the model is treated as a hosted proprietary service.', 'car le modèle est traité comme un service propriétaire hébergé.'],
-      ['A prompt/query calibration is computed from the mean Wh per parameter observed in prompt/query inference records', 'Une calibration prompt/requête est calculée à partir du Wh moyen par paramètre observé dans les enregistrements d’inférence prompt/requête'],
+      ['A prompt/query proxy is calibrated from 1 prompt/query anchor(s), then adjusted by a token ratio relative to 1550 tokens', 'Un proxy prompt/requête est calibré à partir de 1 ancrage prompt/requête, puis ajusté par un ratio de tokens relatif à 1550 tokens'],
       ['The page-family method was marked as not applicable for this scenario by the parser.', 'La méthode de la famille page a été marquée comme non applicable à ce scénario par le parseur.'],
-      ['Average Wh/prompt|request', 'Moyenne Wh/prompt|requête'],
-      ['Average Wh/parameter energy intensities calibrated on prompt/request anchors.', 'Moyenne des intensités énergétiques Wh/paramètre calibrées sur les ancrages prompt/requête.'],
+      ['Wh/prompt|request proxy', 'Proxy Wh/prompt|requête'],
+      ['Parametric Wh/prompt|request proxy calibrated on literature anchors, with a simple token-volume adjustment.', 'Proxy paramétrique Wh/prompt|requête calibré sur les ancrages de la littérature, avec ajustement simple au volume de tokens.'],
       ['1. Scenario input data', '1. Données d’entrée du scénario'],
       ['The interpreted scenario uses', 'Le scénario interprété utilise'],
       ['input tokens and', 'tokens en entrée et'],
       ['output tokens per call.', 'tokens en sortie par appel.'],
       ['The annual call volume is calculated as:', 'Le volume annuel d’appels est calculé ainsi :'],
-      ['In the Wh/prompt|request family, one LLM request directly corresponds to one inference unit. Annualization therefore relies on the number of LLM calls per year.', 'Dans la famille Wh/prompt|requête, une requête LLM correspond directement à une unité d’inférence. L’annualisation repose donc sur le nombre d’appels LLM par an.'],
+      ['In the Wh/prompt|request family, one LLM request remains the base inference unit, then the proxy is adjusted with a simple token ratio relative to the project reference prompt. Annualization therefore relies on the number of LLM calls per year.', 'Dans la famille Wh/prompt|requête, une requête LLM reste l’unité d’inférence de base, puis le proxy est ajusté avec un ratio simple de tokens par rapport au prompt de référence du projet. L’annualisation repose donc sur le nombre d’appels LLM par an.'],
       ['2. Literature anchors and extrapolation', '2. Ancrages bibliographiques et extrapolation'],
       ['The method starts from literature energy values published for the', 'La méthode part de valeurs d’énergie publiées dans la littérature pour la famille'],
       ['family, then applies scaling by parameter count.', ', puis applique une mise à l’échelle selon le nombre de paramètres.'],
@@ -3728,7 +3742,8 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
       ['Target parameter count:', 'Nombre de paramètres cible :'],
       ['Applied parameter factor:', 'Facteur de paramètres appliqué :'],
       ['Extrapolated energy for one inference unit:', 'Énergie extrapolée pour une unité d’inférence :'],
-      ['When several anchors exist in the same family, the engine computes an average energy intensity per billion parameters to obtain the central value shown in the result block.', 'Lorsque plusieurs ancrages existent dans une même famille, le moteur calcule une intensité énergétique moyenne par milliard de paramètres pour obtenir la valeur centrale affichée dans le bloc de résultat.'],
+      ['This family currently relies on a single literature anchor, so the displayed central value is a calibrated proxy rather than a cross-study average.', 'Cette famille repose actuellement sur un seul ancrage bibliographique, de sorte que la valeur centrale affichée est un proxy calibré plutôt qu’une moyenne inter-études.'],
+      ['The table below compares the models tracked by the project under the same inference scenario. For each model, the application shows separately the estimate derived from the <strong>Wh/prompt|request</strong> proxy and the estimate derived from the <strong>Wh/page</strong> proxy, along with their carbon counterparts.', 'Le tableau ci-dessous compare les modèles suivis par le projet dans le même scénario d’inférence. Pour chaque modèle, l’application affiche séparément l’estimation dérivée du proxy <strong>Wh/prompt|requête</strong> et celle dérivée du proxy <strong>Wh/page</strong>, ainsi que leurs équivalents carbone.'],
       ['3. Carbon derivation from the country mix', '3. Dérivation du carbone à partir du mix pays'],
       ['Carbon is not reused directly from the literature. It is derived from extrapolated energy using the retained country electricity mix, here', 'Le carbone n’est pas réutilisé directement depuis la littérature. Il est dérivé de l’énergie extrapolée à partir du mix électrique du pays retenu, ici'],
       ['The unit result retained for this method then leads to the following annualized values: energy', 'Le résultat unitaire retenu pour cette méthode conduit ensuite aux valeurs annualisées suivantes : énergie'],
