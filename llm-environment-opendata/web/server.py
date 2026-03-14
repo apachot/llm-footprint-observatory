@@ -2276,7 +2276,9 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
     * {{ box-sizing: border-box; }}
     body {{
       margin: 0;
-      font-family: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Palatino, "URW Palladio L", serif;
+      font-family: "Aptos", "Segoe UI", "Helvetica Neue", "Noto Sans", Arial, sans-serif;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
       color: var(--ink);
       background: var(--bg);
       scroll-behavior: smooth;
