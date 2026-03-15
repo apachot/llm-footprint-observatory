@@ -2503,6 +2503,20 @@ def render_market_models_charts(records):
     <section class="panel reference-panel">
       <div class="summary-header">
         <div>
+          <div class="summary-kicker">Positioning</div>
+          <h3>Inference bubble chart</h3>
+        </div>
+      </div>
+      <p class="summary-intro">This explicit bubble chart positions each model by effective active parameters and by its retained inference impact. Bubble size reflects the retained context window, while colors distinguish providers.</p>
+      <div class="chart-tabbar" role="tablist" aria-label="Inference bubble chart indicator">
+        <button type="button" class="chart-tab-button is-active" data-inference-bubble-control="metric-tab" data-metric-value="energy" aria-selected="true">Energy</button>
+        <button type="button" class="chart-tab-button" data-inference-bubble-control="metric-tab" data-metric-value="carbon" aria-selected="false">Carbon</button>
+      </div>
+      <div id="inference-bubble-chart" class="models-impact-chart" data-scatter-chart-rows='{escape(json.dumps(view["scatter_chart_rows"], ensure_ascii=False), quote=True)}'></div>
+    </section>
+    <section class="panel reference-panel">
+      <div class="summary-header">
+        <div>
           <div class="summary-kicker">Uncertainty</div>
           <h3>Inference uncertainty span by model</h3>
         </div>
@@ -4310,6 +4324,7 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
     const modelsChart = document.getElementById('models-impact-chart');
     const paramsChart = document.getElementById('params-impact-chart');
     const scatterChart = document.getElementById('carbon-params-scatter-chart');
+    const inferenceBubbleChart = document.getElementById('inference-bubble-chart');
     const factorHeatmap = document.getElementById('inference-factor-heatmap');
     const inferenceUncertaintyChart = document.getElementById('inference-uncertainty-chart');
     const inferenceTrainingTradeoffChart = document.getElementById('inference-training-tradeoff-chart');
@@ -4317,6 +4332,7 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
     const countryMixChart = document.getElementById('country-mix-sensitivity-chart');
     const inferenceReleaseTimelineChart = document.getElementById('inference-release-timeline-chart');
     const chartControls = Array.from(document.querySelectorAll('[data-model-chart-control="metric-tab"]'));
+    const inferenceBubbleControls = Array.from(document.querySelectorAll('[data-inference-bubble-control="metric-tab"]'));
     const inferenceUncertaintyControls = Array.from(document.querySelectorAll('[data-inference-uncertainty-control="metric-tab"]'));
     const crossImpactControls = Array.from(document.querySelectorAll('[data-cross-impact-control="metric-tab"]'));
     const trainingChart = document.getElementById('training-impact-chart');
@@ -5930,6 +5946,142 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
         </svg>
       `;
     }};
+    const renderInferenceBubbleChart = () => {{
+      if (!inferenceBubbleChart) return;
+      let rows = [];
+      try {{
+        rows = JSON.parse(inferenceBubbleChart.getAttribute('data-scatter-chart-rows') || '[]');
+      }} catch (error) {{
+        rows = [];
+      }}
+      const locale = uiText[currentLanguage.value];
+      const metricControl = document.querySelector('[data-inference-bubble-control="metric-tab"].is-active');
+      const metric = metricControl ? metricControl.getAttribute('data-metric-value') : 'energy';
+      const config = metric === 'carbon'
+        ? {{
+            yKey: 'hour_carbon_gco2e',
+            intro: {{
+              en: 'Models are positioned by retained effective active parameters on the horizontal axis and by central inference carbon over one standardized hour on the vertical axis. Bubble size follows the retained context window.',
+              fr: 'Les modèles sont positionnés selon leurs paramètres actifs effectifs retenus sur l’axe horizontal et leur carbone central d’inférence sur une heure standardisée sur l’axe vertical. La taille des bulles suit la fenêtre de contexte retenue.',
+            }},
+            yLabel: {{
+              en: 'Central inference carbon, gCO2e/h (log scale)',
+              fr: 'Carbone central d’inférence, gCO2e/h (échelle logarithmique)',
+            }},
+            formatY: (value) => value >= 1000 ? `${{(value / 1000).toFixed(1)}} kg` : `${{value.toFixed(1)}} g`,
+            ariaLabel: {{
+              en: 'Inference bubble chart by carbon and effective parameters',
+              fr: 'Nuage de bulles d’inférence par carbone et paramètres effectifs',
+            }},
+          }}
+        : {{
+            yKey: 'hour_energy_wh',
+            intro: {{
+              en: 'Models are positioned by retained effective active parameters on the horizontal axis and by central inference energy over one standardized hour on the vertical axis. Bubble size follows the retained context window.',
+              fr: 'Les modèles sont positionnés selon leurs paramètres actifs effectifs retenus sur l’axe horizontal et leur énergie centrale d’inférence sur une heure standardisée sur l’axe vertical. La taille des bulles suit la fenêtre de contexte retenue.',
+            }},
+            yLabel: {{
+              en: 'Central inference energy, Wh/h (log scale)',
+              fr: 'Énergie centrale d’inférence, Wh/h (échelle logarithmique)',
+            }},
+            formatY: (value) => value >= 1000 ? `${{(value / 1000).toFixed(1)}} kWh` : `${{value.toFixed(1)}} Wh`,
+            ariaLabel: {{
+              en: 'Inference bubble chart by energy and effective parameters',
+              fr: 'Nuage de bulles d’inférence par énergie et paramètres effectifs',
+            }},
+          }};
+      const points = rows
+        .map((row) => ({{
+          label: translateBenchmarkLabel(row.label, currentLanguage.value),
+          provider: row.provider || '',
+          x: Number(row.effective_active_parameters_billion || 0),
+          y: Number(row[config.yKey] || 0),
+          context: Number(row.context_window_tokens || 0),
+        }}))
+        .filter((row) => row.x > 0 && row.y > 0 && row.context > 0);
+      if (!points.length) {{
+        inferenceBubbleChart.innerHTML = `<p class="lead">${{locale.noUsableValue}}</p>`;
+        return;
+      }}
+      const providerOrder = Array.from(new Set(points.map((point) => point.provider))).sort((a, b) => providerDisplayName(a).localeCompare(providerDisplayName(b)));
+      const paletteValues = ['#243b63', '#8c7a5b', '#b85c38', '#3f5a49', '#6c5b7b', '#2f7f92', '#a33d5e', '#7a9e2f', '#b06c1f', '#4b5563'];
+      const palette = Object.fromEntries(providerOrder.map((provider, index) => [provider, paletteValues[index % paletteValues.length]]));
+      const width = 980;
+      const height = 640;
+      const padding = {{ top: 24, right: 24, bottom: 86, left: 92 }};
+      const plotWidth = width - padding.left - padding.right;
+      const plotHeight = height - padding.top - padding.bottom;
+      const safeLog = (value) => Math.log10(Math.max(value, 1e-9));
+      const xMin = Math.min(...points.map((row) => row.x));
+      const xMax = Math.max(...points.map((row) => row.x));
+      const yMin = Math.min(...points.map((row) => row.y));
+      const yMax = Math.max(...points.map((row) => row.y));
+      const cMin = Math.min(...points.map((row) => row.context));
+      const cMax = Math.max(...points.map((row) => row.context));
+      const xMinLog = safeLog(xMin);
+      const xMaxLog = safeLog(xMax);
+      const yMinLog = safeLog(yMin);
+      const yMaxLog = safeLog(yMax);
+      const scaleX = (value) => padding.left + ((safeLog(value) - xMinLog) / Math.max(xMaxLog - xMinLog, 1e-9)) * plotWidth;
+      const scaleY = (value) => padding.top + plotHeight - ((safeLog(value) - yMinLog) / Math.max(yMaxLog - yMinLog, 1e-9)) * plotHeight;
+      const scaleR = (value) => 5 + ((safeLog(value) - safeLog(cMin || 1)) / Math.max(safeLog(cMax || 1) - safeLog(cMin || 1), 1e-9)) * 11;
+      const tickValues = (min, max) => {{
+        const ticks = [];
+        const start = Math.floor(safeLog(min));
+        const end = Math.ceil(safeLog(max));
+        for (let exponent = start; exponent <= end; exponent += 1) {{
+          ticks.push(10 ** exponent);
+        }}
+        return ticks.filter((value) => value >= min && value <= max);
+      }};
+      const xGrid = tickValues(xMin, xMax).map((value) => {{
+        const x = scaleX(value);
+        const label = value >= 1000 ? `${{(value / 1000).toFixed(1)}}T` : `${{value >= 10 ? value.toFixed(0) : value.toFixed(1)}}B`;
+        return `
+          <line x1="${{x}}" y1="${{padding.top}}" x2="${{x}}" y2="${{padding.top + plotHeight}}" stroke="rgba(0,0,0,0.08)" />
+          <text x="${{x}}" y="${{height - 18}}" text-anchor="middle" font-size="12" fill="#6c757d">${{label}}</text>
+        `;
+      }}).join('');
+      const yGrid = tickValues(yMin, yMax).map((value) => {{
+        const y = scaleY(value);
+        return `
+          <line x1="${{padding.left}}" y1="${{y}}" x2="${{padding.left + plotWidth}}" y2="${{y}}" stroke="rgba(0,0,0,0.08)" />
+          <text x="${{padding.left - 10}}" y="${{y + 4}}" text-anchor="end" font-size="12" fill="#6c757d">${{config.formatY(value)}}</text>
+        `;
+      }}).join('');
+      const dots = points.map((row) => {{
+        const cx = scaleX(row.x);
+        const cy = scaleY(row.y);
+        const radius = scaleR(row.context);
+        const fill = palette[row.provider] || '#495057';
+        return `
+          <circle cx="${{cx}}" cy="${{cy}}" r="${{radius}}" fill="${{fill}}" opacity="0.72"></circle>
+          <text x="${{cx + radius + 5}}" y="${{cy - radius - 3}}" font-size="12" fill="#212529">${{row.label}}</text>
+        `;
+      }}).join('');
+      const legend = providerOrder.map((provider, index) => `
+        <g transform="translate(${{padding.left + (index % 4) * 170}}, ${{height - 48 + Math.floor(index / 4) * 22}})">
+          <rect width="14" height="14" rx="3" fill="${{palette[provider] || '#495057'}}"></rect>
+          <text x="20" y="11" font-size="12" fill="#495057">${{providerDisplayName(provider)}}</text>
+        </g>
+      `).join('');
+      const xLabel = currentLanguage.value === 'fr' ? 'Paramètres actifs effectifs retenus (échelle logarithmique)' : 'Retained effective active parameters (log scale)';
+      const sizeNote = currentLanguage.value === 'fr' ? 'Taille des bulles : fenêtre de contexte retenue' : 'Bubble size: retained context window';
+      inferenceBubbleChart.innerHTML = `
+        <div class="summary-intro" style="margin-bottom:0.75rem;">${{config.intro[currentLanguage.value]}}</div>
+        <svg viewBox="0 0 ${{width}} ${{height}}" role="img" aria-label="${{config.ariaLabel[currentLanguage.value]}}">
+          ${{xGrid}}
+          ${{yGrid}}
+          <line x1="${{padding.left}}" y1="${{padding.top + plotHeight}}" x2="${{padding.left + plotWidth}}" y2="${{padding.top + plotHeight}}" stroke="#495057" />
+          <line x1="${{padding.left}}" y1="${{padding.top}}" x2="${{padding.left}}" y2="${{padding.top + plotHeight}}" stroke="#495057" />
+          ${{dots}}
+          ${{legend}}
+          <text x="${{padding.left + plotWidth / 2}}" y="${{height - 4}}" text-anchor="middle" font-size="13" fill="#495057">${{xLabel}}</text>
+          <text x="18" y="${{padding.top + plotHeight / 2}}" text-anchor="middle" font-size="13" fill="#495057" transform="rotate(-90 18 ${{padding.top + plotHeight / 2}})">${{config.yLabel[currentLanguage.value]}}</text>
+          <text x="${{width - 24}}" y="20" text-anchor="end" font-size="12" fill="#6c757d">${{sizeNote}}</text>
+        </svg>
+      `;
+    }};
     const renderReleaseTimelineChart = (container, attrName, config) => {{
       if (!container) return;
       let rows = [];
@@ -6088,6 +6240,17 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
       }});
     }});
     renderInferenceTrainingTradeoffChart();
+    inferenceBubbleControls.forEach((control) => {{
+      control.addEventListener('click', () => {{
+        inferenceBubbleControls.forEach((item) => {{
+          const isActive = item === control;
+          item.classList.toggle('is-active', isActive);
+          item.setAttribute('aria-selected', isActive ? 'true' : 'false');
+        }});
+        renderInferenceBubbleChart();
+      }});
+    }});
+    renderInferenceBubbleChart();
     inferenceUncertaintyControls.forEach((control) => {{
       control.addEventListener('click', () => {{
         inferenceUncertaintyControls.forEach((item) => {{
