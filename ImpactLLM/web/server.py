@@ -26,6 +26,11 @@ from core.estimator import (
     load_market_models,
     load_models,
     load_records,
+    market_architecture_factor,
+    market_context_factor,
+    market_modality_factor,
+    market_serving_factor,
+    parse_market_bool,
     to_float,
     wh_to_gco2e,
     wh_to_liters,
@@ -415,19 +420,51 @@ def build_analysis_bibliography_entries(factor_rows, result):
         or (result or {}).get("model_profile")
         or {}
     )
-    parameter_source = str(market_profile.get("parameter_source", "") or "").strip()
-    parameter_url = str(market_profile.get("parameter_source_url", "") or "").strip()
-    parameter_note = str(market_profile.get("notes", "") or "").strip()
-    parameter_dedupe_key = ("parameters", parameter_source, parameter_url, parameter_note)
-    if parameter_source and parameter_dedupe_key not in seen:
-        seen.add(parameter_dedupe_key)
+    characteristic_sources = [
+        (
+            "parameters",
+            "Active-parameter characteristic",
+            market_profile.get("parameter_source"),
+            market_profile.get("parameter_source_url"),
+            market_profile.get("notes"),
+        ),
+        (
+            "context_profile",
+            "Context-window characteristic",
+            market_profile.get("context_source"),
+            market_profile.get("context_source_url"),
+            market_profile.get("context_window_tokens"),
+        ),
+        (
+            "serving_profile",
+            "Serving-mode characteristic",
+            market_profile.get("architecture_source") or market_profile.get("context_source") or market_profile.get("modalities_source"),
+            market_profile.get("architecture_source_url") or market_profile.get("context_source_url") or market_profile.get("modalities_source_url"),
+            market_profile.get("serving_mode"),
+        ),
+        (
+            "vision_profile",
+            "Vision characteristic",
+            market_profile.get("modalities_source"),
+            market_profile.get("modalities_source_url"),
+            market_profile.get("vision_support"),
+        ),
+    ]
+    for entry_key, label, citation, url, locator in characteristic_sources:
+        source_citation = str(citation or "").strip()
+        source_url = str(url or "").strip()
+        source_locator = str(locator or "").strip()
+        dedupe_key = ("market-characteristic", entry_key, source_citation, source_url, source_locator)
+        if not source_citation or dedupe_key in seen:
+            continue
+        seen.add(dedupe_key)
         entries.append(
             {
-                "key": "parameters",
-                "label": "Model parameter estimate",
-                "citation": parameter_source,
-                "url": parameter_url,
-                "locator": parameter_note,
+                "key": entry_key,
+                "label": label,
+                "citation": source_citation,
+                "url": source_url,
+                "locator": source_locator,
             }
         )
 
@@ -1148,6 +1185,7 @@ def build_method_modal_body(method, analysis_refs=None):
               P^{{eff}}_c = P_t \\times F_{{ctx}} \\times F_{{srv}} \\times F_{{mod}} \\times F_{{arch}} = {format_scalar(detail.get('target_params'))} \\times {format_scalar(context_factor.get('central'))} \\times {format_scalar(serving_factor.get('central'))} \\times {format_scalar(modality_factor.get('central'))} \\times {format_scalar(architecture_factor.get('central'))} = {format_scalar(effective_params.get('central'))}
               \\]</p>
               <p class="notranslate">Where \\(P^{{eff}}_c\\) is the central effective active-parameter proxy, \\(P_t\\) the retained raw active-parameter count, \\(F_{{ctx}}\\) the context-window factor, \\(F_{{srv}}\\) the serving-mode factor, \\(F_{{mod}}\\) the modality factor, and \\(F_{{arch}}\\) the architecture-overhead factor.</p>
+              <p>See the table <a href="{app_url('/#tab-bibliography')}" target="_blank" rel="noopener noreferrer">Central screening factors retained for market models</a> in Sources for the retained screening values by model.</p>
               <p>Central token factor:</p>
               <p>\\[
               F_{{tok,c}} = {format_scalar(token_factor.get('central'), 4)}
@@ -1594,42 +1632,34 @@ def render_bibliography_tab():
     market_model_rows = load_market_models()
     if not reference_sections:
         return ""
-    filtered_market_model_rows = []
-    for row in market_model_rows:
-        parameter_status = str(row.get("parameter_value_status", "")).strip().lower()
-        market_status = str(row.get("market_status", "")).strip().lower()
-        serving_mode = str(row.get("serving_mode", "")).strip().lower()
-        if parameter_status != "estimated":
-            continue
-        if market_status != "api" and serving_mode != "closed":
-            continue
-        filtered_market_model_rows.append(row)
-    filtered_market_model_rows.sort(
-        key=lambda row: (
-            str(row.get("provider", "") or "").lower(),
-            str(row.get("display_name", "") or row.get("model_id", "") or "").lower(),
-        )
-    )
-    proprietary_parameter_rows = []
-    for row in filtered_market_model_rows:
-        source_url = str(row.get("parameter_source_url", "") or "").strip()
-        source_label = escape(str(row.get("parameter_source", "") or "Source not specified"))
-        if source_url:
-            source_html = f'<a href="{escape(source_url, quote=True)}" target="_blank" rel="noopener noreferrer">{source_label}</a>'
-        else:
-            source_html = source_label
-        proprietary_parameter_rows.append(
-            f"""
-        <tr>
-          <td>{escape(row.get('display_name', '') or row.get('model_id', '') or 'n.d.')}</td>
-          <td>{escape(row.get('provider', 'n.d.') or 'n.d.')}</td>
-          <td>{escape(format_market_parameter_display(row))}</td>
-          <td>{escape(row.get('parameter_confidence', 'n.d.') or 'n.d.')}</td>
-          <td>{source_html}</td>
-          <td>{escape(row.get('notes', 'n.d.') or 'n.d.')}</td>
-        </tr>
-            """
-        )
+    factor_source_entries = []
+    factor_source_index = {}
+
+    def register_factor_source(category, citation, url):
+        source_citation = str(citation or "").strip()
+        source_url = str(url or "").strip()
+        if not source_citation:
+            return ""
+        key = (category, source_citation, source_url)
+        if key not in factor_source_index:
+            number = len(factor_source_entries) + 1
+            anchor_id = f"factor-source-{number}"
+            factor_source_index[key] = {
+                "number": number,
+                "anchor_id": anchor_id,
+            }
+            factor_source_entries.append(
+                {
+                    "number": number,
+                    "anchor_id": anchor_id,
+                    "category": category,
+                    "citation": source_citation,
+                    "url": source_url,
+                }
+            )
+        entry = factor_source_index[key]
+        return f' <a class="inline-ref" href="#{escape(entry["anchor_id"], quote=True)}">[{entry["number"]}]</a>'
+
     visible_real_world_rows = [entry for entry in REAL_WORLD_INDICATOR_ROWS if entry.get("domain") != "Water"]
     real_world_rows = "".join(
         f"""
@@ -1655,41 +1685,70 @@ def render_bibliography_tab():
         """
         for index, row in enumerate(country_rows, start=1)
     )
+    factor_table_rows = []
+    for row in sorted(
+        market_model_rows,
+        key=lambda item: (
+            str(item.get("provider", "") or "").lower(),
+            str(item.get("display_name", "") or item.get("model_id", "") or "").lower(),
+        ),
+    ):
+        active = to_float(row.get("active_parameters_billion"), default=None)
+        if active in (None, 0):
+            continue
+        f_ctx = market_context_factor(row.get("context_window_tokens"), scenario="central")
+        f_srv = market_serving_factor(row.get("serving_mode"), scenario="central")
+        f_mod = market_modality_factor(row, scenario="central")
+        f_arch = market_architecture_factor(row, scenario="central")
+        p_eff = active * f_ctx * f_srv * f_mod * f_arch
+
+        parameter_ref = register_factor_source("Active parameters", row.get("parameter_source"), row.get("parameter_source_url"))
+        context_ref = register_factor_source("Context window", row.get("context_source"), row.get("context_source_url"))
+        modalities_ref = register_factor_source("Vision", row.get("modalities_source"), row.get("modalities_source_url"))
+        serving_ref = register_factor_source(
+            "Serving mode",
+            row.get("context_source") or row.get("modalities_source") or row.get("architecture_source"),
+            row.get("context_source_url") or row.get("modalities_source_url") or row.get("architecture_source_url"),
+        )
+
+        factor_table_rows.append(
+            f"""
+        <tr>
+          <td>{escape(row.get('display_name', '') or row.get('model_id', '') or 'n.d.')}</td>
+          <td>{escape(row.get('provider', 'n.d.') or 'n.d.')}</td>
+          <td>{escape(format_market_parameter_display(row))}{parameter_ref}</td>
+          <td>{to_float(row.get('context_window_tokens'), default=0):,.0f}{context_ref}</td>
+          <td>{escape(row.get('serving_mode', 'n.d.') or 'n.d.')}{serving_ref}</td>
+          <td>{'yes' if parse_market_bool(row.get('vision_support')) else 'no'}{modalities_ref}</td>
+          <td>{f_ctx:.3f}</td>
+          <td>{f_srv:.3f}</td>
+          <td>{f_mod:.3f}</td>
+          <td>{f_arch:.3f}</td>
+          <td>{p_eff:.3f}B</td>
+        </tr>
+            """
+        )
+    factor_source_rows = "".join(
+        f"""
+        <li id="{escape(entry['anchor_id'], quote=True)}">
+          <span class="analysis-bibliography-number">[{entry['number']}]</span>
+          <span class="analysis-bibliography-label">{escape(entry['category'])}.</span>
+          {'<a href="' + escape(entry['url'], quote=True) + '" target="_blank" rel="noopener noreferrer">' + escape(entry['citation']) + '</a>' if entry['url'] else escape(entry['citation'])}
+        </li>
+        """
+        for entry in factor_source_entries
+    )
 
     return f"""
     <section class="tab-panel" id="tab-bibliography-panel" data-tab-panel="bibliography">
       <section class="panel reference-panel">
         <div class="summary-header">
             <div>
-            <div class="summary-kicker">Biliography</div>
+            <div class="summary-kicker">Sources</div>
           </div>
         </div>
         <div class="reference-copy-block">
           <p class="summary-intro">This annex brings together the quantified reference material used in the interface, along with everyday comparison benchmarks and country factors used for carbon and water recalculation.</p>
-        </div>
-
-        <div class="reference-subtable">
-          <h4>Sources used to estimate proprietary LLM parameter counts</h4>
-          <div class="reference-copy-block">
-            <p class="summary-intro">This table lists the third-party sources used when a provider does not publish the parameter count of a closed model. Estimated values are marked with `*` throughout the interface.</p>
-          </div>
-          <div class="reference-table-wrap">
-            <table class="reference-table">
-              <thead>
-                <tr>
-                  <th>Model</th>
-                  <th>Provider</th>
-                  <th>Estimated parameters</th>
-                  <th>Confidence</th>
-                  <th>Estimation source</th>
-                  <th>Notes</th>
-                </tr>
-              </thead>
-              <tbody>
-                {"".join(proprietary_parameter_rows)}
-              </tbody>
-            </table>
-          </div>
         </div>
 
         <div class="reference-subtable">
@@ -1720,6 +1779,45 @@ def render_bibliography_tab():
               </tbody>
             </table>
           </div>
+        </div>
+
+        <div class="reference-subtable" id="market-screening-factors">
+          <h4>Central screening factors retained for market models</h4>
+          <div class="reference-copy-block">
+            <p class="summary-intro">This table documents the central values retained by the project for the multi-factor prompt proxy of each catalog model: raw active parameters, context window, serving mode, modality support, the resulting central factors <code>F_ctx</code>, <code>F_srv</code>, <code>F_mod</code>, <code>F_arch</code>, and the resulting central effective active-parameter proxy <code>P_eff,c</code>. These are project screening factors, not provider-published measurements.</p>
+          </div>
+          <div class="reference-table-wrap">
+            <table class="reference-table">
+              <thead>
+                <tr>
+                  <th>Model</th>
+                  <th>Provider</th>
+                  <th>Active parameters</th>
+                  <th>Context window</th>
+                  <th>Serving mode</th>
+                  <th>Vision</th>
+                  <th>F_ctx</th>
+                  <th>F_srv</th>
+                  <th>F_mod</th>
+                  <th>F_arch</th>
+                  <th>P_eff,c</th>
+                </tr>
+              </thead>
+              <tbody>
+                {"".join(factor_table_rows)}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="reference-subtable">
+          <h4>Numbered source list for retained screening characteristics</h4>
+          <div class="reference-copy-block">
+            <p class="summary-intro">The numbered references used in the columns Active parameters, Context window, Serving mode, and Vision are listed below.</p>
+          </div>
+          <ol class="analysis-bibliography-list">
+            {factor_source_rows}
+          </ol>
         </div>
 
         <div class="reference-subtable">
@@ -2026,7 +2124,9 @@ pdflatex -interaction=nonstopmode -halt-on-error ImpactLLM_paper.tex</code></pre
           </div>
         </div>
         <div class="summary-body">
-          <p>The software is distributed under the GNU GPL. Any redistribution or modification must remain compatible with the obligations of that free-software license.</p>
+          <p>This program is free software: you can redistribute it and/or modify it under the terms of the <a href="https://www.gnu.org/licenses/gpl-3.0.html" target="_blank" rel="noopener noreferrer">GNU General Public License</a> as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version.</p>
+          <p>This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.</p>
+          <p>You should have received a copy of the GNU General Public License along with this program. If not, see <a href="https://www.gnu.org/licenses/" target="_blank" rel="noopener noreferrer">https://www.gnu.org/licenses/</a>.</p>
           <p>The dataset, comparability metadata, and scientific texts keep their own documentary constraints, especially regarding citation of the underlying sources.</p>
           <p>For a public release of the repository, it is recommended to keep the full license text and author notices explicitly in the project.</p>
         </div>
@@ -2535,7 +2635,9 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
           <p><strong>GitHub repository</strong></p>
           <p>The project repository is available on GitHub: <a href="https://github.com/apachot/ImpactLLM" target="_blank" rel="noreferrer">https://github.com/apachot/ImpactLLM</a>.</p>
           <p><strong>License</strong></p>
-          <p>ImpactLLM is distributed under the GNU GPL. Reuse, modification, and redistribution should remain compatible with the obligations of that free-software license.</p>
+          <p>This program is free software: you can redistribute it and/or modify it under the terms of the <a href="https://www.gnu.org/licenses/gpl-3.0.html" target="_blank" rel="noopener noreferrer">GNU General Public License</a> as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version.</p>
+          <p>This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.</p>
+          <p>You should have received a copy of the GNU General Public License along with this program. If not, see <a href="https://www.gnu.org/licenses/" target="_blank" rel="noopener noreferrer">https://www.gnu.org/licenses/</a>.</p>
           <p><strong>Arnault Pachot</strong></p>
           <p>Arnault Pachot is a researcher and entrepreneur, founder of OpenStudio and now founder of Emotia. He works on responsible digital transformation, Green IT, and decision-oriented AI systems. He co-authored the Dunod book <em>Intelligence artificielle et environnement : alliance ou nuisance ?</em>, dedicated to practical pathways for environmentally responsible AI.</p>
           <p><strong>Thierry Petit</strong></p>
@@ -3705,7 +3807,7 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
       </button>
       <button type="button" class="tab-button" data-tab-target="observatory">Referential</button>
       <button type="button" class="tab-button" data-tab-target="method">Method</button>
-      <button type="button" class="tab-button" data-tab-target="bibliography">Biliography</button>
+      <button type="button" class="tab-button" data-tab-target="bibliography">Sources</button>
       <button type="button" class="tab-button" data-tab-target="contact">About</button>
       <div class="language-control">
         <span class="language-links" aria-label="Language selector">
@@ -3825,8 +3927,9 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
       ['Arnault Pachot is a researcher and entrepreneur, founder of OpenStudio and now founder of Emotia. He works on responsible digital transformation, Green IT, and decision-oriented AI systems. He co-authored the Dunod book ', 'Arnault Pachot est chercheur et entrepreneur, fondateur d’OpenStudio puis d’Emotia. Il travaille sur la transformation numérique responsable, le Green IT et les systèmes d’IA orientés décision. Il a coécrit chez Dunod l’ouvrage '],
       [' dedicated to practical pathways for environmentally responsible AI.', ', consacré à des trajectoires concrètes pour une IA écologiquement responsable.'],
       ['Thierry Petit is a senior AI researcher and scientific leader with more than twenty years of academic and R&D experience in Europe and the United States. His work spans trustworthy AI, simulation, optimization, and decision-grade platforms. At Emotia and Pollitics, he leads the scientific direction of systems designed to remain both operationally useful and methodologically robust.', 'Thierry Petit est chercheur senior en intelligence artificielle et directeur scientifique, avec plus de vingt ans d’expérience académique et de R&D en Europe et aux États-Unis. Ses travaux couvrent l’IA de confiance, la simulation, l’optimisation et les plateformes d’aide à la décision. Chez Emotia et Pollitics, il pilote la direction scientifique de systèmes conçus pour rester à la fois utiles opérationnellement et robustes méthodologiquement.'],
-      ['References', 'Bibliographie'],
-      ['Biliography', 'Bibliographie'],
+      ['References', 'Sources'],
+      ['Biliography', 'Sources'],
+      ['Bibliography', 'Sources'],
       ['Inference', 'Inférence'],
       ['Training', 'Entraînement'],
       ['Estimate application', 'Estimer l’application'],
@@ -3835,11 +3938,12 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
       ['GitHub repository', 'Dépôt GitHub'],
       ['The project repository is available on GitHub: ', 'Le dépôt du projet est disponible sur GitHub : '],
       ['License', 'Licence'],
-      ['ImpactLLM is distributed under the GNU GPL. Reuse, modification, and redistribution should remain compatible with the obligations of that free-software license.', 'ImpactLLM est distribué sous licence GNU GPL. La réutilisation, la modification et la redistribution doivent rester compatibles avec les obligations de cette licence libre.'],
+      ['This program is free software: you can redistribute it and/or modify it under the terms of the <a href="https://www.gnu.org/licenses/gpl-3.0.html" target="_blank" rel="noopener noreferrer">GNU General Public License</a> as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version.', 'Ce programme est un logiciel libre : vous pouvez le redistribuer et/ou le modifier selon les termes de la <a href="https://www.gnu.org/licenses/gpl-3.0.html" target="_blank" rel="noopener noreferrer">GNU General Public License</a> telle que publiée par la Free Software Foundation, soit la version 3 de la licence, soit, à votre choix, toute version ultérieure.'],
+      ['This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.', 'Ce programme est distribué dans l’espoir qu’il sera utile, mais SANS AUCUNE GARANTIE, sans même la garantie implicite de QUALITÉ MARCHANDE ou D’ADÉQUATION À UN USAGE PARTICULIER. Consultez la GNU General Public License pour plus de détails.'],
+      ['You should have received a copy of the GNU General Public License along with this program. If not, see <a href="https://www.gnu.org/licenses/" target="_blank" rel="noopener noreferrer">https://www.gnu.org/licenses/</a>.', 'Vous devriez avoir reçu une copie de la GNU General Public License avec ce programme. Sinon, voir <a href="https://www.gnu.org/licenses/" target="_blank" rel="noopener noreferrer">https://www.gnu.org/licenses/</a>.'],
       ['About us', 'À propos de nous'],
       ['Selected references on AI and the environment', 'Références choisies sur l’IA et l’environnement'],
       ['This annex brings together the quantified reference material used in the interface, along with everyday comparison benchmarks and country factors used for carbon and water recalculation.', 'Cette annexe rassemble les sources quantitatives mobilisées dans l’interface, ainsi que des repères de comparaison du quotidien et les facteurs pays utilisés pour le recalcul du carbone et de l’eau.'],
-      ['This table lists the third-party sources used when a provider does not publish the parameter count of a closed model. Estimated values are marked with `*` throughout the interface.', 'Ce tableau recense les sources tierces utilisées lorsqu’un fournisseur ne publie pas le nombre de paramètres d’un modèle fermé. Les valeurs estimées sont signalées par `*` dans toute l’interface.'],
       ['Download PDF', 'Télécharger le PDF'],
       ['An Open Tool for Exploring and Estimating the Environmental Footprint of Large Language Models', 'Un outil libre pour estimer l’empreinte environnementale des LLMs'],
       ['An Open Tool for Estimating the Environmental Footprint of LLMs', 'Un outil libre pour estimer l’empreinte environnementale des LLMs'],
@@ -3920,6 +4024,8 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
       ['Applied parameter factor:', 'Facteur de paramètres appliqué :'],
       ['Extrapolated energy for one inference unit:', 'Énergie extrapolée pour une unité d’inférence :'],
       ['Central effective active parameters:', 'Paramètres actifs effectifs centraux :'],
+      ['See the table ', 'Voir le tableau '],
+      [' in Sources for the retained screening values by model.', ' dans Sources pour les valeurs de screening retenues par modèle.'],
       ['Where \\(P^{{eff}}_c\\) is the central effective active-parameter proxy, \\(P_t\\) the retained raw active-parameter count, \\(F_{{ctx}}\\) the context-window factor, \\(F_{{srv}}\\) the serving-mode factor, \\(F_{{mod}}\\) the modality factor, and \\(F_{{arch}}\\) the architecture-overhead factor.', 'Où \\(P^{{eff}}_c\\) désigne le proxy central de paramètres actifs effectifs, \\(P_t\\) le nombre brut de paramètres actifs retenu, \\(F_{{ctx}}\\) le facteur de fenêtre de contexte, \\(F_{{srv}}\\) le facteur de mode de service, \\(F_{{mod}}\\) le facteur de modalité, et \\(F_{{arch}}\\) le facteur d’overhead d’architecture.'],
       ['Central token factor:', 'Facteur central de tokens :'],
       ['Central per-request energy:', 'Énergie centrale par requête :'],
@@ -3937,6 +4043,10 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
       ['The final annual projection is based on', 'La projection annuelle finale est basée sur'],
       ['inference unit(s) per year.', 'unité(s) d’inférence par an.'],
       ['Bibliography for this analysis', 'Bibliographie de cette analyse'],
+      ['Active-parameter characteristic', 'Caractéristique des paramètres actifs'],
+      ['Context-window characteristic', 'Caractéristique de la fenêtre de contexte'],
+      ['Serving-mode characteristic', 'Caractéristique du mode de service'],
+      ['Vision characteristic', 'Caractéristique de la vision'],
       ['Observed literature value', 'Valeur observée dans la littérature'],
       ['Electricity mix', 'Mix électrique'],
       ['Evidence level: ', 'Niveau de preuve : '],
@@ -3959,26 +4069,35 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
       ['This table projects the training orders of magnitude of current models from the indicator families actually available in the literature: <strong>training energy</strong> derived from emissions when the source country is documented in the electricity-mix table, and <strong>direct training CO2e</strong>. Values are extrapolated by parameter count. Training energy therefore remains a more fragile screening reconstruction than direct carbon.', 'Ce tableau projette les ordres de grandeur d’entraînement des modèles actuels à partir des familles d’indicateurs réellement disponibles dans la littérature : <strong>l’énergie d’entraînement</strong>, dérivée des émissions lorsque le pays source est documenté dans la table des mixes électriques, et le <strong>CO2e direct d’entraînement</strong>. Les valeurs sont extrapolées selon le nombre de paramètres. L’énergie d’entraînement reste donc une reconstruction de screening plus fragile que le carbone direct.'],
       ['`*` indicates an estimated parameter count rather than a provider-published value.', '`*` indique un nombre de paramètres estimé plutôt qu’une valeur publiée par le fournisseur.'],
       ['Source annex used in the site', 'Annexe des sources utilisées sur le site'],
-      ['Sources used to estimate proprietary LLM parameter counts', 'Sources utilisées pour estimer le nombre de paramètres des LLM propriétaires'],
       ['Inference reference set', 'Jeu de références pour l’inférence'],
       ['Training reference set', 'Jeu de références pour l’entraînement'],
       ['Real-world comparison benchmarks', 'Repères de comparaison du monde réel'],
+      ['Central screening factors retained for market models', 'Facteurs centraux de screening retenus pour les modèles du marché'],
+      ['This table documents the central values retained by the project for the multi-factor prompt proxy of each catalog model: raw active parameters, context window, serving mode, modality support, the resulting central factors <code>F_ctx</code>, <code>F_srv</code>, <code>F_mod</code>, <code>F_arch</code>, and the resulting central effective active-parameter proxy <code>P_eff,c</code>. These are project screening factors, not provider-published measurements.', 'Ce tableau documente les valeurs centrales retenues par le projet pour le proxy prompt multi-facteurs de chaque modèle du catalogue : paramètres actifs bruts, fenêtre de contexte, mode de service, support de modalité, facteurs centraux résultants <code>F_ctx</code>, <code>F_srv</code>, <code>F_mod</code>, <code>F_arch</code>, ainsi que le proxy central de paramètres actifs effectifs <code>P_eff,c</code>. Il s’agit de facteurs de screening du projet, et non de mesures publiées par les fournisseurs.'],
+      ['Numbered source list for retained screening characteristics', 'Liste numérotée des sources des caractéristiques de screening retenues'],
+      ['The numbered references used in the columns Active parameters, Context window, Serving mode, and Vision are listed below.', 'Les références numérotées utilisées dans les colonnes Paramètres actifs, Fenêtre de contexte, Mode de service et Vision sont listées ci-dessous.'],
       ['Country factors for carbon and water recalculation', 'Facteurs pays pour le recalcul du carbone et de l’eau'],
       ['Model', 'Modèle'],
       ['Parameters', 'Paramètres'],
+      ['Active parameters', 'Paramètres actifs'],
+      ['Context window', 'Fenêtre de contexte'],
+      ['Serving mode', 'Mode de service'],
+      ['Vision', 'Vision'],
       ['Server country', 'Pays du serveur'],
       ['Retained country', 'Pays retenu'],
       ['Energy / h', 'Énergie / h'],
       ['Carbon / h', 'Carbone / h'],
       ['Energy / request', 'Énergie / requête'],
       ['Carbon / request', 'Carbone / requête'],
+      ['Context: ', 'Contexte : '],
+      ['Modalities: ', 'Modalités : '],
+      ['Architecture: ', 'Architecture : '],
       ['The market-model comparison now relies on <code>market_multifactor_prompt_proxy_v1</code>: a prompt-energy screening proxy calibrated on Elsworth et al. (2025), then adjusted by active parameters, context window, serving mode, modality support, architecture overhead, and standardized token volume.', 'La comparaison des modèles du marché repose désormais sur <code>market_multifactor_prompt_proxy_v1</code> : un proxy de screening en énergie par prompt calibré sur Elsworth et al. (2025), puis ajusté selon les paramètres actifs, la fenêtre de contexte, le mode de service, le support multimodal, l’overhead d’architecture et un volume de tokens standardisé.'],
       ['The market-model comparison now relies on market_multifactor_prompt_proxy_v1: a prompt-energy screening proxy calibrated on Elsworth et al. (2025), then adjusted by active parameters, context window, serving mode, modality support, architecture overhead, and standardized token volume.', 'La comparaison des modèles du marché repose désormais sur market_multifactor_prompt_proxy_v1 : un proxy de screening en énergie par prompt calibré sur Elsworth et al. (2025), puis ajusté selon les paramètres actifs, la fenêtre de contexte, le mode de service, le support multimodal, l’overhead d’architecture et un volume de tokens standardisé.'],
       ['Training energy', 'Énergie d’entraînement'],
       ['Direct training CO2e', 'CO2e direct d’entraînement'],
       ['Provider', 'Fournisseur'],
       ['Confidence', 'Confiance'],
-      ['Estimation source', 'Source d’estimation'],
       ['Notes', 'Notes'],
       ['No.', 'N°'],
       ['Domain', 'Domaine'],
