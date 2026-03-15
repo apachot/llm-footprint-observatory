@@ -12,6 +12,7 @@ from core.estimator import (
     MARKET_REFERENCE_REQUESTS_PER_HOUR,
     build_market_model_predictions,
     build_training_market_predictions,
+    load_records,
 )
 
 MARKET_MODELS_PATH = ROOT / "data" / "market_models.csv"
@@ -81,7 +82,7 @@ def main():
         rows = [dict(row) for row in reader]
 
     inference_predictions = build_market_model_predictions(rows)
-    training_predictions = build_training_market_predictions(rows)
+    training_predictions = build_training_market_predictions(load_records())
     inference_by_id = {pred["model_id"]: pred for pred in inference_predictions}
     training_by_id = {pred["model_id"]: pred for pred in training_predictions}
 
