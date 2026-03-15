@@ -73,6 +73,24 @@ def update_training_factors(row, prediction):
         row[f"training_f_hardware_{scenario}"] = format_float(profile.get("hardware_factor"))
 
 
+def update_training_estimates(row, prediction):
+    if not prediction:
+        return
+
+    results = prediction.get("training_results_by_id", {})
+    energy_result = results.get("direct_training_energy", {})
+    carbon_result = results.get("direct_training_carbon", {})
+    energy_range = energy_result.get("range") or {}
+    carbon_range = carbon_result.get("range") or {}
+    energy_value = energy_result.get("value")
+    carbon_value = carbon_result.get("value")
+    for scenario in ("low", "central", "high"):
+        scenario_energy = energy_range.get(scenario, energy_value)
+        scenario_carbon = carbon_range.get(scenario, carbon_value)
+        row[f"training_energy_wh_{scenario}"] = format_float(scenario_energy)
+        row[f"training_carbon_tco2e_{scenario}"] = format_float(scenario_carbon)
+
+
 def main():
     with MARKET_MODELS_PATH.open("r", encoding="utf-8", newline="") as handle:
         reader = csv.DictReader(handle)
@@ -89,7 +107,9 @@ def main():
     for row in rows:
         model_id = row.get("model_id")
         update_inference_columns(row, inference_by_id.get(model_id))
-        update_training_factors(row, training_by_id.get(model_id))
+        training_prediction = training_by_id.get(model_id)
+        update_training_factors(row, training_prediction)
+        update_training_estimates(row, training_prediction)
 
     with MARKET_MODELS_PATH.open("w", encoding="utf-8", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=header)
