@@ -3608,7 +3608,7 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
     .math-label {{
       display: block;
       margin-bottom: 0.6rem;
-      font-size: 0.8rem;
+      font-size: 1rem;
       font-weight: 700;
       text-transform: none;
       letter-spacing: 0.01em;
