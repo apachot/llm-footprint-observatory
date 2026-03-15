@@ -6,6 +6,7 @@
 \usepackage{geometry}
 \usepackage{hyperref}
 \usepackage{microtype}
+\usepackage{graphicx}
 \usepackage{amsmath}
 \usepackage{tabularx}
 \usepackage{array}
@@ -154,6 +155,23 @@ Retrieval assistant, GPT-5 mini, 4{,}000 uses/month & 12.31 kWh/year & 4.74 kgCO
 \end{table}
 
 These examples illustrate three practical properties of the method. First, annualization matters: apparently small unit values become relevant when multiplied by real usage. Second, the chosen model profile matters materially. Third, the retained electricity mix can dominate the carbon interpretation, which is why country contextualization is explicitly shown in the interface. Just as importantly, these results can be obtained quickly from natural-language inputs while keeping the extracted scenario and assumptions visible in the interface.
+
+\subsection{Observatory Visualizations}
+Figure \ref{fig:inference-release} follows the release sequence of OpenAI, Claude, Grok, and Mistral models against the project’s inference carbon estimate, keeping the vertical axis logarithmic to hold small and large models together. Figure \ref{fig:training-release} applies the same structure to the retained direct training CO$_2$e estimates, which are even more dispersed.
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.85\linewidth]{figures/inference_release_timeline.png}
+\caption{Inference carbon (gCO$_2$e/h) for the OpenAI, Anthropic, xAI, and Mistral families, plotted against each model’s release month. The logarithmic scale keeps the large orders of magnitude accessible.}
+\label{fig:inference-release}
+\end{figure}
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.85\linewidth]{figures/training_release_timeline.png}
+\caption{Direct training CO$_2$e (tCO$_2$e) from the same release sequence. The timeline emphasizes how training estimates scatter across multiple magnitudes even within the same provider families.}
+\label{fig:training-release}
+\end{figure}
 
 For completeness, Table \ref{tab:catalog-results} reports the current calculated values for all 29 market models tracked in the March 2026 release. The purpose of this table is documentary: it makes the observatory outputs directly inspectable in the paper, while the web interface remains the primary medium for interactive exploration.
 
