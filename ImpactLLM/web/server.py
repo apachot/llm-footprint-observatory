@@ -2252,7 +2252,7 @@ def build_market_models_view(records):
     country_mix_chart_rows = []
     release_timeline_rows = []
     body = []
-    release_providers = {"openai", "anthropic", "xai", "mistral"}
+    release_providers = {"openai", "anthropic", "xai", "mistral", "microsoft", "ai21", "deepmind", "google", "meta"}
     for row in rows:
         architecture_notes = str(row.get("architecture_notes", "") or "").lower()
         serving_mode = str(row.get("serving_mode", "") or "").strip().lower()
@@ -2573,7 +2573,7 @@ def build_training_models_view(records):
     uncertainty_chart_rows = []
     release_timeline_rows = []
     body = []
-    release_providers = {"openai", "anthropic", "xai", "mistral"}
+    release_providers = {"openai", "anthropic", "xai", "mistral", "microsoft", "ai21", "deepmind", "google", "meta"}
     regime_scores = {
         "instruction_tuning": 0.2,
         "alignment_or_rl": 0.4,
