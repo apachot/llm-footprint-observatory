@@ -2263,6 +2263,7 @@ def build_market_models_view(records):
     params_chart_rows = []
     scatter_chart_rows = []
     factor_heatmap_rows = []
+    uncertainty_chart_rows = []
     cross_impact_chart_rows = []
     country_mix_chart_rows = []
     release_timeline_rows = []
@@ -2330,6 +2331,18 @@ def build_market_models_view(records):
                 "f_mod": f_mod,
                 "f_arch": f_arch,
                 "p_eff_ratio": (effective_params / raw_active_parameters) if raw_active_parameters else 0.0,
+            }
+        )
+        uncertainty_chart_rows.append(
+            {
+                "label": row.get("display_name", row.get("model_id", "")),
+                "provider": provider,
+                "energy_low": hour_energy_range["low"],
+                "energy_central": hour_energy_range["central"],
+                "energy_high": hour_energy_range["high"],
+                "carbon_low": hour_carbon_range["low"],
+                "carbon_central": hour_carbon_range["central"],
+                "carbon_high": hour_carbon_range["high"],
             }
         )
         scatter_chart_rows.append(
@@ -2444,6 +2457,7 @@ def build_market_models_view(records):
         "params_chart_rows": params_chart_rows,
         "scatter_chart_rows": scatter_chart_rows,
         "factor_heatmap_rows": factor_heatmap_rows,
+        "uncertainty_chart_rows": uncertainty_chart_rows,
         "cross_impact_chart_rows": cross_impact_chart_rows,
         "country_mix_chart_rows": country_mix_chart_rows,
         "release_timeline_rows": release_timeline_rows,
@@ -2485,6 +2499,20 @@ def render_market_models_charts(records):
         <button type="button" class="chart-tab-button" data-cross-impact-control="metric-tab" data-metric-value="carbon" aria-selected="false">Carbon</button>
       </div>
       <div id="inference-training-tradeoff-chart" class="models-impact-chart" data-cross-impact-chart-rows='{escape(json.dumps(view["cross_impact_chart_rows"], ensure_ascii=False), quote=True)}'></div>
+    </section>
+    <section class="panel reference-panel">
+      <div class="summary-header">
+        <div>
+          <div class="summary-kicker">Uncertainty</div>
+          <h3>Inference uncertainty span by model</h3>
+        </div>
+      </div>
+      <p class="summary-intro">This chart makes the project’s retained inference range explicit for each model by showing the low, central, and high values under the standardized one-hour scenario.</p>
+      <div class="chart-tabbar" role="tablist" aria-label="Inference uncertainty indicator">
+        <button type="button" class="chart-tab-button is-active" data-inference-uncertainty-control="metric-tab" data-metric-value="energy" aria-selected="true">Energy</button>
+        <button type="button" class="chart-tab-button" data-inference-uncertainty-control="metric-tab" data-metric-value="carbon" aria-selected="false">Carbon</button>
+      </div>
+      <div id="inference-uncertainty-chart" class="models-impact-chart" data-inference-uncertainty-rows='{escape(json.dumps(view["uncertainty_chart_rows"], ensure_ascii=False), quote=True)}'></div>
     </section>
     <section class="panel reference-panel">
       <div class="summary-header">
@@ -4283,11 +4311,13 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
     const paramsChart = document.getElementById('params-impact-chart');
     const scatterChart = document.getElementById('carbon-params-scatter-chart');
     const factorHeatmap = document.getElementById('inference-factor-heatmap');
+    const inferenceUncertaintyChart = document.getElementById('inference-uncertainty-chart');
     const inferenceTrainingTradeoffChart = document.getElementById('inference-training-tradeoff-chart');
     const scatterLinearChart = document.getElementById('carbon-params-linear-chart');
     const countryMixChart = document.getElementById('country-mix-sensitivity-chart');
     const inferenceReleaseTimelineChart = document.getElementById('inference-release-timeline-chart');
     const chartControls = Array.from(document.querySelectorAll('[data-model-chart-control="metric-tab"]'));
+    const inferenceUncertaintyControls = Array.from(document.querySelectorAll('[data-inference-uncertainty-control="metric-tab"]'));
     const crossImpactControls = Array.from(document.querySelectorAll('[data-cross-impact-control="metric-tab"]'));
     const trainingChart = document.getElementById('training-impact-chart');
     const trainingScatterChart = document.getElementById('training-carbon-params-scatter-chart');
@@ -5787,6 +5817,119 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
         </svg>
       `;
     }};
+    const renderInferenceUncertaintyChart = () => {{
+      if (!inferenceUncertaintyChart) return;
+      let rows = [];
+      try {{
+        rows = JSON.parse(inferenceUncertaintyChart.getAttribute('data-inference-uncertainty-rows') || '[]');
+      }} catch (error) {{
+        rows = [];
+      }}
+      const locale = uiText[currentLanguage.value];
+      const metricControl = document.querySelector('[data-inference-uncertainty-control="metric-tab"].is-active');
+      const metric = metricControl ? metricControl.getAttribute('data-metric-value') : 'energy';
+      const config = metric === 'carbon'
+        ? {{
+            lowKey: 'carbon_low',
+            centralKey: 'carbon_central',
+            highKey: 'carbon_high',
+            intro: {{
+              en: 'Each line shows the low, central, and high retained values for inference carbon over one standardized hour of use.',
+              fr: 'Chaque ligne montre la borne basse, la valeur centrale et la borne haute du carbone d’inférence retenu sur une heure d’usage standardisée.',
+            }},
+            xLabel: {{
+              en: 'Central inference carbon, gCO2e/h (log scale)',
+              fr: 'Carbone central d’inférence, gCO2e/h (échelle logarithmique)',
+            }},
+            formatTick: (value) => value >= 1000 ? `${{(value / 1000).toFixed(1)}} kg` : `${{value.toFixed(1)}} g`,
+            ariaLabel: {{
+              en: 'Inference carbon uncertainty span by model',
+              fr: 'Étendue d’incertitude du carbone d’inférence par modèle',
+            }},
+          }}
+        : {{
+            lowKey: 'energy_low',
+            centralKey: 'energy_central',
+            highKey: 'energy_high',
+            intro: {{
+              en: 'Each line shows the low, central, and high retained values for inference energy over one standardized hour of use.',
+              fr: 'Chaque ligne montre la borne basse, la valeur centrale et la borne haute de l’énergie d’inférence retenue sur une heure d’usage standardisée.',
+            }},
+            xLabel: {{
+              en: 'Central inference energy, Wh/h (log scale)',
+              fr: 'Énergie centrale d’inférence, Wh/h (échelle logarithmique)',
+            }},
+            formatTick: (value) => value >= 1000 ? `${{(value / 1000).toFixed(1)}} kWh` : `${{value.toFixed(1)}} Wh`,
+            ariaLabel: {{
+              en: 'Inference energy uncertainty span by model',
+              fr: 'Étendue d’incertitude de l’énergie d’inférence par modèle',
+            }},
+          }};
+      const points = rows
+        .map((row) => ({{
+          label: translateBenchmarkLabel(row.label, currentLanguage.value),
+          provider: row.provider || '',
+          low: Number(row[config.lowKey] || 0),
+          central: Number(row[config.centralKey] || 0),
+          high: Number(row[config.highKey] || 0),
+        }}))
+        .filter((row) => row.central > 0 && row.high > 0)
+        .sort((a, b) => b.central - a.central);
+      if (!points.length) {{
+        inferenceUncertaintyChart.innerHTML = `<p class="lead">${{locale.noUsableValue}}</p>`;
+        return;
+      }}
+      const width = 980;
+      const rowHeight = 34;
+      const headerHeight = 10;
+      const labelWidth = 280;
+      const valueWidth = 620;
+      const height = headerHeight + points.length * rowHeight + 24;
+      const safeLog = (value) => Math.log10(Math.max(value, 1e-9));
+      const minValue = Math.min(...points.map((row) => Math.max(row.low, 1e-9)));
+      const maxValue = Math.max(...points.map((row) => row.high));
+      const minLog = safeLog(minValue);
+      const maxLog = safeLog(maxValue);
+      const scaleX = (value) => labelWidth + ((safeLog(value) - minLog) / Math.max(maxLog - minLog, 1e-9)) * valueWidth;
+      const tickValues = (() => {{
+        const ticks = [];
+        const start = Math.floor(minLog);
+        const end = Math.ceil(maxLog);
+        for (let exponent = start; exponent <= end; exponent += 1) {{
+          ticks.push(10 ** exponent);
+        }}
+        return ticks.filter((value) => value >= minValue && value <= maxValue);
+      }})();
+      const grid = tickValues.map((value) => {{
+        const x = scaleX(value);
+        return `
+          <line x1="${{x}}" y1="0" x2="${{x}}" y2="${{height - 18}}" stroke="rgba(0,0,0,0.08)" />
+          <text x="${{x}}" y="${{height - 2}}" text-anchor="middle" font-size="12" fill="#6c757d">${{config.formatTick(value)}}</text>
+        `;
+      }}).join('');
+      const rowsMarkup = points.map((row, index) => {{
+        const y = headerHeight + index * rowHeight + 16;
+        const xLow = scaleX(row.low);
+        const xCentral = scaleX(row.central);
+        const xHigh = scaleX(row.high);
+        return `
+          <text x="0" y="${{y - 2}}" font-size="13" fill="#212529">${{row.label}}</text>
+          <text x="0" y="${{y + 11}}" font-size="11" fill="#6c757d">${{row.provider}}</text>
+          <line x1="${{xLow}}" y1="${{y}}" x2="${{xHigh}}" y2="${{y}}" stroke="#8c7a5b" stroke-width="3" stroke-linecap="round"></line>
+          <circle cx="${{xLow}}" cy="${{y}}" r="4" fill="#d6c9b5"></circle>
+          <circle cx="${{xCentral}}" cy="${{y}}" r="5.5" fill="#243b63"></circle>
+          <circle cx="${{xHigh}}" cy="${{y}}" r="4" fill="#b85c38"></circle>
+        `;
+      }}).join('');
+      inferenceUncertaintyChart.innerHTML = `
+        <div class="summary-intro" style="margin-bottom:0.75rem;">${{config.intro[currentLanguage.value]}}</div>
+        <svg viewBox="0 0 ${{width}} ${{height}}" role="img" aria-label="${{config.ariaLabel[currentLanguage.value]}}">
+          ${{grid}}
+          ${{rowsMarkup}}
+          <text x="${{labelWidth + valueWidth / 2}}" y="${{height - 2}}" text-anchor="middle" font-size="13" fill="#495057">${{config.xLabel[currentLanguage.value]}}</text>
+        </svg>
+      `;
+    }};
     const renderReleaseTimelineChart = (container, attrName, config) => {{
       if (!container) return;
       let rows = [];
@@ -5945,6 +6088,17 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
       }});
     }});
     renderInferenceTrainingTradeoffChart();
+    inferenceUncertaintyControls.forEach((control) => {{
+      control.addEventListener('click', () => {{
+        inferenceUncertaintyControls.forEach((item) => {{
+          const isActive = item === control;
+          item.classList.toggle('is-active', isActive);
+          item.setAttribute('aria-selected', isActive ? 'true' : 'false');
+        }});
+        renderInferenceUncertaintyChart();
+      }});
+    }});
+    renderInferenceUncertaintyChart();
     const renderTrainingScatterLogChart = () => {{
       if (!trainingScatterLogChart) return;
       let rows = [];
