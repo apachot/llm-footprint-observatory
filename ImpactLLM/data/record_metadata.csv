@@ -1,0 +1,77 @@
+record_id,unit_of_analysis,source_type,uncertainty_level,raw_or_derived,applicability_domain
+strubell2019_co2_transformer_big,training_run,article,medium,raw,historical NLP training baseline
+strubell2019_co2_tuning_pipeline,training_run,article,medium,raw,historical NLP training workflow
+strubell2019_co2_nas,training_run,article,medium,raw,historical NLP neural architecture search
+luccioni2023_bloom_dynamic,training_run,article,medium,raw,"frontier open model training, France, dynamic consumption"
+luccioni2023_bloom_extended,training_run,article,medium,raw,"frontier open model training, France, extended boundary"
+meta2024_llama8b_emissions,training_run,model_card,medium,raw,"frontier model training, location-based emissions"
+meta2024_llama70b_emissions,training_run,model_card,medium,raw,"frontier model training, location-based emissions"
+meta2024_llama405b_emissions,training_run,model_card,medium,raw,"frontier model training, location-based emissions"
+meta2024_llama405b_gpu_hours,gpu-hour,model_card,medium,raw,frontier model training compute time
+meta2024_llama8b_gpu_hours,gpu-hour,model_card,medium,raw,family-level training compute time
+meta2024_llama70b_gpu_hours,gpu-hour,model_card,medium,raw,family-level training compute time
+meta2024_llama8b_tokens,training_run,model_card,medium,raw,family-level pretraining data scale
+meta2024_llama70b_tokens,training_run,model_card,medium,raw,family-level pretraining data scale
+meta2024_llama405b_tokens,training_run,model_card,medium,raw,family-level pretraining data scale
+morrison2025_olmo-20m_carbon,training_run,preprint,medium,raw,creation lifecycle including hardware and development
+morrison2025_olmo-60m_carbon,training_run,preprint,medium,raw,creation lifecycle including hardware and development
+morrison2025_olmo-150m_carbon,training_run,preprint,medium,raw,creation lifecycle including hardware and development
+morrison2025_olmo-300m_carbon,training_run,preprint,medium,raw,creation lifecycle including hardware and development
+morrison2025_olmo-700m_carbon,training_run,preprint,medium,raw,creation lifecycle including hardware and development
+morrison2025_olmo-7b-unreleased_carbon,training_run,preprint,medium,raw,creation lifecycle including hardware and development
+morrison2025_olmo-1b-3t_carbon,training_run,preprint,medium,raw,creation lifecycle including hardware and development
+morrison2025_olmo-7b-twin_carbon,training_run,preprint,medium,raw,creation lifecycle including hardware and development
+morrison2025_olmo-0724-7b_carbon,training_run,preprint,medium,raw,creation lifecycle including hardware and development
+morrison2025_olmo-2-7b_carbon,training_run,preprint,medium,raw,creation lifecycle including hardware and development
+morrison2025_olmo-2-13b_carbon,training_run,preprint,medium,raw,creation lifecycle including hardware and development
+morrison2025_olmoe-0924_carbon,training_run,preprint,medium,raw,creation lifecycle including hardware and development
+morrison2025_olmo-20m_water,training_run,preprint,medium,raw,creation lifecycle including hardware and development
+morrison2025_olmo-60m_water,training_run,preprint,medium,raw,creation lifecycle including hardware and development
+morrison2025_olmo-150m_water,training_run,preprint,medium,raw,creation lifecycle including hardware and development
+morrison2025_olmo-300m_water,training_run,preprint,medium,raw,creation lifecycle including hardware and development
+morrison2025_olmo-700m_water,training_run,preprint,medium,raw,creation lifecycle including hardware and development
+morrison2025_olmo-7b-unreleased_water,training_run,preprint,medium,raw,creation lifecycle including hardware and development
+morrison2025_olmo-1b-3t_water,training_run,preprint,medium,raw,creation lifecycle including hardware and development
+morrison2025_olmo-7b-twin_water,training_run,preprint,medium,raw,creation lifecycle including hardware and development
+morrison2025_olmo-0724-7b_water,training_run,preprint,medium,raw,creation lifecycle including hardware and development
+morrison2025_olmo-2-7b_water,training_run,preprint,medium,raw,creation lifecycle including hardware and development
+morrison2025_olmo-2-13b_water,training_run,preprint,medium,raw,creation lifecycle including hardware and development
+morrison2025_olmoe-0924_water,training_run,preprint,medium,raw,creation lifecycle including hardware and development
+morrison2025_dev_share,training_run,preprint,medium,raw,development contribution relative to final training
+morrison2025_power_variation,training_run,preprint,medium,raw,observed hardware power utilization range
+epri2024_ai_share,infrastructure_scope,report,high,raw,AI share of data center electricity
+epri2024_chatgpt_query,query,report,high,raw,ChatGPT-like query order-of-magnitude estimate
+elsworth2025_prompt_energy,prompt,preprint,medium,raw,text prompt at hyperscaler production scale
+elsworth2025_prompt_carbon,prompt,preprint,medium,raw,text prompt at hyperscaler production scale
+elsworth2025_prompt_water,prompt,preprint,medium,raw,text prompt at hyperscaler production scale
+elsworth2025_efficiency_energy,prompt,preprint,medium,raw,year-over-year efficiency of production prompts
+elsworth2025_efficiency_carbon,prompt,preprint,medium,raw,year-over-year efficiency of production prompts
+elsworth2025_accelerator_energy,prompt,preprint,medium,raw,accelerator energy share for production prompt
+elsworth2025_cpu_dram_energy,prompt,preprint,medium,raw,CPU and DRAM energy share for production prompt
+elsworth2025_idle_energy,prompt,preprint,medium,raw,idle provisioned machine energy share for production prompt
+elsworth2025_datacenter_overhead,prompt,preprint,medium,raw,data center overhead share for production prompt
+ren2024_llama70b_energy,page,article,medium,raw,500-word page generation in efficient US data center
+ren2024_llama70b_carbon,page,article,medium,raw,500-word page generation in efficient US data center
+ren2024_llama70b_water,page,article,medium,raw,500-word page generation in efficient US data center
+ren2024_gemma2b_energy,page,article,medium,raw,500-word page generation in efficient US data center
+ren2024_gemma2b_carbon,page,article,medium,raw,500-word page generation in efficient US data center
+ren2024_gemma2b_water,page,article,medium,raw,500-word page generation in efficient US data center
+li2025_gpt3_total_water,training_run,article,medium,raw,training water footprint including indirect electricity-related water
+li2025_gpt3_onsite_water,training_run,article,medium,raw,onsite training water footprint
+li2025_chatbot_water,response_bundle,article,high,raw,500 mL equivalent for 10 to 50 average responses
+lbl2025_us_dc_2014,year,report,medium,raw,US data centers annual electricity
+lbl2025_us_dc_2023,year,report,medium,raw,US data centers annual electricity
+lbl2025_us_dc_2028_low,year,report,high,raw,US data centers annual electricity projection low
+lbl2025_us_dc_2028_high,year,report,high,raw,US data centers annual electricity projection high
+lbl2025_us_share_2023,year,report,medium,raw,US data centers share of national electricity
+lbl2025_us_share_2028_low,year,report,high,raw,US data centers share of national electricity projection low
+lbl2025_us_share_2028_high,year,report,high,raw,US data centers share of national electricity projection high
+iea2025_global_dc_2024,year,report,medium,raw,global data centers annual electricity
+iea2025_global_dc_2030,year,report,high,raw,global data centers annual electricity central projection
+iea2025_growth,year,report,high,raw,global data centers annual growth projection
+devriesgao2025_ai_power_low,year,article,high,raw,global AI systems power lower estimate
+devriesgao2025_ai_power_high,year,article,high,raw,global AI systems power higher estimate
+devriesgao2025_ai_power_end_2025,year,article,high,raw,global AI systems power end-of-year level
+devriesgao2025_ai_energy_low,year,article,high,derived,annualized energy derived from 5.3 GW
+devriesgao2025_ai_energy_high,year,article,high,derived,annualized energy derived from 9.4 GW
+devriesgao2025_ai_energy_end_2025,year,article,high,derived,annualized energy derived from 23 GW

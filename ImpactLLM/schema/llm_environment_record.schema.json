@@ -1,0 +1,125 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.org/schemas/llm_environment_record.schema.json",
+  "title": "LLM Environment Record",
+  "type": "object",
+  "required": [
+    "record_id",
+    "study_key",
+    "citation",
+    "publication_year",
+    "phase",
+    "impact_category",
+    "metric_name",
+    "metric_value",
+    "metric_unit",
+    "model_or_scope",
+    "geography",
+    "time_scope",
+    "system_boundary",
+    "data_type",
+    "source_locator",
+    "source_url"
+  ],
+  "properties": {
+    "record_id": {
+      "type": "string"
+    },
+    "study_key": {
+      "type": "string"
+    },
+    "citation": {
+      "type": "string"
+    },
+    "publication_year": {
+      "type": "integer"
+    },
+    "phase": {
+      "type": "string",
+      "enum": [
+        "training",
+        "inference",
+        "infrastructure",
+        "lifecycle"
+      ]
+    },
+    "impact_category": {
+      "type": "string"
+    },
+    "metric_name": {
+      "type": "string"
+    },
+    "metric_value": {
+      "type": "string"
+    },
+    "metric_unit": {
+      "type": "string"
+    },
+    "model_or_scope": {
+      "type": "string"
+    },
+    "geography": {
+      "type": "string"
+    },
+    "time_scope": {
+      "type": "string"
+    },
+    "system_boundary": {
+      "type": "string"
+    },
+    "data_type": {
+      "type": "string",
+      "enum": [
+        "measured",
+        "calculated",
+        "modeled",
+        "projected",
+        "estimated",
+        "statistical"
+      ]
+    },
+    "source_locator": {
+      "type": "string"
+    },
+    "source_url": {
+      "type": "string"
+    },
+    "unit_of_analysis": {
+      "type": "string"
+    },
+    "source_type": {
+      "type": "string"
+    },
+    "uncertainty_level": {
+      "type": "string",
+      "enum": [
+        "low",
+        "medium",
+        "high"
+      ]
+    },
+    "raw_or_derived": {
+      "type": "string",
+      "enum": [
+        "raw",
+        "derived"
+      ]
+    },
+    "applicability_domain": {
+      "type": "object"
+    },
+    "notes": {
+      "type": "string"
+    },
+    "llm_normalized": {
+      "type": "string"
+    },
+    "model_parameters_normalized": {
+      "type": "string"
+    },
+    "country_normalized": {
+      "type": "string"
+    }
+  },
+  "additionalProperties": false
+}

@@ -1,0 +1,8 @@
+<svg width="640" height="180" viewBox="0 0 640 180" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="logoTitle logoDesc">
+  <title id="logoTitle">ImpactLLM logo</title>
+  <desc id="logoDesc">A simple monogram combining a vertical impact bar and a forward inference chevron, followed by the word ImpactLLM.</desc>
+  <rect x="44" y="34" width="14" height="112" rx="7" fill="#1E3557"/>
+  <path d="M78 54L120 90L78 126" stroke="#5E8B7E" stroke-width="14" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="156" y="120" fill="#1E3557" font-family="Aptos, Segoe UI, Helvetica Neue, Arial, sans-serif" font-size="74" font-weight="600" letter-spacing="-0.055em">Impact</text>
+  <text x="406" y="120" fill="#1E3557" font-family="Aptos, Segoe UI, Helvetica Neue, Arial, sans-serif" font-size="74" font-weight="800" letter-spacing="-0.055em">LLM</text>
+</svg>

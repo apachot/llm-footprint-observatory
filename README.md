@@ -8,8 +8,8 @@ The project is designed as a transparent screening tool rather than a black-box 
 
 This repository brings together two main components:
 
-- `llm-environment-opendata/`: the open dataset, local HTTP API, MCP server, web calculation interface, and estimation logic
-- `llm-environment-opendata-paper/`: the scientific paper, bibliography, and related materials
+- `ImpactLLM/`: the open dataset, local HTTP API, MCP server, web calculation interface, and estimation logic
+- `ImpactLLM-paper/`: the scientific paper, bibliography, and related materials
 
 ImpactLLM is useful for:
 
@@ -27,18 +27,18 @@ Our work on responsible AI emphasizes methodological rigor, traceability, and de
 ## Quick Links
 
 - Demo: `https://dev.emotia.com/impact-llm/`
-- Paper PDF: `https://dev.emotia.com/impact-llm/downloads/llm_environment_opendata_paper.pdf`
+- Paper PDF: `https://dev.emotia.com/impact-llm/downloads/ImpactLLM_paper.pdf`
 - GitHub repository: `https://github.com/apachot/ImpactLLM`
 
 ## Get Started
 
 To use the software stack:
 
-- [Software README](/Users/apachot/Documents/GitHub/ImpactLLM/llm-environment-opendata/README.md)
+- [Software README](/Users/apachot/Documents/GitHub/ImpactLLM/ImpactLLM/README.md)
 
 To browse the publication materials:
 
-- [Paper README](/Users/apachot/Documents/GitHub/ImpactLLM/llm-environment-opendata-paper/README.md)
+- [Paper README](/Users/apachot/Documents/GitHub/ImpactLLM/ImpactLLM-paper/README.md)
 
 ## Technical Overview
 

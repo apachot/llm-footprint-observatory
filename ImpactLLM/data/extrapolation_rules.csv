@@ -1,0 +1,4 @@
+rule_id,metric_kind,basis,exponent_low,exponent_central,exponent_high,reference_tokens,source_citation,notes
+ren2024_energy_scaling,energy,parametric_page_inference,1.18,1.24,1.30,750,"Derived from Ren et al. (2024) Gemma-2B vs Llama-3-70B page-generation energy factors","Used to extrapolate request-level energy from model active parameters."
+ren2024_carbon_scaling,carbon,parametric_page_inference,1.18,1.24,1.30,750,"Derived from Ren et al. (2024) Gemma-2B vs Llama-3-70B page-generation carbon factors","Used to extrapolate request-level carbon from model active parameters."
+ren2024_water_scaling,water,parametric_page_inference,1.18,1.24,1.30,750,"Derived from Ren et al. (2024) Gemma-2B vs Llama-3-70B page-generation water factors","Used to extrapolate request-level water from model active parameters."

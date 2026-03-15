@@ -1,0 +1,7 @@
+<svg width="256" height="256" viewBox="0 0 256 256" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="markTitle markDesc">
+  <title id="markTitle">ImpactLLM monogram</title>
+  <desc id="markDesc">A compact monogram with a vertical impact bar and a forward chevron.</desc>
+  <rect width="256" height="256" rx="40" fill="#F7F8FA"/>
+  <rect x="68" y="48" width="20" height="160" rx="10" fill="#1E3557"/>
+  <path d="M118 76L176 128L118 180" stroke="#5E8B7E" stroke-width="20" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
