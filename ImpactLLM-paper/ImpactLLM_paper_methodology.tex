@@ -21,12 +21,12 @@
   linkcolor=black,
   citecolor=black,
   urlcolor=blue,
-  pdftitle={ImpactLLM Methodology: Transparent Screening for LLM Inference and Training Impacts},
+  pdftitle={Transparent Screening for LLM Inference and Training Impacts},
   pdfauthor={Arnault Pachot and Thierry Petit}
 }
 
 
-\title{ImpactLLM Methodology: Transparent Screening for LLM Inference and Training Impacts}
+\title{Transparent Screening for LLM Inference and Training Impacts}
 \author{Arnault Pachot \and Thierry Petit}
 \date{March 14, 2026}
 
@@ -35,14 +35,16 @@
 \maketitle
 
 \begin{abstract}
-This paper describes the implementation of the ImpactLLM estimator. While the observatory publishes the reference table for 41 models, this companion manuscript focuses on the algorithms that convert natural-language application descriptions into inference and training carbon estimates.
+This paper describes the implementation of the screening proxies used in the ImpactLLM Observatory. While the observatory paper presents the comparative tables and visual results for current LLMs, this companion manuscript focuses on the algorithms that convert natural-language application descriptions into inference and training carbon estimates.
 \end{abstract}
 
 \textbf{Keywords:} LLMs, source-linked evidence, screening method, natural language interface.
 \section{Introduction}
 This paper accompanies the \emph{ImpactLLM Observatory} and documents the proxies that produce the inference and training carbon numbers published there. The observatory now covers 41 models, and this companion paper explains how the interface extracts scenarios from natural-language descriptions and propagates them through the same bounded multi-factor screening proxies explained below. The goal is to keep those proxies auditable while keeping the application workflow fast and interpretable.
 
-The remainder of this paper focuses on the technical design of the inference estimator, the training proxy, and the limits of those assumptions. The actual environmental benchmarks remain in the observatory, which references these methods for transparency.
+The remainder of this paper focuses on the technical design of the inference estimator, the training proxy, and the limits of those assumptions. The comparative environmental benchmarks, tables, and figures remain in the observatory paper, which references these methods for transparency.
+
+The methodological premise is straightforward. For the dominant hosted LLM services, direct provider-side environmental telemetry is generally unavailable, even though those systems dominate practical use and public debate. In that context, avoiding approximation altogether does not produce a more rigorous discussion; it leaves room for opaque claims, unsupported comparisons, and contradictory numerical narratives. The role of the present paper is therefore not to claim direct measurement where none exists, but to define a bounded, source-linked, inspectable proxy framework that is methodologically preferable to unverifiable assertions.
 
 
 \section{Inference Screening Method}
@@ -100,14 +102,153 @@ where $P_t$ is the retained parameter count, $Tok_t$ is a training-token prior, 
 
 This second proxy is not used in the application estimator shown to users, which remains inference-only. It is used in the observatory and the comparative tables to avoid suggesting that training impacts can be projected from parameter count alone. The result should still be read as a screening order of magnitude rather than as an audited declaration of model-development impact.
 
+\section{Results and Comparative Outputs}
+The public observatory standardizes model comparison under one hour of active use corresponding to 1,000 input tokens, 550 output tokens, one LLM request per interaction, and approximately 34.6 interactions per hour, derived from a reading-speed convention \cite{brysbaert2019}. The underlying dataset and derived tables were refreshed for the March 2026 release, so the published values mirror the recalculated inference and training columns for the expanded market-model catalog. This provides a common comparison space before application-specific annualization.
+
+Table \ref{tab:short-results-method} summarizes a few illustrative outputs. The first block shows how the standardized observatory makes model orders of magnitude legible. The second block shows how the same proxy can be annualized at the software-feature level from compact, natural-language scenarios.
+
+\begin{table}[htbp]
+\centering
+\small
+\begin{tabularx}{\textwidth}{|L{4.0cm}|L{2.5cm}|L{2.2cm}|Y|}
+\hline
+Case & Energy & Carbon & Interpretation \\
+\hline
+Ministral 3B, one active hour & 0.19 Wh & 0.0077 gCO$_2$e & Small hybrid model under a French provider-country proxy \\
+\hline
+GPT-5 mini, one active hour & 5.90 Wh & 2.272 gCO$_2$e & Medium proprietary hosted model under a US provider-country proxy \\
+\hline
+Claude Opus 4.1, one active hour & 103.53 Wh & 39.860 gCO$_2$e & Very large proprietary estimate illustrating the steep growth of screening orders of magnitude \\
+\hline
+Support chatbot, Ministral 8B, 20{,}000 conversations/month & 2.38 kWh/year & 96 gCO$_2$e/year & Low-carbon annual result despite high usage because the retained electricity factor is favorable \\
+\hline
+Retrieval assistant, GPT-5 mini, 4{,}000 uses/month & 12.31 kWh/year & 4.74 kgCO$_2$e/year & Higher annualized result driven by hosted-service assumptions and US electricity contextualization \\
+\hline
+\end{tabularx}
+\caption{Illustrative outputs from the current observatory and application estimator. These values are screening estimates, not audited declarations.}
+\label{tab:short-results-method}
+\end{table}
+
+These examples illustrate three practical properties of the method. First, annualization matters: apparently small unit values become relevant when multiplied by real usage. Second, the chosen model profile matters materially. Third, the retained electricity mix can dominate the carbon interpretation, which is why country contextualization is explicitly shown in the interface. Just as importantly, these results can be obtained quickly from natural-language inputs while keeping the extracted scenario and assumptions visible in the interface.
+
+\subsection{Observatory Visualizations}
+Figure \ref{fig:inference-release-method} follows the release sequence of OpenAI, Claude, Grok, and Mistral models against the project's inference carbon estimate, keeping the vertical axis logarithmic to hold small and large models together. Figure \ref{fig:training-release-method} applies the same structure to the retained direct training CO$_2$e estimates, which are even more dispersed.
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.85\linewidth]{figures/inference_release_timeline.png}
+\caption{Inference carbon (gCO$_2$e/h) for the OpenAI, Anthropic, xAI, and Mistral families, plotted against each model's release month. The logarithmic scale keeps the large orders of magnitude accessible.}
+\label{fig:inference-release-method}
+\end{figure}
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.85\linewidth]{figures/training_release_timeline.png}
+\caption{Direct training CO$_2$e (tCO$_2$e) from the same release sequence. The timeline emphasizes how training estimates scatter across multiple magnitudes even within the same provider families.}
+\label{fig:training-release-method}
+\end{figure}
+
+For completeness, Table \ref{tab:catalog-results-method} reports the current calculated values for all 41 market models tracked in the March 2026 release. The purpose of this table is documentary: it makes the observatory outputs directly inspectable in the paper, while the web interface remains the primary medium for interactive exploration.
+
+\begin{longtable}{|L{4.0cm}|L{2.0cm}|L{2.2cm}|L{1.7cm}|L{1.8cm}|}
+\caption{Calculated environmental indicators for the 41 market models currently tracked by ImpactLLM. Inference values correspond to the standardized one-hour scenario used in the observatory. Training values are multi-factor screening estimates.}\label{tab:catalog-results-method}\\
+\hline
+Model & Inference Wh/h & Inference gCO$_2$e/h & Training GWh & Training ktCO$_2$e \\
+\hline
+\endfirsthead
+\hline
+Model & Inference Wh/h & Inference gCO$_2$e/h & Training GWh & Training ktCO$_2$e \\
+\hline
+\endhead
+\hline
+GPT-5.2 & 17.59 & 6.77 & 155.26 & 138.75 \\
+\hline
+GPT-5.2-pro & 17.59 & 6.77 & 155.26 & 138.75 \\
+\hline
+GPT-5 mini & 5.90 & 2.27 & 15.57 & 13.91 \\
+\hline
+GPT-5 nano & 5.90 & 2.27 & 15.57 & 13.91 \\
+\hline
+GPT-OSS 120B & 0.40 & 0.15 & 21.56 & 19.27 \\
+\hline
+GPT-OSS 20B & 0.26 & 0.10 & 0.69 & 0.62 \\
+\hline
+Claude Opus 4.1 & 103.53 & 39.86 & 6900.35 & 6166.82 \\
+\hline
+Claude Sonnet 4 & 22.44 & 8.64 & 276.01 & 246.67 \\
+\hline
+Claude 3.5 Sonnet & 10.23 & 3.94 & 52.83 & 47.21 \\
+\hline
+Claude 3.7 Sonnet & 10.23 & 3.94 & 52.83 & 47.21 \\
+\hline
+Claude 3.5 Haiku & 1.43 & 0.55 & 0.83 & 0.75 \\
+\hline
+Gemini 2.5 Pro & 12.46 & 4.80 & 69.00 & 61.67 \\
+\hline
+Gemini 2.5 Flash & 5.22 & 2.01 & 11.04 & 9.87 \\
+\hline
+Gemini 2.5 Flash-Lite & 2.06 & 0.79 & 1.55 & 1.39 \\
+\hline
+Gemini 2.0 Flash & 2.06 & 0.79 & 1.55 & 1.39 \\
+\hline
+Grok 4 & 38.04 & 14.65 & 621.03 & 555.01 \\
+\hline
+Llama 3.1 8B & 0.46 & 0.18 & 0.11 & 0.10 \\
+\hline
+Llama 3.1 70B & 3.61 & 1.39 & 8.58 & 7.66 \\
+\hline
+Llama 3.1 405B & 19.13 & 7.37 & 287.06 & 256.54 \\
+\hline
+Ministral 3B & 0.19 & 0.01 & 0.02 & 0.01 \\
+\hline
+Ministral 8B & 0.49 & 0.02 & 0.11 & 0.10 \\
+\hline
+Mistral Large & 7.18 & 0.29 & 26.10 & 23.32 \\
+\hline
+Mistral Small 3.1 24B & 1.43 & 0.06 & 1.10 & 0.99 \\
+\hline
+Codestral 22B & 1.20 & 0.05 & 0.81 & 0.72 \\
+\hline
+Qwen2.5 7B & 0.41 & 0.22 & 0.09 & 0.08 \\
+\hline
+Qwen2.5 32B & 1.72 & 0.93 & 1.79 & 1.60 \\
+\hline
+Qwen2.5 72B & 3.71 & 2.00 & 9.07 & 8.11 \\
+\hline
+DeepSeek V3 & 2.76 & 1.49 & 675.40 & 603.60 \\
+\hline
+DeepSeek R1 & 2.89 & 1.56 & 675.40 & 603.60 \\
+\hline
+\end{longtable}
+
+\section{Literature and Source Base}
+The results above are not produced from a single benchmark, but from a layered source base combining direct environmental anchors, estimator literature, infrastructure and electricity context, and broader analytical framing. This structure corresponds to the source logic exposed in the site's \emph{Sources} page, where each value is linked to a document, a system boundary, and a use role in the estimator.
+
+\subsection{Direct Environmental Anchors for LLMs}
+The primary literature anchors for training and inference come from work that reports environmental indicators directly for language-model systems or adjacent production systems. The core training anchors include Strubell et al. on transformer training costs \cite{strubell2019}, Luccioni et al. on BLOOM \cite{luccioni2023}, Morrison et al. on holistic language-model impacts \cite{morrison2025}, and recent lifecycle or training-oriented extensions such as Fernandez et al. \cite{fernandez2025lca} and d'Orgeval et al. \cite{dorgeval2026}. For inference, the most operational prompt-level anchor in the current release is Elsworth et al. \cite{elsworth2025}, complemented by broader framing from Ren et al. \cite{ren2024} and water-related contextualization from Li et al. \cite{li2025water}.
+
+\subsection{Measurement, Tracking, and Proxy Literature}
+The methodological design also builds on the literature and tooling ecosystem for measuring or estimating AI impacts when direct telemetry is available or partially missing. This includes CarbonTracker \cite{anthony2020carbontracker}, CodeCarbon \cite{codecarbon2026}, the ML.ENERGY benchmark \cite{mlenergy2025}, and proxy-oriented tooling such as EcoLogits \cite{ecologits2026}. These references do not provide one transferable number for all current hosted LLMs, but they define the design space within which a screening proxy must remain explicit about assumptions, units, and uncertainty.
+
+\subsection{Infrastructure, Electricity, and Cloud Context}
+A second family of sources informs the infrastructural and contextual layers needed to convert energy proxies into carbon estimates or to interpret data-center scale effects. This includes cloud and infrastructure accounting references such as Cloud Carbon Footprint \cite{cloudcarbonfootprint2026}, AWS CCFT \cite{awsccft2026}, the Microsoft Emissions Impact Dashboard \cite{azureeid2026}, Google Cloud carbon reporting \cite{gcloudcarbon2026}, and the OVHcloud environmental tracker \cite{ovhtracker2024}. It also includes system-level or electricity-demand framing from EPRI \cite{epri2024}, Lawrence Berkeley National Laboratory \cite{lbl2025,shehabi2024report}, the International Energy Agency \cite{iea2025}, and Joule-scale discussion by de Vries-Gao \cite{devriesgao2025joule}.
+
+\subsection{Model Documentation and Conceptual Framing}
+Some source families play a different role: they do not provide direct environmental measurements but document model properties or frame the interpretation of the results. Examples include model and provider documentation such as the Llama 3.1 model card \cite{meta2024llama}, broader environmental framing from Rillig et al. \cite{rillig2023}, and earlier conceptual work on sustainable AI and environmental decision support \cite{pachot2022book,pachot2023sustainableai}. The observatory and the site itself are part of this transparency layer because the project republishes those linked records in reusable interfaces \cite{impactllmrepo2026}.
+
+\subsection{Use-Phase and Comparison Conventions}
+Finally, a few references are used to define common use scenarios or contextual comparison devices rather than model-specific environmental values. In the current release, Brysbaert \cite{brysbaert2019} is used to anchor the reading-speed convention behind the standardized one-hour observatory scenario. This kind of contextual reference matters because comparative results depend not only on environmental anchors, but also on the retained usage normalization and interpretation framework.
+
 \section{Limitations}
 The main limitations are methodological. First, the estimator depends on scarce literature anchors, so the uncertainty intervals rely on wide parameter- and token-exponent bounds to keep the screening range honest. Second, proprietary service configurations remain opaque, forcing the method to rely on contextual proxies for regime, architecture, and hardware. Third, training-level emissions are reconstructed from sparse reports and assumed token priors; more published training anchors would reduce that uncertainty. Finally, the natural-language parser must interpret ambiguous descriptions, which is why every extracted assumption is surfaced to the user along with the final estimate.
 
 \section{Implementation Notes}
-The prototype is implemented as a Python/Flask web application that builds on the observatory dataset stored in \\texttt{ImpactLLM/data/market_models.csv}. The front-end sends the user description to OpenAI for parsing, then queries the estimator to compute the inference and training proxies. The same dataset drives the observatory tables, which remain independent of the estimator logic.
+The prototype is implemented as a Python/Flask web application that builds on the observatory dataset stored in \texttt{ImpactLLM/data/market\_models.csv}. The front-end sends the user description to OpenAI for parsing, then queries the estimator to compute the inference and training proxies. The same dataset drives the observatory tables, which remain independent of the estimator logic.
 
 \section{Conclusion}
-The contribution of this manuscript is primarily methodological: it documents how ImpactLLM transforms natural-language descriptions into vetted inference and training carbon estimates. The observatory paper provides the reference table of 41 models, and this companion paper makes explicit how those numbers are derived and what assumptions underlie them.
+The contribution of this manuscript is primarily methodological: it documents how ImpactLLM transforms natural-language descriptions into vetted inference and training carbon estimates. The observatory paper provides the comparative tables and figures for the tracked models, and this companion paper makes explicit how those numbers are derived and what assumptions underlie them.
+
+That contribution should not be read as an attempt to eliminate uncertainty. For the most widely used proprietary LLM services, uncertainty is structurally unavoidable because the decisive telemetry remains inaccessible. The relevant methodological task is therefore to organize approximation rather than to pretend to escape it. This paper argues that a transparent, source-linked, reproducible screening proxy is a better basis for comparison and discussion than the current situation in which strong environmental claims often circulate without explicit assumptions, traceable derivation, or shared comparison rules.
 
 \bibliographystyle{plain}
 \bibliography{references_ImpactLLM}

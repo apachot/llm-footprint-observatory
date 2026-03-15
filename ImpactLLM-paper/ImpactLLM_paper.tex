@@ -21,11 +21,11 @@
   linkcolor=black,
   citecolor=black,
   urlcolor=blue,
-  pdftitle={ImpactLLM: An Open Tool for Estimating the Environmental Footprint of LLMs},
+  pdftitle={ImpactLLM Observatory: An Open Observatory for the Environmental Footprint of LLMs},
   pdfauthor={Arnault Pachot and Thierry Petit}
 }
 
-\title{ImpactLLM:\\An Open Tool for Estimating the Environmental Footprint of LLMs}
+\title{ImpactLLM Observatory:\\An Open Observatory for the Environmental Footprint of LLMs}
 \author{Arnault Pachot \and Thierry Petit}
 \date{March 14, 2026}
 
@@ -46,6 +46,8 @@ This paper addresses that bottleneck with a narrower claim than many AI-impact p
 
 First, it provides an open observatory of environmental indicators for current LLMs. The observatory exposes source-linked records, model metadata, bibliographic references, and comparative views that remain inspectable by users. Second, it provides a rapid screening tool for application-level inference assessment. The user can describe an LLM-enabled application in natural language; the system extracts a compact scenario and returns an inference-focused estimate together with its assumptions, sources, and calculation details. This ``fast estimate from natural language'' design is deliberate: in many practical settings, users do not know dozens of technical serving parameters, but they can describe their application, model, country, and usage volume.
 
+This positioning reflects a practical methodological judgment. The current AI market is dominated by a small number of hosted LLM services such as ChatGPT, Claude, Gemini, and Copilot, precisely the systems for which direct environmental telemetry is the least accessible. Yet the absence of direct measurement does not prevent strong claims from circulating. On the contrary, the public debate is now saturated with contradictory assertions, rough extrapolations, and decontextualized figures. In this context, the relevant choice is not between perfect measurement and approximation. For dominant proprietary services, perfect measurement is usually unavailable. The practical choice is therefore between opaque, unverifiable claims and a transparent, source-linked, auditable approximation framework. \emph{ImpactLLM} adopts the second position.
+
 This gap is especially visible for proprietary LLMs. While some product-level figures and a few industrial anchors have recently become public, model-level environmental values for proprietary systems are still rarely published with enough methodological detail to support direct comparison or reuse. The most widely used systems are often the least transparent: the serving hardware, routing logic, batching behavior, architecture, and deployment geography needed for direct environmental attribution generally remain undisclosed.
 
 The scientific claim of the paper is therefore modest but useful. In a field dominated either by low-level telemetry tools or by opaque provider-side information, an open, reusable observatory coupled with an explicit screening estimator can fill an important operational gap.
@@ -64,7 +66,7 @@ The fourth family consists of cloud- or infrastructure-level accounting tools su
 Two broader lessons follow from the literature. First, the footprint of LLMs is multi-dimensional and should not be collapsed into one number \cite{rillig2023,li2025water,morrison2025}. Second, unit of analysis and system boundary matter as much as the numerical value itself \cite{ren2024}. The missing piece is therefore a reusable evidence layer that preserves this heterogeneity instead of hiding it.
 
 \section{Contribution and Data Layer}
-\emph{ImpactLLM} is organized around one core design principle: one reusable quantified value per record, with its source and comparability context. The current release contains 76 records spanning 11 core sources and four analytical phases: training, inference, infrastructure, and lifecycle. This iteration also expands the market-model catalog to 41 entries, adding legacy Grok (1/2) and Claude 2 releases plus a curated set of GPT-era models such as Megatron-Turing NLG, Jurassic-1, Gopher, GLaM, LaMDA, and OPT to the previously tracked OpenAI and Mistral families. All inference and training columns were recomputed so the observatory data reflect those additional models and the most recent parameter inputs. Each record stores at least a unique identifier, citation, year, analytical phase, impact category, metric name, value, unit, model or scope, geography, data type, source locator, source URL, and free-text note.
+\emph{ImpactLLM Observatory} is organized around one core design principle: one reusable quantified value per record, with its source and comparability context. The current release contains 76 records spanning 11 core sources and four analytical phases: training, inference, infrastructure, and lifecycle. This iteration also expands the market-model catalog to 41 entries, adding legacy Grok (1/2) and Claude 2 releases plus a curated set of GPT-era models such as Megatron-Turing NLG, Jurassic-1, Gopher, GLaM, LaMDA, and OPT to the previously tracked OpenAI and Mistral families. All inference and training columns were recomputed so the observatory data reflect those additional models and the most recent parameter inputs. Each record stores at least a unique identifier, citation, year, analytical phase, impact category, metric name, value, unit, model or scope, geography, data type, source locator, source URL, and free-text note.
 
 This structure separates three dimensions that are often conflated in narrative reviews: the observed phenomenon, the method used to produce the number, and the scope to which the number applies. It also supports a second metadata layer describing comparability-oriented fields such as unit of analysis, source type, uncertainty level, and applicability domain.
 
@@ -73,7 +75,7 @@ The same evidence base is exposed through four reuse layers: a tabular dataset, 
 This observatory angle matters because, to our knowledge, openly accessible infrastructures that jointly provide (i) source-level environmental indicators for LLMs, (ii) comparative views of current models, and (iii) an application-oriented inference screening interface remain rare. Existing tools often provide either instrumentation, or estimation, or datasets, but not all three within one openly inspectable workflow.
 
 
-\noindent The screening proxies themselves are described in full in the companion paper \emph{ImpactLLM Methodology}; the remainder of this article focuses on the resulting observatory outputs.
+\noindent The screening proxies themselves are described in full in the companion paper \emph{Transparent Screening for LLM Inference and Training Impacts}; the remainder of this article focuses on the resulting observatory outputs.
 
 
 \section{Illustrative Results}
@@ -208,6 +210,8 @@ A fourth limitation concerns natural-language scenario extraction. The ``fast es
 \emph{ImpactLLM} proposes a different kind of contribution to the LLM-environment literature. Its main novelty is not a new physical model, but an open, source-linked infrastructure that makes environmental evidence reusable across a dataset, an API, an MCP server, and a public observatory. On top of that evidence layer, the project implements a transparent inference-only screening method for current LLM services, including proprietary ones, and a rapid interface that starts from natural-language descriptions rather than long technical forms.
 
 The value of the project lies precisely in this combination of restraint and reuse. It does not claim hidden provider telemetry, and it does not collapse heterogeneous evidence into a single opaque score. Instead, it publishes the records, the assumptions, the interfaces, and the extrapolative method together. In a field where the difficulty is increasingly one of comparability, accessibility, and traceability rather than raw numerical absence, an open observatory plus a fast screening workflow is a legitimate scientific contribution in its own right \cite{impactllmrepo2026}.
+
+This is the sense in which the project should be read. For the most widely used hosted LLMs, direct environmental measurement is usually not publicly available, while public and policy discussions nevertheless continue to rely on numerical claims. In such a setting, doing nothing does not preserve rigor; it leaves the field open to opaque, inconsistent, and non-reproducible assertions. \emph{ImpactLLM Observatory} therefore argues for a more disciplined middle ground: not false precision, but explicit approximation; not hidden assumptions, but auditable proxies; not definitive measurement, but a reusable framework that can be challenged, updated, and improved as better evidence becomes available.
 
 \bibliographystyle{plain}
 \bibliography{references_ImpactLLM}
