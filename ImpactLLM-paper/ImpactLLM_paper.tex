@@ -33,7 +33,7 @@
 \maketitle
 
 \begin{abstract}
-The environmental literature on large language models (LLMs) is growing, but the evidence remains difficult to reuse because values are dispersed across papers, model cards, reports, and dashboards with heterogeneous units and system boundaries. We present \emph{ImpactLLM}, an open observatory and screening tool for exploring the environmental footprint of current LLMs. The contribution is intentionally practical rather than grand-theoretical. First, the project provides a source-linked evidence layer that can be reused through a tabular dataset, a local API, an MCP server, and a public web interface. Second, it offers a rapid application-level estimator driven by natural-language descriptions rather than by long technical forms. The current estimator is inference-only and designed for screening: it starts from observed literature anchors, then applies a bounded multi-factor proxy that remains explicit and inspectable. In a domain where direct telemetry is usually unavailable for the most-used proprietary models, we argue that an open, auditable observatory is itself a useful scientific contribution.
+The environmental literature on large language models (LLMs) is growing, but the evidence remains difficult to reuse because values are dispersed across papers, model cards, reports, and dashboards with heterogeneous units and system boundaries. We present \emph{ImpactLLM}, an open observatory and screening tool for exploring the environmental footprint of current LLMs. The contribution is intentionally practical rather than grand-theoretical. First, the project provides a source-linked evidence layer that can be reused through a tabular dataset, a local API, an MCP server, and a public web interface. Second, it offers a rapid application-level estimator driven by natural-language descriptions rather than by long technical forms. The current release combines an inference-only application estimator with multi-factor screening views for both inference and training. In both cases, the project starts from observed literature anchors, then applies bounded multi-factor proxies that remain explicit and inspectable. In a domain where direct telemetry is usually unavailable for the most-used proprietary models, we argue that an open, auditable observatory is itself a useful scientific contribution.
 \end{abstract}
 
 \textbf{Keywords:} LLMs, open data, environmental footprint, inference, screening method, API.
@@ -113,6 +113,19 @@ where $CI_c$ is the carbon intensity of country $c$ in gCO$_2$e/kWh.
 
 This method is not presented as a physical law of inference scaling. It is a traceable screening proxy anchored in observed prompt energy and explicit contextual assumptions. Its purpose is to provide a fast and inspectable estimate for comparative reasoning, not an audited declaration of real provider-side energy use.
 
+\section{Training Screening Method}
+The observatory also exposes training orders of magnitude for current market models. Here the uncertainty is even higher than for inference because published values are sparse, heterogeneous, and often reported only as aggregate emissions. A pure parameter-only scaling is therefore too brittle. The current release instead uses a second bounded proxy that combines retained parameter count with additional training priors.
+
+The training proxy starts from literature anchors that directly report training CO$_2$e, and from training-energy reconstructions derived from those emissions when the source-country electricity mix is documented. For a target model $t$, the central training estimate is:
+\begin{equation}
+\hat{E}^{train}_{t,s} = E^{train}_a \times \left(\frac{P_t}{P_a}\right)^{\alpha_s}
+\times \left(\frac{Tok_t}{Tok_a}\right)^{\beta_s}
+\times F^{reg}_{t,s} \times F^{arch-tr}_{t,s} \times F^{hw}_{t,s},
+\end{equation}
+where $P_t$ is the retained parameter count, $Tok_t$ is a training-token prior, $F^{reg}$ is a training-regime prior, $F^{arch-tr}$ captures architecture and multimodality assumptions, and $F^{hw}$ is a hardware-class proxy. The current release uses a simple prior of 20 training tokens per retained parameter when no better public estimate is available, and defaults market models to a foundation-pretraining regime unless a narrower public indication exists.
+
+This second proxy is not used in the application estimator shown to users, which remains inference-only. It is used in the observatory and the comparative tables to avoid suggesting that training impacts can be projected from parameter count alone. The result should still be read as a screening order of magnitude rather than as an audited declaration of model-development impact.
+
 \section{Illustrative Results}
 The public observatory standardizes model comparison under one hour of active use corresponding to 1,000 input tokens, 550 output tokens, one LLM request per interaction, and approximately 34.6 interactions per hour, derived from a reading-speed convention \cite{brysbaert2019}. This provides a common comparison space before application-specific annualization.
 
@@ -145,7 +158,7 @@ These examples illustrate three practical properties of the method. First, annua
 For completeness, Table \ref{tab:catalog-results} reports the current calculated values for all 29 market models tracked in the March 2026 release. The purpose of this table is documentary: it makes the observatory outputs directly inspectable in the paper, while the web interface remains the primary medium for interactive exploration.
 
 \begin{longtable}{|L{4.0cm}|L{2.0cm}|L{2.2cm}|L{1.7cm}|L{1.8cm}|}
-\caption{Calculated environmental indicators for the 29 market models currently tracked by ImpactLLM. Inference values correspond to the standardized one-hour scenario used in the observatory. Training values are extrapolated screening estimates.}\label{tab:catalog-results}\\
+\caption{Calculated environmental indicators for the 29 market models currently tracked by ImpactLLM. Inference values correspond to the standardized one-hour scenario used in the observatory. Training values are multi-factor screening estimates.}\label{tab:catalog-results}\\
 \hline
 Model & Inference Wh/h & Inference gCO$_2$e/h & Training GWh & Training ktCO$_2$e \\
 \hline
@@ -155,72 +168,72 @@ Model & Inference Wh/h & Inference gCO$_2$e/h & Training GWh & Training ktCO$_2$
 \hline
 \endhead
 \hline
-GPT-5.2 & 17.59 & 6.77 & 1.17 & 5.23 \\
+GPT-5.2 & 17.59 & 6.77 & 155.26 & 138.75 \\
 \hline
-GPT-5.2-pro & 17.59 & 6.77 & 1.17 & 5.23 \\
+GPT-5.2-pro & 17.59 & 6.77 & 155.26 & 138.75 \\
 \hline
-GPT-5 mini & 5.90 & 2.27 & 0.37 & 1.66 \\
+GPT-5 mini & 5.90 & 2.27 & 15.57 & 13.91 \\
 \hline
-GPT-5 nano & 5.90 & 2.27 & 0.37 & 1.66 \\
+GPT-5 nano & 5.90 & 2.27 & 15.57 & 13.91 \\
 \hline
-GPT-OSS 120B & 0.40 & 0.15 & 0.02 & 0.09 \\
+GPT-OSS 120B & 0.40 & 0.15 & 21.56 & 19.27 \\
 \hline
-GPT-OSS 20B & 0.26 & 0.10 & 0.01 & 0.06 \\
+GPT-OSS 20B & 0.26 & 0.10 & 0.69 & 0.62 \\
 \hline
-Claude Opus 4.1 & 103.53 & 39.86 & 7.83 & 34.84 \\
+Claude Opus 4.1 & 103.53 & 39.86 & 6900.35 & 6166.82 \\
 \hline
-Claude Sonnet 4 & 22.44 & 8.64 & 1.57 & 6.97 \\
+Claude Sonnet 4 & 22.44 & 8.64 & 276.01 & 246.67 \\
 \hline
-Claude 3.5 Sonnet & 10.23 & 3.94 & 0.69 & 3.05 \\
+Claude 3.5 Sonnet & 10.23 & 3.94 & 52.83 & 47.21 \\
 \hline
-Claude 3.7 Sonnet & 10.23 & 3.94 & 0.69 & 3.05 \\
+Claude 3.7 Sonnet & 10.23 & 3.94 & 52.83 & 47.21 \\
 \hline
-Claude 3.5 Haiku & 1.43 & 0.55 & 0.09 & 0.38 \\
+Claude 3.5 Haiku & 1.43 & 0.55 & 0.83 & 0.75 \\
 \hline
-Gemini 2.5 Pro & 12.46 & 4.80 & 0.78 & 3.48 \\
+Gemini 2.5 Pro & 12.46 & 4.80 & 69.00 & 61.67 \\
 \hline
-Gemini 2.5 Flash & 5.22 & 2.01 & 0.31 & 1.39 \\
+Gemini 2.5 Flash & 5.22 & 2.01 & 11.04 & 9.87 \\
 \hline
-Gemini 2.5 Flash-Lite & 2.06 & 0.79 & 0.12 & 0.52 \\
+Gemini 2.5 Flash-Lite & 2.06 & 0.79 & 1.55 & 1.39 \\
 \hline
-Gemini 2.0 Flash & 2.06 & 0.79 & 0.12 & 0.52 \\
+Gemini 2.0 Flash & 2.06 & 0.79 & 1.55 & 1.39 \\
 \hline
-Grok 4 & 38.04 & 14.65 & 2.35 & 10.45 \\
+Grok 4 & 38.04 & 14.65 & 621.03 & 555.01 \\
 \hline
-Llama 3.1 8B & 0.46 & 0.18 & 0.03 & 0.14 \\
+Llama 3.1 8B & 0.46 & 0.18 & 0.11 & 0.10 \\
 \hline
-Llama 3.1 70B & 3.61 & 1.39 & 0.27 & 1.22 \\
+Llama 3.1 70B & 3.61 & 1.39 & 8.58 & 7.66 \\
 \hline
-Llama 3.1 405B & 19.13 & 7.37 & 1.59 & 7.06 \\
+Llama 3.1 405B & 19.13 & 7.37 & 287.06 & 256.54 \\
 \hline
-Ministral 3B & 0.19 & 0.01 & 0.01 & 0.05 \\
+Ministral 3B & 0.19 & 0.01 & 0.02 & 0.01 \\
 \hline
-Ministral 8B & 0.49 & 0.02 & 0.03 & 0.14 \\
+Ministral 8B & 0.49 & 0.02 & 0.11 & 0.10 \\
 \hline
-Mistral Large & 7.18 & 0.29 & 0.48 & 2.14 \\
+Mistral Large & 7.18 & 0.29 & 26.10 & 23.32 \\
 \hline
-Mistral Small 3.1 24B & 1.43 & 0.06 & 0.09 & 0.42 \\
+Mistral Small 3.1 24B & 1.43 & 0.06 & 1.10 & 0.99 \\
 \hline
-Codestral 22B & 1.20 & 0.05 & 0.09 & 0.38 \\
+Codestral 22B & 1.20 & 0.05 & 0.81 & 0.72 \\
 \hline
-Qwen2.5 7B & 0.41 & 0.22 & 0.03 & 0.12 \\
+Qwen2.5 7B & 0.41 & 0.22 & 0.09 & 0.08 \\
 \hline
-Qwen2.5 32B & 1.72 & 0.93 & 0.13 & 0.56 \\
+Qwen2.5 32B & 1.72 & 0.93 & 1.79 & 1.60 \\
 \hline
-Qwen2.5 72B & 3.71 & 2.00 & 0.28 & 1.25 \\
+Qwen2.5 72B & 3.71 & 2.00 & 9.07 & 8.11 \\
 \hline
-DeepSeek V3 & 2.76 & 1.49 & 0.14 & 0.64 \\
+DeepSeek V3 & 2.76 & 1.49 & 675.40 & 603.60 \\
 \hline
-DeepSeek R1 & 2.89 & 1.56 & 0.14 & 0.64 \\
+DeepSeek R1 & 2.89 & 1.56 & 675.40 & 603.60 \\
 \hline
 \end{longtable}
 
 \section{Limitations}
 The main limitation is epistemic rather than computational. For proprietary hosted models, the evaluator does not observe the real serving stack, hardware, batch behavior, or data-center geography directly. The method therefore remains a proxy-informed estimate, not a direct measurement. The bounded interval is intended to make that limitation visible rather than to eliminate it.
 
-A second limitation is corpus size. Prompt-level anchors remain scarce, and the method currently relies heavily on Elsworth et al. for the main operational prompt-energy anchor \cite{elsworth2025}. More published request-level benchmarks would improve both calibration and uncertainty framing.
+A second limitation is anchor sparsity. Prompt-level inference anchors remain scarce, and the method currently relies heavily on Elsworth et al. for the main operational prompt-energy anchor \cite{elsworth2025}. Training anchors are also sparse and require additional priors on training tokens, regime, architecture, and hardware class. More published request-level and training-level benchmarks would improve both calibration and uncertainty framing.
 
-A third limitation concerns scope. The current user-facing estimate is inference-only. Training, embodied hardware impacts, software-system overheads, and water contextualization remain documented in the evidence base, but they are not yet integrated into the personalized screening output.
+A third limitation concerns scope. The current user-facing estimate is still inference-only. Training, embodied hardware impacts, software-system overheads, and water contextualization remain documented in the evidence base, and training is now screened in the observatory, but these dimensions are not yet integrated into the personalized application estimate.
 
 A fourth limitation concerns natural-language scenario extraction. The ``fast estimate'' workflow improves usability, but it also introduces interpretation assumptions when users provide incomplete descriptions. For that reason, the extracted scenario, assumptions, and retained defaults are systematically displayed alongside the result.
 
