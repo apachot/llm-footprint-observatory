@@ -2285,7 +2285,7 @@ def build_market_models_view(records):
               <td data-sort-value="{escape(market_parameter_sort_value(row), quote=True)}">{escape(format_market_parameter_display(row))}</td>
               <td>{escape(row.get('server_country', 'n.d.') or 'n.d.')}<div class="reference-locator">{escape(format_market_country_status(row.get('server_country_status')))}</div></td>
               <td>{escape(row.get('estimation_country_code', 'n.d.') or 'n.d.')}<div class="reference-locator">{escape(format_market_country_status(row.get('estimation_country_status')))}</div></td>
-              <td>{escape(hour_energy)}<div class="reference-locator">{escape(screening_method)}</div></td>
+              <td>{escape(hour_energy)}</td>
               <td>{escape(hour_carbon)}</td>
               <td>{escape(request_energy)}</td>
               <td>{escape(request_carbon)}</td>
