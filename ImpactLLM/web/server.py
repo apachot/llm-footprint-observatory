@@ -2185,11 +2185,18 @@ def build_market_models_view(records):
     chart_rows = []
     params_chart_rows = []
     scatter_chart_rows = []
+    factor_heatmap_rows = []
+    country_mix_chart_rows = []
     body = []
     for row in rows:
         architecture_notes = str(row.get("architecture_notes", "") or "").lower()
         serving_mode = str(row.get("serving_mode", "") or "").strip().lower()
         screening_method = row.get("screening_method_id", "") or "n.d."
+        raw_active_parameters = to_float(row.get("active_parameters_billion"), default=0.0)
+        f_ctx = market_context_factor(row.get("context_window_tokens"), scenario="central")
+        f_srv = market_serving_factor(row.get("serving_mode"), scenario="central")
+        f_mod = market_modality_factor(row, scenario="central")
+        f_arch = market_architecture_factor(row, scenario="central")
         hour_energy_range = {
             "low": to_float(row.get("screening_per_hour_energy_wh_low"), default=0.0),
             "central": to_float(row.get("screening_per_hour_energy_wh_central"), default=0.0),
@@ -2234,11 +2241,22 @@ def build_market_models_view(records):
                 "effective_active_parameters_billion": effective_params,
             }
         )
+        factor_heatmap_rows.append(
+            {
+                "label": row.get("display_name", row.get("model_id", "")),
+                "provider": row.get("provider", ""),
+                "f_ctx": f_ctx,
+                "f_srv": f_srv,
+                "f_mod": f_mod,
+                "f_arch": f_arch,
+                "p_eff_ratio": (effective_params / raw_active_parameters) if raw_active_parameters else 0.0,
+            }
+        )
         scatter_chart_rows.append(
             {
                 "label": row.get("display_name", row.get("model_id", "")),
                 "provider": row.get("provider", ""),
-                "active_parameters_billion": to_float(row.get("active_parameters_billion"), default=0.0),
+                "active_parameters_billion": raw_active_parameters,
                 "effective_active_parameters_billion": effective_params,
                 "context_window_tokens": to_float(row.get("context_window_tokens"), default=0.0),
                 "serving_mode_score": 1.0 if serving_mode == "closed" else 0.5 if serving_mode == "hybrid" else 0.0,
@@ -2249,6 +2267,15 @@ def build_market_models_view(records):
                 "hour_carbon_gco2e": hour_carbon_range["central"],
                 "request_energy_wh": request_energy_range["central"],
                 "request_carbon_gco2e": request_carbon_range["central"],
+            }
+        )
+        country_mix_chart_rows.append(
+            {
+                "label": row.get("display_name", row.get("model_id", "")),
+                "provider": row.get("provider", ""),
+                "country_code": row.get("estimation_country_code", "n.d.") or "n.d.",
+                "hour_energy_wh": hour_energy_range["central"],
+                "hour_carbon_gco2e": hour_carbon_range["central"],
             }
         )
         body.append(
@@ -2314,6 +2341,8 @@ def build_market_models_view(records):
         "chart_rows": chart_rows,
         "params_chart_rows": params_chart_rows,
         "scatter_chart_rows": scatter_chart_rows,
+        "factor_heatmap_rows": factor_heatmap_rows,
+        "country_mix_chart_rows": country_mix_chart_rows,
         "table_body": "".join(body),
     }
 
@@ -2352,12 +2381,32 @@ def render_market_models_charts(records):
     <section class="panel reference-panel">
       <div class="summary-header">
         <div>
+          <div class="summary-kicker">Proxy</div>
+          <h3>Inference screening factor heatmap</h3>
+        </div>
+      </div>
+      <p class="summary-intro">This heatmap exposes the central screening factors retained for each market model. It shows the four multiplicative factors used by the project’s prompt proxy and the resulting ratio between effective and raw active parameters.</p>
+      <div id="inference-factor-heatmap" class="models-impact-chart" data-factor-heatmap-rows='{escape(json.dumps(view["factor_heatmap_rows"], ensure_ascii=False), quote=True)}'></div>
+    </section>
+    <section class="panel reference-panel">
+      <div class="summary-header">
+        <div>
           <div class="summary-kicker">Positioning</div>
           <h3>Inference carbon vs. parameter count</h3>
         </div>
       </div>
       <p class="summary-intro">This complementary view places models by retained active parameter count on the horizontal axis and by central inference carbon over one hour on the vertical axis, using logarithmic scaling on both axes.</p>
       <div id="carbon-params-linear-chart" class="models-impact-chart" data-scatter-chart-rows='{escape(json.dumps(view["scatter_chart_rows"], ensure_ascii=False), quote=True)}'></div>
+    </section>
+    <section class="panel reference-panel">
+      <div class="summary-header">
+        <div>
+          <div class="summary-kicker">Sensitivity</div>
+          <h3>Country-mix sensitivity</h3>
+        </div>
+      </div>
+      <p class="summary-intro">This view compares central inference energy and carbon over one hour, while coloring each model by the retained electricity-mix country used for carbon recalculation. It helps separate model-size effects from country-mix effects.</p>
+      <div id="country-mix-sensitivity-chart" class="models-impact-chart" data-country-mix-chart-rows='{escape(json.dumps(view["country_mix_chart_rows"], ensure_ascii=False), quote=True)}'></div>
     </section>
     """
 
@@ -3991,7 +4040,9 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
     const modelsChart = document.getElementById('models-impact-chart');
     const paramsChart = document.getElementById('params-impact-chart');
     const scatterChart = document.getElementById('carbon-params-scatter-chart');
+    const factorHeatmap = document.getElementById('inference-factor-heatmap');
     const scatterLinearChart = document.getElementById('carbon-params-linear-chart');
+    const countryMixChart = document.getElementById('country-mix-sensitivity-chart');
     const chartControls = Array.from(document.querySelectorAll('[data-model-chart-control="metric-tab"]'));
     const trainingChart = document.getElementById('training-impact-chart');
     const trainingScatterChart = document.getElementById('training-carbon-params-scatter-chart');
@@ -4197,11 +4248,15 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
       ['Benchmarks integrated into the chart, all expressed over one hour or rescaled to a comparable order of magnitude: household electricity from Purdue Extension measurements (fluorescent lamp ≈ 9.3 Wh over 1 h; laptop ≈ 32 Wh over 1 h) and a 1500 W electric space heater rescaled here to <strong>4.1 minutes</strong> to obtain ≈ <strong>103.5 Wh</strong>, close to the order of magnitude of Claude Opus 4.1 in the inference scenario; for carbon, an average gasoline car benchmark derived from the ICCT (2025) factor retained by the project (235 gCO2e/km), here rescaled to <strong>0.17 km</strong> to obtain ≈ <strong>40.0 gCO2e</strong>, close to the order of magnitude of Claude Opus 4.1 in the inference scenario.', 'Repères intégrés au graphique, tous exprimés sur une heure ou redimensionnés à un ordre de grandeur comparable : consommation électrique domestique issue des mesures de Purdue Extension (lampe fluorescente ≈ 9,3 Wh sur 1 h ; ordinateur portable ≈ 32 Wh sur 1 h) et radiateur électrique de 1500 W ramené ici à <strong>4,1 minutes</strong> pour obtenir ≈ <strong>103,5 Wh</strong>, proche de l’ordre de grandeur de Claude Opus 4.1 dans le scénario d’inférence ; pour le carbone, un repère de voiture essence moyenne dérivé du facteur ICCT (2025) retenu par le projet (235 gCO2e/km), ici ramené à <strong>0,17 km</strong> pour obtenir ≈ <strong>40,0 gCO2e</strong>, proche de l’ordre de grandeur de Claude Opus 4.1 dans le scénario d’inférence.'],
       ['Average gasoline car for 0.17 km', 'Voiture essence moyenne sur 0,17 km'],
       ['Inference model landscape', 'Paysage des modèles en inférence'],
+      ['Inference screening factor heatmap', 'Heatmap des facteurs de screening en inférence'],
       ['Inference carbon vs. parameter count', 'Carbone d’inférence vs nombre de paramètres'],
+      ['Country-mix sensitivity', 'Sensibilité au mix pays'],
       ['Training model landscape', 'Paysage des modèles en entraînement'],
       ['Training carbon vs. parameter count', 'Carbone d’entraînement vs nombre de paramètres'],
       ['This landscape view clusters the catalog models from the characteristics retained by the project for inference screening: active and effective parameters, context window, serving mode, modality support, architecture notes, and central energy and carbon outputs. Nearby points indicate models with similar retained screening profiles, not a simple one-metric ranking.', 'Cette vue de paysage regroupe les modèles du catalogue à partir des caractéristiques retenues par le projet pour le screening en inférence : paramètres actifs et effectifs, fenêtre de contexte, mode de service, support multimodal, notes d’architecture, ainsi que sorties centrales d’énergie et de carbone. Des points proches indiquent des profils de screening retenus similaires, et non un classement sur une seule métrique.'],
+      ['This heatmap exposes the central screening factors retained for each market model. It shows the four multiplicative factors used by the project’s prompt proxy and the resulting ratio between effective and raw active parameters.', 'Cette heatmap rend visibles les facteurs centraux de screening retenus pour chaque modèle du marché. Elle montre les quatre facteurs multiplicatifs utilisés par le proxy prompt du projet ainsi que le ratio résultant entre paramètres actifs effectifs et paramètres actifs bruts.'],
       ['This complementary view places models by retained active parameter count on the horizontal axis and by central inference carbon over one hour on the vertical axis, using logarithmic scaling on both axes.', 'Cette vue complémentaire positionne les modèles selon leur nombre de paramètres actifs retenus sur l’axe horizontal et leur carbone central d’inférence sur une heure sur l’axe vertical, avec une échelle logarithmique sur les deux axes.'],
+      ['This view compares central inference energy and carbon over one hour, while coloring each model by the retained electricity-mix country used for carbon recalculation. It helps separate model-size effects from country-mix effects.', 'Cette vue compare l’énergie et le carbone centraux d’inférence sur une heure, en colorant chaque modèle selon le pays de mix électrique retenu pour le recalcul du carbone. Elle aide à distinguer les effets de taille de modèle des effets de mix pays.'],
       ['This landscape view clusters the catalog models from the characteristics retained by the project for training screening: active parameters, context window, serving mode, modality support, architecture notes, and central training energy and carbon outputs. Nearby points indicate similar retained screening profiles rather than a direct ranking on one axis.', 'Cette vue de paysage regroupe les modèles du catalogue à partir des caractéristiques retenues par le projet pour le screening en entraînement : paramètres actifs, fenêtre de contexte, mode de service, support multimodal, notes d’architecture, ainsi que sorties centrales d’énergie et de carbone d’entraînement. Des points proches indiquent des profils de screening retenus similaires plutôt qu’un classement direct sur un seul axe.'],
       ['This complementary view places models by retained active parameter count on the horizontal axis and by direct training CO2e on the vertical axis, using logarithmic scaling on both axes.', 'Cette vue complémentaire positionne les modèles selon leur nombre de paramètres actifs retenus sur l’axe horizontal et leur CO2e direct d’entraînement sur l’axe vertical, avec une échelle logarithmique sur les deux axes.'],
       ['3. Carbon derivation from the country mix', '3. Dérivation du carbone à partir du mix pays'],
@@ -4421,7 +4476,9 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
       renderModelsChart();
       renderParamsChart();
       renderScatterChart();
+      renderFactorHeatmap();
       renderScatterLinearChart();
+      renderCountryMixChart();
       renderTrainingChart();
       renderTrainingScatterChart();
       renderTrainingScatterLogChart();
@@ -4908,6 +4965,70 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
       }});
     }};
     renderScatterChart();
+    const renderFactorHeatmap = () => {{
+      if (!factorHeatmap) return;
+      let rows = [];
+      try {{
+        rows = JSON.parse(factorHeatmap.getAttribute('data-factor-heatmap-rows') || '[]');
+      }} catch (error) {{
+        rows = [];
+      }}
+      const locale = uiText[currentLanguage.value];
+      if (!rows.length) {{
+        factorHeatmap.innerHTML = `<p class="lead">${{locale.noData}}</p>`;
+        return;
+      }}
+      const metrics = [
+        {{ key: 'f_ctx', label: currentLanguage.value === 'fr' ? 'F_ctx' : 'F_ctx' }},
+        {{ key: 'f_srv', label: currentLanguage.value === 'fr' ? 'F_srv' : 'F_srv' }},
+        {{ key: 'f_mod', label: currentLanguage.value === 'fr' ? 'F_mod' : 'F_mod' }},
+        {{ key: 'f_arch', label: currentLanguage.value === 'fr' ? 'F_arch' : 'F_arch' }},
+        {{ key: 'p_eff_ratio', label: currentLanguage.value === 'fr' ? 'P_eff / P_raw' : 'P_eff / P_raw' }},
+      ];
+      const width = 980;
+      const rowHeight = 34;
+      const headerHeight = 34;
+      const labelWidth = 280;
+      const cellWidth = 120;
+      const height = headerHeight + rows.length * rowHeight + 20;
+      const colorForValue = (value) => {{
+        const normalized = Math.max(0, Math.min(1, (Number(value || 0) - 0.8) / 0.7));
+        const lightness = 94 - normalized * 42;
+        return `hsl(147, 28%, ${{lightness}}%)`;
+      }};
+      const header = metrics.map((metric, index) => `
+        <text x="${{labelWidth + index * cellWidth + cellWidth / 2}}" y="22" text-anchor="middle" font-size="13" fill="#495057">${{metric.label}}</text>
+      `).join('');
+      const body = rows.map((row, rowIndex) => {{
+        const y = headerHeight + rowIndex * rowHeight;
+        const label = translateBenchmarkLabel(row.label, currentLanguage.value);
+        const provider = row.provider || '';
+        const cells = metrics.map((metric, metricIndex) => {{
+          const value = Number(row[metric.key] || 0);
+          const x = labelWidth + metricIndex * cellWidth;
+          return `
+            <rect x="${{x}}" y="${{y}}" width="${{cellWidth - 10}}" height="${{rowHeight - 6}}" rx="4" fill="${{colorForValue(value)}}" stroke="rgba(0,0,0,0.08)"></rect>
+            <text x="${{x + (cellWidth - 10) / 2}}" y="${{y + 19}}" text-anchor="middle" font-size="12" fill="#212529">${{value.toFixed(3)}}</text>
+          `;
+        }}).join('');
+        return `
+          <text x="0" y="${{y + 15}}" font-size="13" fill="#212529">${{label}}</text>
+          <text x="0" y="${{y + 29}}" font-size="11" fill="#6c757d">${{provider}}</text>
+          ${{cells}}
+        `;
+      }}).join('');
+      const intro = currentLanguage.value === 'fr'
+        ? 'Plus la cellule est foncée, plus le facteur central retenu par le proxy est élevé.'
+        : 'Darker cells indicate higher central screening factors retained by the proxy.';
+      factorHeatmap.innerHTML = `
+        <div class="summary-intro" style="margin-bottom:0.75rem;">${{intro}}</div>
+        <svg viewBox="0 0 ${{width}} ${{height}}" role="img" aria-label="Inference screening factor heatmap">
+          ${{header}}
+          ${{body}}
+        </svg>
+      `;
+    }};
+    renderFactorHeatmap();
     const renderScatterLinearChart = () => {{
       if (!scatterLinearChart) return;
       let rows = [];
@@ -4997,6 +5118,93 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
       `;
     }};
     renderScatterLinearChart();
+    const renderCountryMixChart = () => {{
+      if (!countryMixChart) return;
+      let rows = [];
+      try {{
+        rows = JSON.parse(countryMixChart.getAttribute('data-country-mix-chart-rows') || '[]');
+      }} catch (error) {{
+        rows = [];
+      }}
+      const locale = uiText[currentLanguage.value];
+      const points = rows
+        .map((row) => ({{
+          label: translateBenchmarkLabel(row.label, currentLanguage.value),
+          provider: row.provider,
+          country: row.country_code || 'n.d.',
+          x: Number(row.hour_energy_wh || 0),
+          y: Number(row.hour_carbon_gco2e || 0),
+        }}))
+        .filter((row) => row.x > 0 && row.y > 0);
+      if (!points.length) {{
+        countryMixChart.innerHTML = `<p class="lead">${{locale.noUsableValue}}</p>`;
+        return;
+      }}
+      const countries = Array.from(new Set(points.map((row) => row.country))).sort();
+      const palette = ['#243b63', '#3f5a49', '#8c7a5b', '#b85c38', '#6c5b7b', '#2f7f92', '#7a9e2f', '#a33d5e'];
+      const colorByCountry = Object.fromEntries(countries.map((country, index) => [country, palette[index % palette.length]]));
+      const padding = {{ top: 24, right: 24, bottom: 58, left: 74 }};
+      const width = 980;
+      const height = 620;
+      const plotWidth = width - padding.left - padding.right;
+      const plotHeight = height - padding.top - padding.bottom;
+      const xMax = Math.max(...points.map((row) => row.x));
+      const yMax = Math.max(...points.map((row) => row.y));
+      const scaleX = (value) => padding.left + (value / Math.max(xMax, 1e-9)) * plotWidth;
+      const scaleY = (value) => padding.top + plotHeight - (value / Math.max(yMax, 1e-9)) * plotHeight;
+      const xGrid = Array.from({{ length: 6 }}, (_, index) => {{
+        const value = (xMax / 5) * index;
+        const x = scaleX(value);
+        const label = value >= 1000 ? `${{(value / 1000).toFixed(1)}} kWh` : `${{value.toFixed(1)}} Wh`;
+        return `
+          <line x1="${{x}}" y1="${{padding.top}}" x2="${{x}}" y2="${{padding.top + plotHeight}}" stroke="rgba(0,0,0,0.08)" />
+          <text x="${{x}}" y="${{height - 18}}" text-anchor="middle" font-size="12" fill="#6c757d">${{label}}</text>
+        `;
+      }}).join('');
+      const yGrid = Array.from({{ length: 6 }}, (_, index) => {{
+        const value = (yMax / 5) * index;
+        const y = scaleY(value);
+        const label = `${{value.toFixed(1)}} g`;
+        return `
+          <line x1="${{padding.left}}" y1="${{y}}" x2="${{padding.left + plotWidth}}" y2="${{y}}" stroke="rgba(0,0,0,0.08)" />
+          <text x="${{padding.left - 10}}" y="${{y + 4}}" text-anchor="end" font-size="12" fill="#6c757d">${{label}}</text>
+        `;
+      }}).join('');
+      const dots = points.map((row) => {{
+        const cx = scaleX(row.x);
+        const cy = scaleY(row.y);
+        const fill = colorByCountry[row.country];
+        return `
+          <circle cx="${{cx}}" cy="${{cy}}" r="5.5" fill="${{fill}}" opacity="0.9"></circle>
+          <text x="${{cx + 8}}" y="${{cy - 8}}" font-size="12" fill="#212529">${{row.label}}</text>
+        `;
+      }}).join('');
+      const legend = countries.map((country, index) => `
+        <g transform="translate(${{padding.left + (index % 4) * 150}}, ${{height - 28 - Math.floor(index / 4) * 18}})">
+          <rect width="14" height="14" rx="3" fill="${{colorByCountry[country]}}"></rect>
+          <text x="20" y="11" font-size="12" fill="#495057">${{country}}</text>
+        </g>
+      `).join('');
+      const intro = currentLanguage.value === 'fr'
+        ? 'Les points de même couleur partagent le même pays de mix électrique retenu pour le recalcul du carbone.'
+        : 'Points with the same color share the same retained electricity-mix country for carbon recalculation.';
+      const xLabel = currentLanguage.value === 'fr' ? 'Énergie centrale d’inférence, Wh/h' : 'Central inference energy, Wh/h';
+      const yLabel = currentLanguage.value === 'fr' ? 'Carbone central d’inférence, gCO2e/h' : 'Central inference carbon, gCO2e/h';
+      countryMixChart.innerHTML = `
+        <div class="summary-intro" style="margin-bottom:0.75rem;">${{intro}}</div>
+        <svg viewBox="0 0 ${{width}} ${{height}}" role="img" aria-label="Country mix sensitivity chart">
+          ${{xGrid}}
+          ${{yGrid}}
+          <line x1="${{padding.left}}" y1="${{padding.top + plotHeight}}" x2="${{padding.left + plotWidth}}" y2="${{padding.top + plotHeight}}" stroke="#495057" />
+          <line x1="${{padding.left}}" y1="${{padding.top}}" x2="${{padding.left}}" y2="${{padding.top + plotHeight}}" stroke="#495057" />
+          ${{dots}}
+          ${{legend}}
+          <text x="${{padding.left + plotWidth / 2}}" y="${{height - 4}}" text-anchor="middle" font-size="13" fill="#495057">${{xLabel}}</text>
+          <text x="18" y="${{padding.top + plotHeight / 2}}" text-anchor="middle" font-size="13" fill="#495057" transform="rotate(-90 18 ${{padding.top + plotHeight / 2}})">${{yLabel}}</text>
+        </svg>
+      `;
+    }};
+    renderCountryMixChart();
     const renderTrainingScatterLogChart = () => {{
       if (!trainingScatterLogChart) return;
       let rows = [];
