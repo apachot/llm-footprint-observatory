@@ -2596,17 +2596,24 @@ def build_training_models_view(records):
         provider = row.get("provider", "")
         retained_training_params = to_float(training_profile.get("target_params_billion"), default=training_parameter_count_billion(row) or 0.0)
         retained_training_tokens = to_float(training_profile.get("target_tokens_trillion"), default=training_tokens_estimate_trillion(row) or 0.0)
-        direct_energy_value = to_float(row.get("training_energy_wh_central"), default=0.0)
+        training_results = row.get("training_results_by_id") or {}
+        energy_result = training_results.get("direct_training_energy") or {}
+        carbon_result = training_results.get("direct_training_carbon") or {}
+        central_energy_value = energy_result.get("value")
+        direct_energy_value = to_float(central_energy_value, default=to_float(row.get("training_energy_wh_central"), default=0.0))
+        energy_range = energy_result.get("range") or {}
         direct_energy_range = {
-            "low": to_float(row.get("training_energy_wh_low"), default=0.0),
-            "central": direct_energy_value,
-            "high": to_float(row.get("training_energy_wh_high"), default=0.0),
+            "low": to_float(energy_range.get("low"), default=direct_energy_value),
+            "central": to_float(energy_range.get("central"), default=direct_energy_value),
+            "high": to_float(energy_range.get("high"), default=direct_energy_value),
         }
-        direct_carbon_value = to_float(row.get("training_carbon_tco2e_central"), default=0.0)
+        central_carbon_value = carbon_result.get("value")
+        direct_carbon_value = to_float(central_carbon_value, default=to_float(row.get("training_carbon_tco2e_central"), default=0.0))
+        carbon_range = carbon_result.get("range") or {}
         direct_carbon_range = {
-            "low": to_float(row.get("training_carbon_tco2e_low"), default=0.0),
-            "central": direct_carbon_value,
-            "high": to_float(row.get("training_carbon_tco2e_high"), default=0.0),
+            "low": to_float(carbon_range.get("low"), default=direct_carbon_value),
+            "central": to_float(carbon_range.get("central"), default=direct_carbon_value),
+            "high": to_float(carbon_range.get("high"), default=direct_carbon_value),
         }
         chart_rows.append(
             {
