@@ -1640,6 +1640,12 @@ def render_bibliography_tab():
     def register_factor_source(category, citation, url):
         source_citation = str(citation or "").strip()
         source_url = str(url or "").strip()
+        if source_citation and not source_url and (
+            source_citation.startswith("Project screening prior")
+            or source_citation.startswith("ImpactLLM method note")
+            or source_citation.startswith("Project screening default")
+        ):
+            source_url = app_url("/downloads/ImpactLLM_paper.pdf")
         if not source_citation:
             return ""
         key = (category, source_citation, source_url)
@@ -1688,6 +1694,7 @@ def render_bibliography_tab():
         for index, row in enumerate(country_rows, start=1)
     )
     factor_table_rows = []
+    training_factor_table_rows = []
     for row in sorted(
         market_model_rows,
         key=lambda item: (
@@ -1727,6 +1734,32 @@ def render_bibliography_tab():
           <td>{f_mod:.3f}</td>
           <td>{f_arch:.3f}</td>
           <td>{p_eff:.3f}B</td>
+        </tr>
+            """
+        )
+        training_params = training_parameter_count_billion(row)
+        training_tokens = to_float(row.get("training_tokens_estimate_trillion"), default=training_tokens_estimate_trillion(row) or 0.0)
+        training_regime = str(row.get("training_regime", "n.d.") or "n.d.")
+        training_hardware = str(row.get("training_hardware_class_proxy", "n.d.") or "n.d.")
+        training_multimodal = "yes" if parse_market_bool(row.get("training_multimodal")) else "no"
+        training_param_ref = register_factor_source("Training parameters", row.get("parameter_source"), row.get("parameter_source_url"))
+        training_tokens_ref = register_factor_source("Training tokens", row.get("training_tokens_source"), row.get("training_tokens_source_url"))
+        training_regime_ref = register_factor_source("Training regime", row.get("training_regime_source"), row.get("training_regime_source_url"))
+        training_modality_ref = register_factor_source("Training modality", row.get("training_multimodal_source"), row.get("training_multimodal_source_url"))
+        training_hardware_ref = register_factor_source("Training hardware", row.get("training_hardware_source"), row.get("training_hardware_source_url"))
+        training_factor_table_rows.append(
+            f"""
+        <tr>
+          <td>{escape(row.get('display_name', '') or row.get('model_id', '') or 'n.d.')}</td>
+          <td>{escape(row.get('provider', 'n.d.') or 'n.d.')}</td>
+          <td>{escape(format_scalar(training_params))}B{training_param_ref}</td>
+          <td>{training_tokens:,.2f}T{training_tokens_ref}</td>
+          <td>{escape(training_regime)}{training_regime_ref}</td>
+          <td>{training_multimodal}{training_modality_ref}</td>
+          <td>{escape(training_hardware)}{training_hardware_ref}</td>
+          <td>{escape(str(row.get('training_f_regime_central', 'n.d.') or 'n.d.'))}</td>
+          <td>{escape(str(row.get('training_f_arch_central', 'n.d.') or 'n.d.'))}</td>
+          <td>{escape(str(row.get('training_f_hardware_central', 'n.d.') or 'n.d.'))}</td>
         </tr>
             """
         )
@@ -1812,10 +1845,38 @@ def render_bibliography_tab():
           </div>
         </div>
 
+        <div class="reference-subtable" id="market-training-screening-factors">
+          <h4>Central training screening factors retained for market models</h4>
+          <div class="reference-copy-block">
+            <p class="summary-intro">This table documents the central values retained by the project for the multi-factor training proxy of each catalog model: retained training parameter count, training-token prior, training regime, multimodal training flag, hardware-class proxy, and the resulting central factors <code>F_reg</code>, <code>F_arch-tr</code>, and <code>F_hw</code>. These are project screening factors, not provider-published measurements.</p>
+          </div>
+          <div class="reference-table-wrap">
+            <table class="reference-table">
+              <thead>
+                <tr>
+                  <th>Model</th>
+                  <th>Provider</th>
+                  <th>Retained parameters</th>
+                  <th>Training tokens</th>
+                  <th>Training regime</th>
+                  <th>Multimodal</th>
+                  <th>Hardware class</th>
+                  <th>F_reg</th>
+                  <th>F_arch</th>
+                  <th>F_hw</th>
+                </tr>
+              </thead>
+              <tbody>
+                {"".join(training_factor_table_rows)}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
         <div class="reference-subtable">
           <h4>Numbered source list for retained screening characteristics</h4>
           <div class="reference-copy-block">
-            <p class="summary-intro">The numbered references used in the columns Active parameters, Context window, Serving mode, and Vision are listed below.</p>
+            <p class="summary-intro">The numbered references used in the retained inference and training screening-characteristic tables are listed below.</p>
           </div>
           <ol class="analysis-bibliography-list">
             {factor_source_rows}
@@ -2189,11 +2250,14 @@ def build_market_models_view(records):
     scatter_chart_rows = []
     factor_heatmap_rows = []
     country_mix_chart_rows = []
+    release_timeline_rows = []
     body = []
+    release_providers = {"openai", "anthropic", "xai", "mistral"}
     for row in rows:
         architecture_notes = str(row.get("architecture_notes", "") or "").lower()
         serving_mode = str(row.get("serving_mode", "") or "").strip().lower()
         screening_method = row.get("screening_method_id", "") or "n.d."
+        provider = row.get("provider", "")
         raw_active_parameters = to_float(row.get("active_parameters_billion"), default=0.0)
         f_ctx = market_context_factor(row.get("context_window_tokens"), scenario="central")
         f_srv = market_serving_factor(row.get("serving_mode"), scenario="central")
@@ -2246,7 +2310,7 @@ def build_market_models_view(records):
         factor_heatmap_rows.append(
             {
                 "label": row.get("display_name", row.get("model_id", "")),
-                "provider": row.get("provider", ""),
+                "provider": provider,
                 "f_ctx": f_ctx,
                 "f_srv": f_srv,
                 "f_mod": f_mod,
@@ -2257,7 +2321,7 @@ def build_market_models_view(records):
         scatter_chart_rows.append(
             {
                 "label": row.get("display_name", row.get("model_id", "")),
-                "provider": row.get("provider", ""),
+                "provider": provider,
                 "active_parameters_billion": raw_active_parameters,
                 "effective_active_parameters_billion": effective_params,
                 "context_window_tokens": to_float(row.get("context_window_tokens"), default=0.0),
@@ -2274,12 +2338,22 @@ def build_market_models_view(records):
         country_mix_chart_rows.append(
             {
                 "label": row.get("display_name", row.get("model_id", "")),
-                "provider": row.get("provider", ""),
+                "provider": provider,
                 "country_code": row.get("estimation_country_code", "n.d.") or "n.d.",
                 "hour_energy_wh": hour_energy_range["central"],
                 "hour_carbon_gco2e": hour_carbon_range["central"],
             }
         )
+        release_date = row.get("release_date", "")
+        if provider in release_providers and release_date:
+            release_timeline_rows.append(
+                {
+                    "label": row.get("display_name", row.get("model_id", "")),
+                    "provider": provider,
+                    "release_date": release_date,
+                    "hour_carbon_gco2e": hour_carbon_range["central"],
+                }
+            )
         body.append(
             f"""
             <tr>
@@ -2344,6 +2418,7 @@ def build_market_models_view(records):
         "scatter_chart_rows": scatter_chart_rows,
         "factor_heatmap_rows": factor_heatmap_rows,
         "country_mix_chart_rows": country_mix_chart_rows,
+        "release_timeline_rows": release_timeline_rows,
         "table_body": "".join(body),
     }
 
@@ -2408,6 +2483,16 @@ def render_market_models_charts(records):
       </div>
       <p class="summary-intro">This view compares central inference energy and carbon over one hour, while coloring each model by the retained electricity-mix country used for carbon recalculation. It helps separate model-size effects from country-mix effects.</p>
       <div id="country-mix-sensitivity-chart" class="models-impact-chart" data-country-mix-chart-rows='{escape(json.dumps(view["country_mix_chart_rows"], ensure_ascii=False), quote=True)}'></div>
+    </section>
+    <section class="panel reference-panel">
+      <div class="summary-header">
+        <div>
+          <div class="summary-kicker">Timeline</div>
+          <h3>Inference carbon by model release date</h3>
+        </div>
+      </div>
+      <p class="summary-intro">This timeline follows the evolution of the project’s central inference CO2e estimate over time for the OpenAI, Claude, Grok, and Mistral families, using the release month of each model as the horizontal axis.</p>
+      <div id="inference-release-timeline-chart" class="models-impact-chart" data-release-timeline-rows='{escape(json.dumps(view["release_timeline_rows"], ensure_ascii=False), quote=True)}'></div>
     </section>
     """
 
@@ -2484,7 +2569,11 @@ def build_training_models_view(records):
     rows = build_training_market_predictions(records)
     chart_rows = []
     scatter_chart_rows = []
+    factor_heatmap_rows = []
+    uncertainty_chart_rows = []
+    release_timeline_rows = []
     body = []
+    release_providers = {"openai", "anthropic", "xai", "mistral"}
     regime_scores = {
         "instruction_tuning": 0.2,
         "alignment_or_rl": 0.4,
@@ -2504,24 +2593,34 @@ def build_training_models_view(records):
         training_profile = row.get("training_proxy_profile") or {}
         training_regime = str(training_profile.get("training_regime") or row.get("training_regime") or "unknown").strip().lower()
         hardware_class = str(training_profile.get("training_hardware_class_proxy") or row.get("training_hardware_class_proxy") or "unknown").strip().lower()
-        results = row.get("training_results_by_id") or {}
-        direct_energy = results.get("direct_training_energy") or {}
-        direct_carbon = results.get("direct_training_carbon") or {}
+        provider = row.get("provider", "")
         retained_training_params = to_float(training_profile.get("target_params_billion"), default=training_parameter_count_billion(row) or 0.0)
         retained_training_tokens = to_float(training_profile.get("target_tokens_trillion"), default=training_tokens_estimate_trillion(row) or 0.0)
+        direct_energy_value = to_float(row.get("training_energy_wh_central"), default=0.0)
+        direct_energy_range = {
+            "low": to_float(row.get("training_energy_wh_low"), default=0.0),
+            "central": direct_energy_value,
+            "high": to_float(row.get("training_energy_wh_high"), default=0.0),
+        }
+        direct_carbon_value = to_float(row.get("training_carbon_tco2e_central"), default=0.0)
+        direct_carbon_range = {
+            "low": to_float(row.get("training_carbon_tco2e_low"), default=0.0),
+            "central": direct_carbon_value,
+            "high": to_float(row.get("training_carbon_tco2e_high"), default=0.0),
+        }
         chart_rows.append(
             {
                 "label": row.get("display_name", row.get("model_id", "")),
                 "provider": row.get("provider", ""),
                 "kind": "model",
-                "direct_training_energy_wh": float(direct_energy.get("value", 0.0) or 0.0),
-                "direct_training_carbon_tco2e": float(direct_carbon.get("value", 0.0) or 0.0),
+                "direct_training_energy_wh": direct_energy_value,
+                "direct_training_carbon_tco2e": direct_carbon_value,
             }
         )
         scatter_chart_rows.append(
             {
                 "label": row.get("display_name", row.get("model_id", "")),
-                "provider": row.get("provider", ""),
+                "provider": provider,
                 "active_parameters_billion": retained_training_params,
                 "training_tokens_estimate_trillion": retained_training_tokens,
                 "training_regime_score": regime_scores.get(training_regime, regime_scores["unknown"]),
@@ -2529,17 +2628,50 @@ def build_training_models_view(records):
                 "vision_support_score": 1.0 if parse_market_bool(row.get("vision_support")) else 0.0,
                 "moe_score": 1.0 if "moe" in architecture_notes else 0.0,
                 "reasoning_score": 1.0 if "reason" in architecture_notes else 0.0,
-                "direct_training_energy_wh": float(direct_energy.get("value", 0.0) or 0.0),
-                "direct_training_carbon_tco2e": float(direct_carbon.get("value", 0.0) or 0.0),
+                "direct_training_energy_wh": direct_energy_value,
+                "direct_training_carbon_tco2e": direct_carbon_value,
             }
         )
+        factor_heatmap_rows.append(
+            {
+                "label": row.get("display_name", row.get("model_id", "")),
+                "provider": provider,
+                "f_reg": to_float(row.get("training_f_regime_central"), default=0.0),
+                "f_arch": to_float(row.get("training_f_arch_central"), default=0.0),
+                "f_hw": to_float(row.get("training_f_hardware_central"), default=0.0),
+                "token_ratio": (
+                    retained_training_tokens / max(retained_training_params, 1e-9)
+                    if retained_training_tokens > 0 and retained_training_params > 0
+                    else 0.0
+                ),
+            }
+        )
+        uncertainty_chart_rows.append(
+            {
+                "label": row.get("display_name", row.get("model_id", "")),
+                "provider": provider,
+                "low": direct_carbon_range["low"],
+                "central": direct_carbon_range["central"],
+                "high": direct_carbon_range["high"],
+            }
+        )
+        release_date = row.get("release_date", "")
+        if provider in release_providers and release_date and direct_carbon_value > 0:
+            release_timeline_rows.append(
+                {
+                    "label": row.get("display_name", row.get("model_id", "")),
+                    "provider": provider,
+                    "release_date": release_date,
+                    "direct_training_carbon_tco2e": direct_carbon_value,
+                }
+            )
         body.append(
             f"""
             <tr>
               <td><strong>{escape(row.get('display_name', row.get('model_id', '')))}</strong><div class="method-basis">{escape(row.get('provider', ''))}</div></td>
               <td data-sort-value="{escape(market_parameter_sort_value(row), quote=True)}">{escape(format_market_parameter_display(row))}</td>
-              <td>{escape(format_training_estimate(direct_energy.get('value'), direct_energy.get('unit')))}</td>
-              <td>{escape(format_training_estimate(direct_carbon.get('value'), direct_carbon.get('unit')))}</td>
+              <td>{escape(format_training_estimate(direct_energy_value, 'Wh'))}</td>
+              <td>{escape(format_training_estimate(direct_carbon_value, 'tCO2e'))}</td>
             </tr>
             """
         )
@@ -2566,6 +2698,9 @@ def build_training_models_view(records):
         "rows": rows,
         "chart_rows": chart_rows,
         "scatter_chart_rows": scatter_chart_rows,
+        "factor_heatmap_rows": factor_heatmap_rows,
+        "uncertainty_chart_rows": uncertainty_chart_rows,
+        "release_timeline_rows": release_timeline_rows,
         "table_body": "".join(body),
     }
 
@@ -2605,11 +2740,41 @@ def render_training_models_charts(records):
       <div class="summary-header">
         <div>
           <div class="summary-kicker">Positioning</div>
+          <h3>Training screening factor heatmap</h3>
+        </div>
+      </div>
+      <p class="summary-intro">This heatmap exposes the central screening factors retained for each market model in the training proxy. It shows the regime, architecture, and hardware factors together with the retained training-token ratio per parameter.</p>
+      <div id="training-factor-heatmap" class="models-impact-chart" data-training-factor-heatmap-rows='{escape(json.dumps(view["factor_heatmap_rows"], ensure_ascii=False), quote=True)}'></div>
+    </section>
+    <section class="panel reference-panel">
+      <div class="summary-header">
+        <div>
+          <div class="summary-kicker">Uncertainty</div>
+          <h3>Training uncertainty span by model</h3>
+        </div>
+      </div>
+      <p class="summary-intro">This view shows the low, central, and high direct training CO2e values retained by the project for each market model. It makes explicit how widely the training proxy can vary once the parameter and token exponents and contextual factors are widened.</p>
+      <div id="training-uncertainty-chart" class="models-impact-chart" data-training-uncertainty-rows='{escape(json.dumps(view["uncertainty_chart_rows"], ensure_ascii=False), quote=True)}'></div>
+    </section>
+    <section class="panel reference-panel">
+      <div class="summary-header">
+        <div>
+          <div class="summary-kicker">Positioning</div>
           <h3>Training carbon vs. parameter count</h3>
         </div>
       </div>
       <p class="summary-intro">This complementary view places models by retained parameter count on the horizontal axis and by direct training CO2e on the vertical axis, using logarithmic scaling on both axes.</p>
       <div id="training-carbon-params-log-chart" class="models-impact-chart" data-training-scatter-chart-rows='{escape(json.dumps(view["scatter_chart_rows"], ensure_ascii=False), quote=True)}'></div>
+    </section>
+    <section class="panel reference-panel">
+      <div class="summary-header">
+        <div>
+          <div class="summary-kicker">Timeline</div>
+          <h3>Training carbon by model release date</h3>
+        </div>
+      </div>
+      <p class="summary-intro">This timeline follows the evolution of the project’s retained direct training CO2e estimate over time for the OpenAI, Claude, Grok, and Mistral families, using the release month of each model as the horizontal axis.</p>
+      <div id="training-release-timeline-chart" class="models-impact-chart" data-training-release-timeline-rows='{escape(json.dumps(view["release_timeline_rows"], ensure_ascii=False), quote=True)}'></div>
     </section>
     """
 
@@ -4062,10 +4227,14 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
     const factorHeatmap = document.getElementById('inference-factor-heatmap');
     const scatterLinearChart = document.getElementById('carbon-params-linear-chart');
     const countryMixChart = document.getElementById('country-mix-sensitivity-chart');
+    const inferenceReleaseTimelineChart = document.getElementById('inference-release-timeline-chart');
     const chartControls = Array.from(document.querySelectorAll('[data-model-chart-control="metric-tab"]'));
     const trainingChart = document.getElementById('training-impact-chart');
     const trainingScatterChart = document.getElementById('training-carbon-params-scatter-chart');
+    const trainingFactorHeatmap = document.getElementById('training-factor-heatmap');
+    const trainingUncertaintyChart = document.getElementById('training-uncertainty-chart');
     const trainingScatterLogChart = document.getElementById('training-carbon-params-log-chart');
+    const trainingReleaseTimelineChart = document.getElementById('training-release-timeline-chart');
     const trainingChartControls = Array.from(document.querySelectorAll('[data-training-chart-control="metric-tab"]'));
     const LANGUAGE_STORAGE_KEY = 'llm-environment-language';
     const TAB_HASH_PREFIX = '#tab-';
@@ -4268,16 +4437,24 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
       ['Average gasoline car for 0.17 km', 'Voiture essence moyenne sur 0,17 km'],
       ['Inference model landscape', 'Paysage des modèles en inférence'],
       ['Inference screening factor heatmap', 'Heatmap des facteurs de screening en inférence'],
+      ['Training screening factor heatmap', 'Heatmap des facteurs de screening en entraînement'],
+      ['Training uncertainty span by model', 'Étendue d’incertitude d’entraînement par modèle'],
       ['Inference carbon vs. parameter count', 'Carbone d’inférence vs nombre de paramètres'],
+      ['Inference carbon by model release date', 'Carbone d’inférence par date de sortie du modèle'],
       ['Country-mix sensitivity', 'Sensibilité au mix pays'],
       ['Training model landscape', 'Paysage des modèles en entraînement'],
       ['Training carbon vs. parameter count', 'Carbone d’entraînement vs nombre de paramètres'],
+      ['Training carbon by model release date', 'Carbone d’entraînement par date de sortie du modèle'],
       ['This landscape view clusters the catalog models from the characteristics retained by the project for inference screening: active and effective parameters, context window, serving mode, modality support, architecture notes, and central energy and carbon outputs. Nearby points indicate models with similar retained screening profiles, not a simple one-metric ranking.', 'Cette vue de paysage regroupe les modèles du catalogue à partir des caractéristiques retenues par le projet pour le screening en inférence : paramètres actifs et effectifs, fenêtre de contexte, mode de service, support multimodal, notes d’architecture, ainsi que sorties centrales d’énergie et de carbone. Des points proches indiquent des profils de screening retenus similaires, et non un classement sur une seule métrique.'],
       ['This heatmap exposes the central screening factors retained for each market model. It shows the four multiplicative factors used by the project’s prompt proxy and the resulting ratio between effective and raw active parameters.', 'Cette heatmap rend visibles les facteurs centraux de screening retenus pour chaque modèle du marché. Elle montre les quatre facteurs multiplicatifs utilisés par le proxy prompt du projet ainsi que le ratio résultant entre paramètres actifs effectifs et paramètres actifs bruts.'],
+      ['This heatmap exposes the central screening factors retained for each market model in the training proxy. It shows the regime, architecture, and hardware factors together with the retained training-token ratio per parameter.', 'Cette heatmap rend visibles les facteurs centraux de screening retenus pour chaque modèle du marché dans le proxy d’entraînement. Elle montre les facteurs de régime, d’architecture et de matériel, ainsi que le ratio retenu de tokens d’entraînement par paramètre.'],
+      ['This view shows the low, central, and high direct training CO2e values retained by the project for each market model. It makes explicit how widely the training proxy can vary once the parameter and token exponents and contextual factors are widened.', 'Cette vue montre, pour chaque modèle du marché, les valeurs basse, centrale et haute de CO2e direct d’entraînement retenues par le projet. Elle rend explicite l’ampleur de variation possible du proxy d’entraînement lorsque les exposants sur les paramètres et les tokens, ainsi que les facteurs contextuels, sont élargis.'],
       ['This complementary view places models by retained active parameter count on the horizontal axis and by central inference carbon over one hour on the vertical axis, using logarithmic scaling on both axes.', 'Cette vue complémentaire positionne les modèles selon leur nombre de paramètres actifs retenus sur l’axe horizontal et leur carbone central d’inférence sur une heure sur l’axe vertical, avec une échelle logarithmique sur les deux axes.'],
+      ['This timeline follows the evolution of the project’s central inference CO2e estimate over time for the OpenAI, Claude, Grok, and Mistral families, using the release month of each model as the horizontal axis.', 'Cette chronologie suit l’évolution dans le temps de l’estimation centrale du CO2e d’inférence du projet pour les familles OpenAI, Claude, Grok et Mistral, en utilisant le mois de sortie de chaque modèle comme axe horizontal.'],
       ['This view compares central inference energy and carbon over one hour, while coloring each model by the retained electricity-mix country used for carbon recalculation. It helps separate model-size effects from country-mix effects.', 'Cette vue compare l’énergie et le carbone centraux d’inférence sur une heure, en colorant chaque modèle selon le pays de mix électrique retenu pour le recalcul du carbone. Elle aide à distinguer les effets de taille de modèle des effets de mix pays.'],
       ['This landscape view clusters the catalog models from the characteristics retained by the project for training screening: retained parameter count, training-token prior, training regime, hardware-class proxy, modality support, architecture notes, and central training energy and carbon outputs. Nearby points indicate similar retained screening profiles rather than a direct ranking on one axis.', 'Cette vue de paysage regroupe les modèles du catalogue à partir des caractéristiques retenues par le projet pour le screening en entraînement : nombre de paramètres retenu, prior sur les tokens d’entraînement, régime d’entraînement, proxy de classe matérielle, support multimodal, notes d’architecture, ainsi que sorties centrales d’énergie et de carbone d’entraînement. Des points proches indiquent des profils de screening retenus similaires plutôt qu’un classement direct sur un seul axe.'],
       ['This complementary view places models by retained parameter count on the horizontal axis and by direct training CO2e on the vertical axis, using logarithmic scaling on both axes.', 'Cette vue complémentaire positionne les modèles selon leur nombre de paramètres retenu sur l’axe horizontal et leur CO2e direct d’entraînement sur l’axe vertical, avec une échelle logarithmique sur les deux axes.'],
+      ['This timeline follows the evolution of the project’s retained direct training CO2e estimate over time for the OpenAI, Claude, Grok, and Mistral families, using the release month of each model as the horizontal axis.', 'Cette chronologie suit l’évolution dans le temps de l’estimation retenue du CO2e direct d’entraînement du projet pour les familles OpenAI, Claude, Grok et Mistral, en utilisant le mois de sortie de chaque modèle comme axe horizontal.'],
       ['3. Carbon derivation from the country mix', '3. Dérivation du carbone à partir du mix pays'],
       ['Carbon is not reused directly from the literature. It is derived from extrapolated energy using the retained country electricity mix, here', 'Le carbone n’est pas réutilisé directement depuis la littérature. Il est dérivé de l’énergie extrapolée à partir du mix électrique du pays retenu, ici'],
       ['The unit result retained for this method then leads to the following annualized values: energy', 'Le résultat unitaire retenu pour cette méthode conduit ensuite aux valeurs annualisées suivantes : énergie'],
@@ -4317,15 +4494,22 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
       ['Real-world comparison benchmarks', 'Repères de comparaison du monde réel'],
       ['Central screening factors retained for market models', 'Facteurs centraux de screening retenus pour les modèles du marché'],
       ['This table documents the central values retained by the project for the multi-factor prompt proxy of each catalog model: raw active parameters, context window, serving mode, modality support, the resulting central factors <code>F_ctx</code>, <code>F_srv</code>, <code>F_mod</code>, <code>F_arch</code>, and the resulting central effective active-parameter proxy <code>P_eff,c</code>. These are project screening factors, not provider-published measurements.', 'Ce tableau documente les valeurs centrales retenues par le projet pour le proxy prompt multi-facteurs de chaque modèle du catalogue : paramètres actifs bruts, fenêtre de contexte, mode de service, support de modalité, facteurs centraux résultants <code>F_ctx</code>, <code>F_srv</code>, <code>F_mod</code>, <code>F_arch</code>, ainsi que le proxy central de paramètres actifs effectifs <code>P_eff,c</code>. Il s’agit de facteurs de screening du projet, et non de mesures publiées par les fournisseurs.'],
+      ['Central training screening factors retained for market models', 'Facteurs centraux de screening retenus pour l’entraînement des modèles du marché'],
+      ['This table documents the central values retained by the project for the multi-factor training proxy of each catalog model: retained training parameter count, training-token prior, training regime, multimodal training flag, hardware-class proxy, and the resulting central factors <code>F_reg</code>, <code>F_arch-tr</code>, and <code>F_hw</code>. These are project screening factors, not provider-published measurements.', 'Ce tableau documente les valeurs centrales retenues par le projet pour le proxy multi-facteurs d’entraînement de chaque modèle du catalogue : nombre de paramètres d’entraînement retenu, prior sur les tokens d’entraînement, régime d’entraînement, indicateur d’entraînement multimodal, proxy de classe matérielle, ainsi que les facteurs centraux résultants <code>F_reg</code>, <code>F_arch-tr</code> et <code>F_hw</code>. Il s’agit de facteurs de screening du projet, et non de mesures publiées par les fournisseurs.'],
       ['Numbered source list for retained screening characteristics', 'Liste numérotée des sources des caractéristiques de screening retenues'],
-      ['The numbered references used in the columns Active parameters, Context window, Serving mode, and Vision are listed below.', 'Les références numérotées utilisées dans les colonnes Paramètres actifs, Fenêtre de contexte, Mode de service et Vision sont listées ci-dessous.'],
+      ['The numbered references used in the retained inference and training screening-characteristic tables are listed below.', 'Les références numérotées utilisées dans les tableaux de caractéristiques de screening retenues pour l’inférence et l’entraînement sont listées ci-dessous.'],
       ['Country factors for carbon and water recalculation', 'Facteurs pays pour le recalcul du carbone et de l’eau'],
       ['Model', 'Modèle'],
       ['Parameters', 'Paramètres'],
       ['Active parameters', 'Paramètres actifs'],
+      ['Retained parameters', 'Paramètres retenus'],
       ['Context window', 'Fenêtre de contexte'],
       ['Serving mode', 'Mode de service'],
       ['Vision', 'Vision'],
+      ['Training tokens', 'Tokens d’entraînement'],
+      ['Training regime', 'Régime d’entraînement'],
+      ['Multimodal', 'Multimodal'],
+      ['Hardware class', 'Classe matérielle'],
       ['Server country', 'Pays du serveur'],
       ['Retained country', 'Pays retenu'],
       ['Energy / h', 'Énergie / h'],
@@ -4339,6 +4523,9 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
       ['The market-model comparison now relies on market_multifactor_prompt_proxy_v1: a prompt-energy screening proxy calibrated on Elsworth et al. (2025), then adjusted by active parameters, context window, serving mode, modality support, architecture overhead, and standardized token volume.', 'La comparaison des modèles du marché repose désormais sur market_multifactor_prompt_proxy_v1 : un proxy de screening en énergie par prompt calibré sur Elsworth et al. (2025), puis ajusté selon les paramètres actifs, la fenêtre de contexte, le mode de service, le support multimodal, l’overhead d’architecture et un volume de tokens standardisé.'],
       ['Training energy', 'Énergie d’entraînement'],
       ['Direct training CO2e', 'CO2e direct d’entraînement'],
+      ['Training parameters', 'Paramètres d’entraînement'],
+      ['Training modality', 'Modalité d’entraînement'],
+      ['Training hardware', 'Matériel d’entraînement'],
       ['Provider', 'Fournisseur'],
       ['Confidence', 'Confiance'],
       ['Notes', 'Notes'],
@@ -5048,6 +5235,155 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
       `;
     }};
     renderFactorHeatmap();
+    const renderTrainingFactorHeatmap = () => {{
+      if (!trainingFactorHeatmap) return;
+      let rows = [];
+      try {{
+        rows = JSON.parse(trainingFactorHeatmap.getAttribute('data-training-factor-heatmap-rows') || '[]');
+      }} catch (error) {{
+        rows = [];
+      }}
+      const locale = uiText[currentLanguage.value];
+      if (!rows.length) {{
+        trainingFactorHeatmap.innerHTML = `<p class="lead">${{locale.noData}}</p>`;
+        return;
+      }}
+      const metrics = [
+        {{ key: 'f_reg', label: currentLanguage.value === 'fr' ? 'F_reg' : 'F_reg' }},
+        {{ key: 'f_arch', label: currentLanguage.value === 'fr' ? 'F_arch' : 'F_arch' }},
+        {{ key: 'f_hw', label: currentLanguage.value === 'fr' ? 'F_hw' : 'F_hw' }},
+        {{ key: 'token_ratio', label: currentLanguage.value === 'fr' ? 'Tok / Param' : 'Tok / Param' }},
+      ];
+      const width = 980;
+      const rowHeight = 34;
+      const headerHeight = 34;
+      const labelWidth = 280;
+      const cellWidth = 140;
+      const height = headerHeight + rows.length * rowHeight + 20;
+      const colorForValue = (value, metricKey) => {{
+        let normalized = 0;
+        if (metricKey === 'token_ratio') {{
+          normalized = Math.max(0, Math.min(1, Number(value || 0) / 0.04));
+        }} else {{
+          normalized = Math.max(0, Math.min(1, (Number(value || 0) - 0.7) / 0.6));
+        }}
+        const lightness = 94 - normalized * 42;
+        return `hsl(205, 35%, ${{lightness}}%)`;
+      }};
+      const header = metrics.map((metric, index) => `
+        <text x="${{labelWidth + index * cellWidth + cellWidth / 2}}" y="22" text-anchor="middle" font-size="13" fill="#495057">${{metric.label}}</text>
+      `).join('');
+      const body = rows.map((row, rowIndex) => {{
+        const y = headerHeight + rowIndex * rowHeight;
+        const label = translateBenchmarkLabel(row.label, currentLanguage.value);
+        const provider = row.provider || '';
+        const cells = metrics.map((metric, metricIndex) => {{
+          const value = Number(row[metric.key] || 0);
+          const x = labelWidth + metricIndex * cellWidth;
+          return `
+            <rect x="${{x}}" y="${{y}}" width="${{cellWidth - 10}}" height="${{rowHeight - 6}}" rx="4" fill="${{colorForValue(value, metric.key)}}" stroke="rgba(0,0,0,0.08)"></rect>
+            <text x="${{x + (cellWidth - 10) / 2}}" y="${{y + 19}}" text-anchor="middle" font-size="12" fill="#212529">${{metric.key === 'token_ratio' ? value.toFixed(3) : value.toFixed(3)}}</text>
+          `;
+        }}).join('');
+        return `
+          <text x="0" y="${{y + 15}}" font-size="13" fill="#212529">${{label}}</text>
+          <text x="0" y="${{y + 29}}" font-size="11" fill="#6c757d">${{provider}}</text>
+          ${{cells}}
+        `;
+      }}).join('');
+      const intro = currentLanguage.value === 'fr'
+        ? 'Plus la cellule est foncée, plus le facteur central retenu par le proxy d’entraînement est élevé.'
+        : 'Darker cells indicate higher central screening factors retained by the training proxy.';
+      trainingFactorHeatmap.innerHTML = `
+        <div class="summary-intro" style="margin-bottom:0.75rem;">${{intro}}</div>
+        <svg viewBox="0 0 ${{width}} ${{height}}" role="img" aria-label="Training screening factor heatmap">
+          ${{header}}
+          ${{body}}
+        </svg>
+      `;
+    }};
+    renderTrainingFactorHeatmap();
+    const renderTrainingUncertaintyChart = () => {{
+      if (!trainingUncertaintyChart) return;
+      let rows = [];
+      try {{
+        rows = JSON.parse(trainingUncertaintyChart.getAttribute('data-training-uncertainty-rows') || '[]');
+      }} catch (error) {{
+        rows = [];
+      }}
+      const locale = uiText[currentLanguage.value];
+      const points = rows
+        .map((row) => ({{
+          label: translateBenchmarkLabel(row.label, currentLanguage.value),
+          provider: row.provider || '',
+          low: Number(row.low || 0),
+          central: Number(row.central || 0),
+          high: Number(row.high || 0),
+        }}))
+        .filter((row) => row.central > 0 && row.high > 0)
+        .sort((a, b) => b.central - a.central);
+      if (!points.length) {{
+        trainingUncertaintyChart.innerHTML = `<p class="lead">${{locale.noUsableValue}}</p>`;
+        return;
+      }}
+      const width = 980;
+      const rowHeight = 34;
+      const headerHeight = 10;
+      const labelWidth = 280;
+      const valueWidth = 620;
+      const paddingRight = 40;
+      const height = headerHeight + points.length * rowHeight + 24;
+      const safeLog = (value) => Math.log10(Math.max(value, 1e-9));
+      const minValue = Math.min(...points.map((row) => Math.max(row.low, 1e-9)));
+      const maxValue = Math.max(...points.map((row) => row.high));
+      const minLog = safeLog(minValue);
+      const maxLog = safeLog(maxValue);
+      const scaleX = (value) => labelWidth + ((safeLog(value) - minLog) / Math.max(maxLog - minLog, 1e-9)) * valueWidth;
+      const tickValues = (() => {{
+        const ticks = [];
+        const start = Math.floor(minLog);
+        const end = Math.ceil(maxLog);
+        for (let exponent = start; exponent <= end; exponent += 1) {{
+          ticks.push(10 ** exponent);
+        }}
+        return ticks.filter((value) => value >= minValue && value <= maxValue);
+      }})();
+      const grid = tickValues.map((value) => {{
+        const x = scaleX(value);
+        const label = value >= 1000 ? `${{(value / 1000).toFixed(1)}} kt` : `${{value.toFixed(1)}} t`;
+        return `
+          <line x1="${{x}}" y1="0" x2="${{x}}" y2="${{height - 18}}" stroke="rgba(0,0,0,0.08)" />
+          <text x="${{x}}" y="${{height - 2}}" text-anchor="middle" font-size="12" fill="#6c757d">${{label}}</text>
+        `;
+      }}).join('');
+      const rowsMarkup = points.map((row, index) => {{
+        const y = headerHeight + index * rowHeight + 16;
+        const xLow = scaleX(row.low);
+        const xCentral = scaleX(row.central);
+        const xHigh = scaleX(row.high);
+        return `
+          <text x="0" y="${{y - 2}}" font-size="13" fill="#212529">${{row.label}}</text>
+          <text x="0" y="${{y + 11}}" font-size="11" fill="#6c757d">${{row.provider}}</text>
+          <line x1="${{xLow}}" y1="${{y}}" x2="${{xHigh}}" y2="${{y}}" stroke="#8c7a5b" stroke-width="3" stroke-linecap="round"></line>
+          <circle cx="${{xLow}}" cy="${{y}}" r="4" fill="#d6c9b5"></circle>
+          <circle cx="${{xCentral}}" cy="${{y}}" r="5.5" fill="#243b63"></circle>
+          <circle cx="${{xHigh}}" cy="${{y}}" r="4" fill="#b85c38"></circle>
+        `;
+      }}).join('');
+      const intro = currentLanguage.value === 'fr'
+        ? 'Chaque ligne montre la borne basse, la valeur centrale et la borne haute du CO2e direct d’entraînement retenu pour un modèle.'
+        : 'Each line shows the low, central, and high retained values for direct training CO2e.';
+      const xLabel = currentLanguage.value === 'fr' ? 'CO2e direct d’entraînement, tCO2e (échelle logarithmique)' : 'Direct training CO2e, tCO2e (log scale)';
+      trainingUncertaintyChart.innerHTML = `
+        <div class="summary-intro" style="margin-bottom:0.75rem;">${{intro}}</div>
+        <svg viewBox="0 0 ${{width}} ${{height}}" role="img" aria-label="Training uncertainty span by model">
+          ${{grid}}
+          ${{rowsMarkup}}
+          <text x="${{labelWidth + valueWidth / 2}}" y="${{height - 2}}" text-anchor="middle" font-size="13" fill="#495057">${{xLabel}}</text>
+        </svg>
+      `;
+    }};
+    renderTrainingUncertaintyChart();
     const renderScatterLinearChart = () => {{
       if (!scatterLinearChart) return;
       let rows = [];
@@ -5224,6 +5560,162 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
       `;
     }};
     renderCountryMixChart();
+    const providerDisplayName = (provider) => {{
+      const mapping = {{
+        openai: 'OpenAI',
+        anthropic: 'Claude',
+        xai: 'Grok',
+        mistral: 'Mistral',
+      }};
+      return mapping[provider] || provider || '';
+    }};
+    const renderReleaseTimelineChart = (container, attrName, config) => {{
+      if (!container) return;
+      let rows = [];
+      try {{
+        rows = JSON.parse(container.getAttribute(attrName) || '[]');
+      }} catch (error) {{
+        rows = [];
+      }}
+      const locale = uiText[currentLanguage.value];
+      const points = rows
+        .map((row) => {{
+          const date = new Date(`${{row.release_date}}T00:00:00Z`);
+          const value = Number(row[config.valueKey] || 0);
+          return {{
+            label: translateBenchmarkLabel(row.label, currentLanguage.value),
+            provider: row.provider || '',
+            providerLabel: providerDisplayName(row.provider || ''),
+            releaseDate: row.release_date,
+            date,
+            value,
+          }};
+        }})
+        .filter((row) => !Number.isNaN(row.date.getTime()) && row.value > 0)
+        .sort((a, b) => a.date - b.date || a.provider.localeCompare(b.provider));
+      if (!points.length) {{
+        container.innerHTML = `<p class="lead">${{locale.noUsableValue}}</p>`;
+        return;
+      }}
+      const providerOrder = ['openai', 'anthropic', 'xai', 'mistral'];
+      const palette = {{
+        openai: '#243b63',
+        anthropic: '#8c7a5b',
+        xai: '#b85c38',
+        mistral: '#3f5a49',
+      }};
+      const width = 980;
+      const height = 620;
+      const padding = {{ top: 24, right: 24, bottom: 86, left: 86 }};
+      const plotWidth = width - padding.left - padding.right;
+      const plotHeight = height - padding.top - padding.bottom;
+      const xMin = Math.min(...points.map((row) => row.date.getTime()));
+      const xMax = Math.max(...points.map((row) => row.date.getTime()));
+      const safeLog = (value) => Math.log10(Math.max(value, 1e-9));
+      const yMin = Math.min(...points.map((row) => row.value));
+      const yMax = Math.max(...points.map((row) => row.value));
+      const yMinLog = safeLog(yMin);
+      const yMaxLog = safeLog(yMax);
+      const scaleX = (value) => padding.left + ((value - xMin) / Math.max(xMax - xMin, 1)) * plotWidth;
+      const scaleY = (value) => padding.top + plotHeight - ((safeLog(value) - yMinLog) / Math.max(yMaxLog - yMinLog, 1e-9)) * plotHeight;
+      const monthTicks = (() => {{
+        const ticks = [];
+        const start = new Date(xMin);
+        const end = new Date(xMax);
+        const cursor = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth(), 1));
+        while (cursor <= end) {{
+          ticks.push(new Date(cursor.getTime()));
+          cursor.setUTCMonth(cursor.getUTCMonth() + 2);
+        }}
+        return ticks;
+      }})();
+      const xGrid = monthTicks.map((tick) => {{
+        const x = scaleX(tick.getTime());
+        const label = tick.toLocaleDateString(currentLanguage.value === 'fr' ? 'fr-FR' : 'en-US', {{
+          year: 'numeric',
+          month: 'short',
+          timeZone: 'UTC',
+        }});
+        return `
+          <line x1="${{x}}" y1="${{padding.top}}" x2="${{x}}" y2="${{padding.top + plotHeight}}" stroke="rgba(0,0,0,0.08)" />
+          <text x="${{x}}" y="${{height - 40}}" text-anchor="middle" font-size="12" fill="#6c757d">${{label}}</text>
+        `;
+      }}).join('');
+      const yTickValues = (() => {{
+        const ticks = [];
+        const start = Math.floor(yMinLog);
+        const end = Math.ceil(yMaxLog);
+        for (let exponent = start; exponent <= end; exponent += 1) {{
+          ticks.push(10 ** exponent);
+        }}
+        return ticks.filter((value) => value >= yMin && value <= yMax);
+      }})();
+      const yGrid = yTickValues.map((value) => {{
+        const y = scaleY(value);
+        return `
+          <line x1="${{padding.left}}" y1="${{y}}" x2="${{padding.left + plotWidth}}" y2="${{y}}" stroke="rgba(0,0,0,0.08)" />
+          <text x="${{padding.left - 10}}" y="${{y + 4}}" text-anchor="end" font-size="12" fill="#6c757d">${{config.formatValue(value)}}</text>
+        `;
+      }}).join('');
+      const byProvider = providerOrder
+        .map((provider) => [provider, points.filter((point) => point.provider === provider)])
+        .filter(([, providerPoints]) => providerPoints.length);
+      const lines = byProvider.map(([provider, providerPoints]) => {{
+        const d = providerPoints
+          .map((point, index) => `${{index === 0 ? 'M' : 'L'}}${{scaleX(point.date.getTime()).toFixed(2)}},${{scaleY(point.value).toFixed(2)}}`)
+          .join(' ');
+        return `<path d="${{d}}" fill="none" stroke="${{palette[provider] || '#495057'}}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" opacity="0.85"></path>`;
+      }}).join('');
+      const dots = points.map((point) => {{
+        const cx = scaleX(point.date.getTime());
+        const cy = scaleY(point.value);
+        const fill = palette[point.provider] || '#495057';
+        return `
+          <circle cx="${{cx}}" cy="${{cy}}" r="5.5" fill="${{fill}}" opacity="0.95"></circle>
+          <text x="${{cx + 8}}" y="${{cy - 8}}" font-size="12" fill="#212529">${{point.label}}</text>
+        `;
+      }}).join('');
+      const legend = byProvider.map(([provider], index) => `
+        <g transform="translate(${{padding.left + index * 150}}, ${{height - 20}})">
+          <rect width="14" height="14" rx="3" fill="${{palette[provider] || '#495057'}}"></rect>
+          <text x="20" y="11" font-size="12" fill="#495057">${{providerDisplayName(provider)}}</text>
+        </g>
+      `).join('');
+      container.innerHTML = `
+        <div class="summary-intro" style="margin-bottom:0.75rem;">${{config.intro[currentLanguage.value]}}</div>
+        <svg viewBox="0 0 ${{width}} ${{height}}" role="img" aria-label="${{config.ariaLabel[currentLanguage.value]}}">
+          ${{xGrid}}
+          ${{yGrid}}
+          <line x1="${{padding.left}}" y1="${{padding.top + plotHeight}}" x2="${{padding.left + plotWidth}}" y2="${{padding.top + plotHeight}}" stroke="#495057" />
+          <line x1="${{padding.left}}" y1="${{padding.top}}" x2="${{padding.left}}" y2="${{padding.top + plotHeight}}" stroke="#495057" />
+          ${{lines}}
+          ${{dots}}
+          ${{legend}}
+          <text x="${{padding.left + plotWidth / 2}}" y="${{height - 52}}" text-anchor="middle" font-size="13" fill="#495057">${{config.xLabel[currentLanguage.value]}}</text>
+          <text x="18" y="${{padding.top + plotHeight / 2}}" text-anchor="middle" font-size="13" fill="#495057" transform="rotate(-90 18 ${{padding.top + plotHeight / 2}})">${{config.yLabel[currentLanguage.value]}}</text>
+        </svg>
+      `;
+    }};
+    renderReleaseTimelineChart(inferenceReleaseTimelineChart, 'data-release-timeline-rows', {{
+      valueKey: 'hour_carbon_gco2e',
+      formatValue: (value) => value >= 1000 ? `${{(value / 1000).toFixed(1)}} kg` : `${{value.toFixed(1)}} g`,
+      intro: {{
+        en: 'Connected points trace the release sequence of OpenAI, Claude, Grok, and Mistral models against the project’s central inference CO2e estimate. The vertical axis uses a logarithmic scale to keep small and large models readable together.',
+        fr: 'Les points reliés retracent la séquence de sortie des modèles OpenAI, Claude, Grok et Mistral face à l’estimation centrale de CO2e d’inférence du projet. L’axe vertical utilise une échelle logarithmique pour garder lisibles ensemble les petits et les grands modèles.'
+      }},
+      xLabel: {{
+        en: 'Model release month',
+        fr: 'Mois de sortie du modèle',
+      }},
+      yLabel: {{
+        en: 'Central inference carbon, gCO2e/h (log scale)',
+        fr: 'Carbone central d’inférence, gCO2e/h (échelle logarithmique)',
+      }},
+      ariaLabel: {{
+        en: 'Inference carbon by model release date chart',
+        fr: 'Graphique du carbone d’inférence par date de sortie du modèle',
+      }},
+    }});
     const renderTrainingScatterLogChart = () => {{
       if (!trainingScatterLogChart) return;
       let rows = [];
@@ -5312,6 +5804,26 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
         </svg>
       `;
     }};
+    renderReleaseTimelineChart(trainingReleaseTimelineChart, 'data-training-release-timeline-rows', {{
+      valueKey: 'direct_training_carbon_tco2e',
+      formatValue: (value) => value >= 1000 ? `${{(value / 1000).toFixed(1)}} kt` : `${{value.toFixed(1)}} t`,
+      intro: {{
+        en: 'Connected points trace the release sequence of OpenAI, Claude, Grok, and Mistral models against the project’s retained direct training CO2e estimate. The vertical axis uses a logarithmic scale because training orders of magnitude remain widely spread.',
+        fr: 'Les points reliés retracent la séquence de sortie des modèles OpenAI, Claude, Grok et Mistral face à l’estimation retenue du CO2e direct d’entraînement du projet. L’axe vertical utilise une échelle logarithmique car les ordres de grandeur d’entraînement restent très dispersés.'
+      }},
+      xLabel: {{
+        en: 'Model release month',
+        fr: 'Mois de sortie du modèle',
+      }},
+      yLabel: {{
+        en: 'Direct training CO2e, tCO2e (log scale)',
+        fr: 'CO2e direct d’entraînement, tCO2e (échelle logarithmique)',
+      }},
+      ariaLabel: {{
+        en: 'Training carbon by model release date chart',
+        fr: 'Graphique du carbone d’entraînement par date de sortie du modèle',
+      }},
+    }});
     const formatTrainingChartValue = (value, metric) => {{
       if (metric === 'direct_training_energy') {{
         if (value >= 1_000_000_000) return `${{(value / 1_000_000_000).toFixed(1)}} GWh`;
