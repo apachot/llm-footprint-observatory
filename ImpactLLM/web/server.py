@@ -1189,7 +1189,7 @@ def build_method_modal_body(method, analysis_refs=None):
               P^{{eff}}_c = P_t \\times F_{{ctx}} \\times F_{{srv}} \\times F_{{mod}} \\times F_{{arch}} = {format_scalar(detail.get('target_params'))} \\times {format_scalar(context_factor.get('central'))} \\times {format_scalar(serving_factor.get('central'))} \\times {format_scalar(modality_factor.get('central'))} \\times {format_scalar(architecture_factor.get('central'))} = {format_scalar(effective_params.get('central'))}
               \\]</p>
               <p class="notranslate">Where \\(P^{{eff}}_c\\) is the central effective active-parameter proxy, \\(P_t\\) the retained raw active-parameter count, \\(F_{{ctx}}\\) the context-window factor, \\(F_{{srv}}\\) the serving-mode factor, \\(F_{{mod}}\\) the modality factor, and \\(F_{{arch}}\\) the architecture-overhead factor.</p>
-              <p>See the table <a href="{app_url('/#tab-bibliography')}" target="_blank" rel="noopener noreferrer">Central screening factors retained for market models</a> in Sources for the retained screening values by model.</p>
+              <p>See the table <a href="{app_url('/?scroll_to=market-screening-factors#tab-bibliography')}" target="_blank" rel="noopener noreferrer" style="text-decoration: underline; text-underline-offset: 0.14em;">Central screening factors retained for market models</a> in Sources for the retained screening values by model.</p>
               <p>Central token factor:</p>
               <p>\\[
               F_{{tok,c}} = {format_scalar(token_factor.get('central'), 4)}
@@ -5350,6 +5350,17 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
       }}
       return activateTab(target);
     }}
+    function applyPendingScrollTarget() {{
+      const searchParams = new URLSearchParams(window.location.search);
+      const targetId = searchParams.get('scroll_to');
+      if (!targetId) return false;
+      const target = document.getElementById(targetId);
+      if (!target) return false;
+      window.requestAnimationFrame(() => {{
+        target.scrollIntoView({{ behavior: 'smooth', block: 'start' }});
+      }});
+      return true;
+    }}
     tabButtons.forEach((button) => {{
       button.addEventListener('click', function () {{
         const target = button.getAttribute('data-tab-target');
@@ -5375,8 +5386,10 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
     }});
     window.addEventListener('hashchange', () => {{
       applyHashNavigation();
+      applyPendingScrollTarget();
     }});
     applyHashNavigation();
+    applyPendingScrollTarget();
     if (resultsAnchor && resultsAnchor.textContent.trim()) {{
       window.requestAnimationFrame(() => {{
         resultsAnchor.scrollIntoView({{ behavior: 'smooth', block: 'start' }});
