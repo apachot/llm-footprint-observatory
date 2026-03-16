@@ -51,21 +51,13 @@ LOGO_PATH = ROOT / "web" / "impactllm-logo.svg"
 LOGO_MARK_PATH = ROOT / "web" / "impactllm-mark.svg"
 REFERENCE_PAGE_TOKENS = 750.0
 DEFAULT_PROMPT_TOKENS = 1550.0
-PROJECT_PAPER_BIBTEX = """@misc{llm_environment_open_data_2026,
-  title = {ImpactLLM: An Open Observatory and Screening Method for the Environmental Footprint of LLMs},
-  author = {Pachot, Arnault and Petit, Thierry},
-  year = {2026},
-  month = mar,
-  note = {Working paper},
-  url = {https://dev.emotia.com/impact-llm/downloads/ImpactLLM_paper.pdf}
-}"""
-METHODOLOGY_PAPER_BIBTEX = """@misc{impactllm_methodology_2026,
+PROJECT_PAPER_BIBTEX = """@misc{impactllm_screening_2026,
   title = {Transparent Screening for LLM Inference and Training Impacts},
   author = {Pachot, Arnault and Petit, Thierry},
   year = {2026},
   month = mar,
   note = {Working paper},
-  url = {https://dev.emotia.com/impact-llm/downloads/ImpactLLM_paper_methodology.pdf}
+  url = {https://dev.emotia.com/impact-llm/downloads/ImpactLLM_paper.pdf}
 }"""
 
 
@@ -99,15 +91,9 @@ PAPER_PDF_PATH = first_existing_path(
     ROOT.parent / "ImpactLLM-paper" / "ImpactLLM_paper.pdf",
     ROOT.parent / "llm-environment-opendata-paper" / "llm_environment_opendata_paper.pdf",
 )
-METHODOLOGY_PDF_PATH = first_existing_path(
-    ROOT.parent / "ImpactLLM-paper" / "ImpactLLM_paper_methodology.pdf",
-)
 PAPER_PREVIEW_PATH = first_existing_path(
     ROOT / "web" / "ImpactLLM_paper_preview.png",
     ROOT / "web" / "llm_environment_opendata_paper_preview.png",
-)
-METHODOLOGY_PREVIEW_PATH = first_existing_path(
-    ROOT / "web" / "ImpactLLM_paper_methodology_preview.png",
 )
 
 
@@ -3251,14 +3237,14 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
 
           <p><strong>Scientific paper</strong></p>
           <div class="paper-preview-grid">
-            <a class="paper-preview-card" href="{app_url('/downloads/ImpactLLM_paper.pdf')}" target="_blank" rel="noopener noreferrer" aria-label="Open the scientific paper PDF">
+            <a class="paper-preview-card" href="{app_url('/downloads/ImpactLLM_paper.pdf')}" target="_blank" rel="noopener noreferrer" aria-label="Open the Transparent Screening paper PDF">
               <span class="paper-preview-frame">
-                <img src="{app_url('/downloads/ImpactLLM_paper_preview.png')}" alt="Preview of the first page of the ImpactLLM scientific paper" loading="lazy">
+                <img src="{app_url('/downloads/ImpactLLM_paper_preview.png')}" alt="Preview of the first page of Transparent Screening for LLM Inference and Training Impacts" loading="lazy">
               </span>
-              <span class="paper-preview-caption">ImpactLLM paper PDF</span>
+              <span class="paper-preview-caption">Transparent Screening paper PDF</span>
             </a>
           </div>
-          <p class="paper-preview-reference notranslate">Pachot, A., &amp; Petit, T. (2026, March 14). <em>ImpactLLM: An Open Observatory and Screening Method for the Environmental Footprint of LLMs.</em> <a href="{app_url('/downloads/ImpactLLM_paper.pdf')}">{app_url('/downloads/ImpactLLM_paper.pdf')}</a></p>
+          <p class="paper-preview-reference notranslate">Pachot, A., &amp; Petit, T. (2026, March 14). <em>Transparent Screening for LLM Inference and Training Impacts.</em> <a href="{app_url('/downloads/ImpactLLM_paper.pdf')}">{app_url('/downloads/ImpactLLM_paper.pdf')}</a></p>
         </div>
       </section>
     </section>
@@ -3269,7 +3255,7 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
         <div class="summary-body">
           <p>We work on responsible AI with a focus on methodological rigor, traceability, and real-world decision support. Our work combines scientific research, product design, and operational deployment to make AI systems more transparent, more accountable, and more useful in practice.</p>
           <p><strong>How to cite ImpactLLM</strong></p>
-          <p class="notranslate">Pachot, A., &amp; Petit, T. (2026, March 14). <em><a href="{app_url('/downloads/ImpactLLM_paper.pdf')}">ImpactLLM: An Open Observatory and Screening Method for the Environmental Footprint of LLMs.</a></em></p>
+          <p class="notranslate">Pachot, A., &amp; Petit, T. (2026, March 14). <em><a href="{app_url('/downloads/ImpactLLM_paper.pdf')}">Transparent Screening for LLM Inference and Training Impacts.</a></em></p>
           <p><strong>BibTeX</strong></p>
           <pre class="citation-block"><code>{escape(PROJECT_PAPER_BIBTEX)}</code></pre>
           <p><a href="{app_url('/downloads/ImpactLLM_paper.pdf')}">Download paper PDF</a> | <a href="{app_url('/downloads/ImpactLLM_paper.bib')}">Download paper BibTeX</a></p>
@@ -7199,30 +7185,11 @@ class Handler(BaseHTTPRequestHandler):
                 return
             self._write_html(render_page(error_message="Publication PDF not found."), status=404, send_body=send_body)
             return
-        if normalized_path == "/downloads/ImpactLLM_paper_methodology.pdf":
-            if METHODOLOGY_PDF_PATH.exists():
-                self._write_bytes(
-                    METHODOLOGY_PDF_PATH.read_bytes(),
-                    "application/pdf",
-                    filename="ImpactLLM_paper_methodology.pdf",
-                    send_body=send_body,
-                )
-                return
-            self._write_html(render_page(error_message="Methodology PDF not found."), status=404, send_body=send_body)
-            return
         if normalized_path in {"/downloads/ImpactLLM_paper.bib", "/downloads/llm_environment_opendata_paper.bib"}:
             self._write_bytes(
                 PROJECT_PAPER_BIBTEX.encode("utf-8"),
                 "application/x-bibtex; charset=utf-8",
                 filename="ImpactLLM_paper.bib",
-                send_body=send_body,
-            )
-            return
-        if normalized_path == "/downloads/ImpactLLM_paper_methodology.bib":
-            self._write_bytes(
-                METHODOLOGY_PAPER_BIBTEX.encode("utf-8"),
-                "application/x-bibtex; charset=utf-8",
-                filename="ImpactLLM_paper_methodology.bib",
                 send_body=send_body,
             )
             return
@@ -7235,16 +7202,6 @@ class Handler(BaseHTTPRequestHandler):
                 )
                 return
             self._write_html(render_page(error_message="Publication preview not found."), status=404, send_body=send_body)
-            return
-        if normalized_path == "/downloads/ImpactLLM_paper_methodology_preview.png":
-            if METHODOLOGY_PREVIEW_PATH.exists():
-                self._write_bytes(
-                    METHODOLOGY_PREVIEW_PATH.read_bytes(),
-                    "image/png",
-                    send_body=send_body,
-                )
-                return
-            self._write_html(render_page(error_message="Methodology preview not found."), status=404, send_body=send_body)
             return
         self._write_html(render_page(), send_body=send_body)
 

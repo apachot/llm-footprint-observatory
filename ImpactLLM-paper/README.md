@@ -1,8 +1,7 @@
-# ImpactLLM Papers
+# ImpactLLM Paper
 
-ImpactLLM now ships with two companion papers:
+This directory now ships with a single paper:
 
-- `ImpactLLM_paper.tex` (Observatory): documents the open dataset, API, and web observatory covering 41 market models.
-- `ImpactLLM_paper_methodology.tex` (Methodology): details the natural-language estimator that produces the inference and training emissions reported in the Observatoire.
+- `ImpactLLM_paper.tex`: `Transparent Screening for LLM Inference and Training Impacts`
 
-Compile each with `pdflatex` (and `bibtex` if references need regeneration).
+Compile it with `pdflatex` (and `bibtex` if references need regeneration).

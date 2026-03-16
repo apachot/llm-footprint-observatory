@@ -27,7 +27,7 @@ Our work on responsible AI emphasizes methodological rigor, traceability, and de
 ## Quick Links
 
 - Demo: `https://dev.emotia.com/impact-llm/`
-- Paper PDF: `https://dev.emotia.com/impact-llm/downloads/ImpactLLM_paper.pdf`
+- Paper PDF: `https://dev.emotia.com/impact-llm/downloads/ImpactLLM_paper.pdf` (`Transparent Screening for LLM Inference and Training Impacts`)
 - GitHub repository: `https://github.com/apachot/ImpactLLM`
 
 ## Get Started
