@@ -3267,8 +3267,8 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
           <p>You should have received a copy of the GNU General Public License along with this program. If not, see <a href="https://www.gnu.org/licenses/" target="_blank" rel="noopener noreferrer">https://www.gnu.org/licenses/</a>.</p>
           <p><strong>Arnault Pachot</strong></p>
           <p>Arnault Pachot is a researcher and entrepreneur, founder of OpenStudio and now founder of Emotia. He works on responsible digital transformation, Green IT, and decision-oriented AI systems. He co-authored the Dunod book <em>Intelligence artificielle et environnement : alliance ou nuisance ?</em>, dedicated to practical pathways for environmentally responsible AI.</p>
-          <p class="notranslate"><a href="https://www.linkedin.com/in/arnaultpachot/" target="_blank" rel="noopener noreferrer">LinkedIn: Arnault Pachot</a></p>
-          <p class="notranslate"><a href="https://scholar.google.com/citations?user=aFQ2gLMAAAAJ&hl=fr" target="_blank" rel="noopener noreferrer">Google Scholar: Arnault Pachot</a></p>
+          <p class="notranslate"><a class="profile-link" href="https://www.linkedin.com/in/arnaultpachot/" target="_blank" rel="noopener noreferrer"><span class="profile-link-icon" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><path d="M6.94 8.5V19H3.5V8.5h3.44zM5.22 3A2 2 0 1 1 5.2 7a2 2 0 0 1 .02-4zM20.5 13.05V19h-3.43v-5.44c0-1.37-.5-2.3-1.71-2.3-.93 0-1.49.63-1.74 1.23-.09.22-.11.52-.11.82V19H10.1s.05-9.3 0-10.5h3.41v1.49l-.02.03h.02v-.03c.45-.69 1.25-1.68 3.05-1.68 2.23 0 3.9 1.46 3.9 4.74z"/></svg></span><span>LinkedIn: Arnault Pachot</span></a></p>
+          <p class="notranslate"><a class="profile-link" href="https://scholar.google.com/citations?user=aFQ2gLMAAAAJ&hl=fr" target="_blank" rel="noopener noreferrer"><span class="profile-link-icon" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><path d="M12 3 1 9l11 6 9-4.91V17h2V9L12 3zm-7.45 9L12 8.09 19.45 12 12 15.91 4.55 12z"/><path d="M7 14.96V18c0 1.9 2.69 3.5 5 3.5s5-1.6 5-3.5v-3.04l-5 2.73-5-2.73z"/></svg></span><span>Google Scholar: Arnault Pachot</span></a></p>
           <div class="paper-preview-grid">
             <a class="paper-preview-card book-preview-card" href="https://www.dunod.com/entreprise-et-economie/intelligence-artificielle-et-environnement-alliance-ou-nuisance-ia-face-aux" target="_blank" rel="noopener noreferrer" aria-label="Open Arnault Pachot's Dunod book page">
               <span class="paper-preview-frame">
@@ -3279,8 +3279,8 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
           </div>
           <p><strong>Thierry Petit</strong></p>
           <p>Thierry Petit is a senior AI researcher and scientific leader with more than twenty years of academic and R&amp;D experience in Europe and the United States. His work spans trustworthy AI, simulation, optimization, and decision-grade platforms. At Emotia and Pollitics, he leads the scientific direction of systems designed to remain both operationally useful and methodologically robust.</p>
-          <p class="notranslate"><a href="https://www.linkedin.com/in/tpetit19/" target="_blank" rel="noopener noreferrer">LinkedIn: Thierry Petit</a></p>
-          <p class="notranslate"><a href="https://scholar.google.com/citations?hl=fr&user=7-OxukEAAAAJ" target="_blank" rel="noopener noreferrer">Google Scholar: Thierry Petit</a></p>
+          <p class="notranslate"><a class="profile-link" href="https://www.linkedin.com/in/tpetit19/" target="_blank" rel="noopener noreferrer"><span class="profile-link-icon" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><path d="M6.94 8.5V19H3.5V8.5h3.44zM5.22 3A2 2 0 1 1 5.2 7a2 2 0 0 1 .02-4zM20.5 13.05V19h-3.43v-5.44c0-1.37-.5-2.3-1.71-2.3-.93 0-1.49.63-1.74 1.23-.09.22-.11.52-.11.82V19H10.1s.05-9.3 0-10.5h3.41v1.49l-.02.03h.02v-.03c.45-.69 1.25-1.68 3.05-1.68 2.23 0 3.9 1.46 3.9 4.74z"/></svg></span><span>LinkedIn: Thierry Petit</span></a></p>
+          <p class="notranslate"><a class="profile-link" href="https://scholar.google.com/citations?hl=fr&user=7-OxukEAAAAJ" target="_blank" rel="noopener noreferrer"><span class="profile-link-icon" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><path d="M12 3 1 9l11 6 9-4.91V17h2V9L12 3zm-7.45 9L12 8.09 19.45 12 12 15.91 4.55 12z"/><path d="M7 14.96V18c0 1.9 2.69 3.5 5 3.5s5-1.6 5-3.5v-3.04l-5 2.73-5-2.73z"/></svg></span><span>Google Scholar: Thierry Petit</span></a></p>
           <p><strong>Selected references on AI and the environment</strong></p>
           <ul class="analysis-bibliography-list">
             <li class="analysis-bibliography-item">Pachot, A., Patissier, C., &amp; Open Studio. (2022). <em>Intelligence artificielle et environnement : alliance ou nuisance ? L'IA face aux défis écologiques d'aujourd'hui et de demain</em>. Dunod. <a href="https://www.dunod.com/entreprise-et-economie/intelligence-artificielle-et-environnement-alliance-ou-nuisance-ia-face-aux" target="_blank" rel="noopener noreferrer">https://www.dunod.com/entreprise-et-economie/intelligence-artificielle-et-environnement-alliance-ou-nuisance-ia-face-aux</a></li>
@@ -4442,6 +4442,32 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
       font-size: 0.9rem;
       line-height: 1.6;
       color: var(--muted);
+    }}
+    .profile-link {{
+      display: inline-flex;
+      align-items: center;
+      gap: 0.45rem;
+      color: var(--accent);
+      text-decoration: none;
+      font-weight: 600;
+    }}
+    .profile-link:hover {{
+      text-decoration: underline;
+    }}
+    .profile-link-icon {{
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 1rem;
+      height: 1rem;
+      color: currentColor;
+      flex: 0 0 auto;
+    }}
+    .profile-link-icon svg {{
+      display: block;
+      width: 100%;
+      height: 100%;
+      fill: currentColor;
     }}
     .reference-table {{
       width: 100%;
