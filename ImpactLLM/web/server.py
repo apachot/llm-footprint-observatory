@@ -2092,7 +2092,7 @@ POST /predict_inference</code></pre>
   -d '{
     "scenario_id": "demo",
     "provider": "OpenAI",
-    "model_id": "gpt-4o-mini",
+    "model_id": "gpt-4",
     "request_type": "chat",
     "input_tokens": 1200,
     "output_tokens": 350,
@@ -2107,7 +2107,7 @@ POST /predict_inference</code></pre>
   -d '{
     "scenario_id": "catalog-demo",
     "provider": "OpenAI",
-    "model_id": "gpt-4o-mini",
+    "model_id": "gpt-4",
     "request_type": "chat",
     "input_tokens": 1000,
     "output_tokens": 550,
@@ -3374,7 +3374,7 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
         </button>
         <div class="example-prompts" aria-label="Application examples">
           <p class="example-prompts-label">Or click an example to test it</p>
-          <button type="button" class="example-prompt" data-example-prompt="We have a customer-support assistant based on GPT-4o-mini, used about 4,000 times per month in France by our support team.">We have a customer-support assistant based on GPT-4o-mini, used about 4,000 times per month in France by our support team.</button>
+          <button type="button" class="example-prompt" data-example-prompt="We have a customer-support assistant based on GPT-4, used about 4,000 times per month in France by our support team.">We have a customer-support assistant based on GPT-4, used about 4,000 times per month in France by our support team.</button>
           <button type="button" class="example-prompt" data-example-prompt="We use Claude 3.5 Sonnet in our app to summarize internal documents for around 120 consultants, with about 15,000 summaries generated per month.">We use Claude 3.5 Sonnet in our app to summarize internal documents for around 120 consultants, with about 15,000 summaries generated per month.</button>
           <button type="button" class="example-prompt" data-example-prompt="We have a RAG assistant based on Mistral Large, with a vector database and logging, used by about 800 employees and handling roughly 25,000 requests per month. If you know them, you can also add token volumes or request counts.">We have a RAG assistant based on Mistral Large, with a vector database and logging, used by about 800 employees and handling roughly 25,000 requests per month. If you know them, you can also add token volumes or request counts.</button>
         </div>
@@ -4829,7 +4829,7 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
         methodBoundBody: 'The current prompt-level branch is a screening proxy, not an audited benchmark. For this reason, the application returns a bounded low-central-high result rather than one falsely precise deterministic value.',
         methodCarbonBody: 'Carbon is not copied mechanically from the source paper. It is recalculated from the retained energy estimate using the electricity mix associated with the selected country context.',
         methodResearchBody: 'The result is an auditable estimate intended for comparison, software design, and methodological discussion. It is useful precisely because the assumptions, factors, and retained sources remain visible and inspectable.',
-        examplePrompt1: 'We have a customer-support assistant based on GPT-4o-mini, used about 4,000 times per month in France by our support team.',
+        examplePrompt1: 'We have a customer-support assistant based on GPT-4, used about 4,000 times per month in France by our support team.',
         examplePrompt2: 'We use Claude 3.5 Sonnet in our app to summarize internal documents for around 120 consultants, with about 15,000 summaries generated per month.',
         examplePrompt3: 'We have a RAG assistant based on Mistral Large, with a vector database and logging, used by about 800 employees and handling roughly 25,000 requests per month. If you know them, you can also add token volumes or request counts.',
       }},
@@ -4862,7 +4862,7 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
         methodBoundBody: 'La branche actuelle au niveau prompt est un proxy de screening, pas un benchmark audité. Pour cette raison, l’application renvoie un résultat borné bas-central-haut plutôt qu’une valeur déterministe faussement précise.',
         methodCarbonBody: 'Le carbone n’est pas repris mécaniquement depuis l’article source. Il est recalculé à partir de l’estimation énergétique retenue en utilisant le mix électrique associé au contexte pays sélectionné.',
         methodResearchBody: 'Le résultat est une estimation auditable destinée à la comparaison, à la conception logicielle et à la discussion méthodologique. Son intérêt vient précisément du fait que les hypothèses, les facteurs et les sources retenues restent visibles et inspectables.',
-        examplePrompt1: 'Nous avons un assistant de support client basé sur GPT-4o-mini, utilisé environ 4 000 fois par mois en France par notre équipe support.',
+        examplePrompt1: 'Nous avons un assistant de support client basé sur GPT-4, utilisé environ 4 000 fois par mois en France par notre équipe support.',
         examplePrompt2: 'Nous utilisons Claude 3.5 Sonnet dans notre application pour résumer des documents internes pour environ 120 consultants, avec près de 15 000 résumés générés par mois.',
         examplePrompt3: 'Nous avons un assistant RAG basé sur Mistral Large, avec une base vectorielle et de la journalisation, utilisé par environ 800 collaborateurs et traitant près de 25 000 requêtes par mois.',
       }}
