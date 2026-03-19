@@ -10,6 +10,56 @@ MARKET_MODELS_PATH = ROOT / "data" / "market_models.csv"
 
 NEW_MARKET_MODELS = [
     {
+        "model_id": "gpt-4o-mini",
+        "display_name": "GPT-4o mini",
+        "provider": "openai",
+        "market_status": "api",
+        "serving_mode": "closed",
+        "server_country": "United States",
+        "server_country_status": "multi_region",
+        "server_country_source": "Introducing GPT-4o mini | OpenAI",
+        "server_country_source_url": "https://openai.com/index/gpt-4o-mini-advancing-cost-efficient-intelligence/",
+        "estimation_country_code": "US",
+        "estimation_country_status": "screening_proxy",
+        "estimation_country_source": "Introducing GPT-4o mini | OpenAI",
+        "estimation_country_source_url": "https://openai.com/index/gpt-4o-mini-advancing-cost-efficient-intelligence/",
+        "active_parameters_billion": "8",
+        "total_parameters_billion": "8",
+        "parameter_value_status": "estimated",
+        "parameter_confidence": "low",
+        "parameter_source": "Internal approximate profile for extrapolation",
+        "parameter_source_url": "",
+        "notes": "OpenAI does not publish a parameter count for GPT-4o mini; the project retains an 8B screening-level proxy for comparative extrapolation.",
+        "input_modalities": "text,image",
+        "output_modalities": "text",
+        "context_window_tokens": "128000",
+        "max_output_tokens": "16384",
+        "vision_support": "yes",
+        "architecture_notes": "Cost-efficient multimodal small model in the GPT-4o family, exposed through the OpenAI API.",
+        "modalities_source": "Introducing GPT-4o mini | OpenAI",
+        "modalities_source_url": "https://openai.com/index/gpt-4o-mini-advancing-cost-efficient-intelligence/",
+        "context_source": "GPT-4o mini model docs | OpenAI API",
+        "context_source_url": "https://platform.openai.com/docs/models/gpt-4o-mini",
+        "architecture_source": "Introducing GPT-4o mini | OpenAI",
+        "architecture_source_url": "https://openai.com/index/gpt-4o-mini-advancing-cost-efficient-intelligence/",
+        "release_date": "2024-07-18",
+        "release_source": "Introducing GPT-4o mini | OpenAI",
+        "release_source_url": "https://openai.com/index/gpt-4o-mini-advancing-cost-efficient-intelligence/",
+        "screening_method_id": "market_multifactor_prompt_proxy_v1",
+        "training_regime": "pretraining",
+        "training_regime_status": "screening_prior",
+        "training_regime_source": "Introducing GPT-4o mini | OpenAI",
+        "training_regime_source_url": "https://openai.com/index/gpt-4o-mini-advancing-cost-efficient-intelligence/",
+        "training_multimodal": "yes",
+        "training_multimodal_source": "Introducing GPT-4o mini | OpenAI",
+        "training_multimodal_source_url": "https://openai.com/index/gpt-4o-mini-advancing-cost-efficient-intelligence/",
+        "training_hardware_class_proxy": "modern_hyperscale_gpu",
+        "training_hardware_source": "Introducing GPT-4o mini | OpenAI",
+        "training_hardware_source_url": "https://openai.com/index/gpt-4o-mini-advancing-cost-efficient-intelligence/",
+        "training_multifactor_method_id": "training_multifactor_proxy_v1",
+        "training_multifactor_anchor": "Transformer (big) (strubell2019_co2_transformer_big); BLOOM 176B (luccioni2023_bloom_dynamic); BLOOM 176B (luccioni2023_bloom_extended)",
+    },
+    {
         "model_id": "gpt-3.5-turbo",
         "display_name": "GPT-3.5 Turbo",
         "provider": "openai",
@@ -146,7 +196,7 @@ def main():
         for row in rows:
             writer.writerow(_normalize_row(row))
 
-    print("Market models dataset updated with GPT-3.5 Turbo and GPT-4 entries.")
+    print("Market models dataset updated with GPT-4o mini, GPT-3.5 Turbo, and GPT-4 entries.")
 
 
 if __name__ == "__main__":
