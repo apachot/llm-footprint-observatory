@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import csv
 import math
+import sys
 from collections import defaultdict
 from datetime import datetime
 from pathlib import Path
@@ -14,6 +15,11 @@ import matplotlib.pyplot as plt
 
 
 ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from core.estimator import get_country_mix, to_float, wh_to_gco2e
+
 DATA_PATH = ROOT / "data" / "market_models.csv"
 FIGURES_DIR = ROOT.parent / "ImpactLLM-paper" / "figures"
 
@@ -53,12 +59,26 @@ def load_rows(metric_key: str) -> list[dict[str, object]]:
             name = row["display_name"].strip()
             if name not in KEEP_NAMES:
                 continue
+            if metric_key == "training_carbon_tco2e_central":
+                energy_wh = to_float(row["training_energy_wh_central"], default=0.0)
+                country_mix = get_country_mix(row.get("estimation_country_code"))
+                retained_grid_carbon_intensity = to_float(
+                    (country_mix or {}).get("grid_carbon_intensity_gco2_per_kwh"),
+                    default=None,
+                )
+                value = (
+                    wh_to_gco2e(energy_wh, retained_grid_carbon_intensity) / 1_000_000.0
+                    if retained_grid_carbon_intensity is not None
+                    else float(row[metric_key])
+                )
+            else:
+                value = float(row[metric_key])
             rows.append(
                 {
                     "name": name,
                     "family": family_of(name),
                     "date": datetime.strptime(row["release_date"], "%Y-%m-%d"),
-                    "value": float(row[metric_key]),
+                    "value": value,
                 }
             )
     return sorted(rows, key=lambda item: item["date"])
@@ -150,9 +170,9 @@ def main() -> None:
         output_name="paper_training_co2_doubling.png",
     )
     draw_figure(
-        load_rows("screening_per_hour_carbon_gco2e_central"),
+        load_rows("screening_per_request_carbon_gco2e_central"),
         title="Inference-screening trajectory of flagship GPT, Claude, and Grok models",
-        ylabel="Central inference CO2 estimate (gCO2e/h, log scale)",
+        ylabel="Central inference CO2 estimate (gCO2e/request, log scale)",
         output_name="paper_inference_co2_doubling.png",
     )
 

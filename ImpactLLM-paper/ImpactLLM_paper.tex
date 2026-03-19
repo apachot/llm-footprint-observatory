@@ -140,7 +140,7 @@ These examples illustrate three practical properties of the method. First, annua
 For completeness, Table \ref{tab:catalog-results-method} reports the current calculated values for all 40 market models tracked in the March 2026 release. The purpose of this table is documentary: it makes the observatory outputs directly inspectable in the paper, while the web interface remains the primary medium for interactive exploration.
 
 \begin{longtable}{|L{4.0cm}|L{2.0cm}|L{2.2cm}|L{1.7cm}|L{1.8cm}|}
-\caption{Calculated environmental indicators for the 40 market models currently tracked by ImpactLLM. Inference values correspond to the central prompt-level proxy retained by the observatory, expressed per standardized request. Training values are multi-factor screening estimates.}\label{tab:catalog-results-method}\\
+\caption{Calculated environmental indicators for the 40 market models currently tracked by ImpactLLM. Inference values correspond to the central prompt-level proxy retained by the observatory, expressed per standardized request. Training energy values are multi-factor screening estimates, and training CO$_2$e is contextualized from retained training energy using the model-country electricity mix.}\label{tab:catalog-results-method}\\
 \hline
 Model & Inference Wh/request & Inference gCO$_2$e/request & Training GWh & Training ktCO$_2$e \\
 \hline
@@ -150,88 +150,87 @@ Model & Inference Wh/request & Inference gCO$_2$e/request & Training GWh & Train
 \hline
 \endhead
 \hline
-Claude Opus 4.1 & 2.9922 & 1.1520 & 125.63 & 6749.42 \\
+GPT-5.2 & 2.7897 & 1.0740 & 101.76 & 39.18 \\
 \hline
-GPT-5.2 & 2.7897 & 1.0740 & 101.76 & 5467.03 \\
+GPT-5.2-pro & 2.7897 & 1.0740 & 101.76 & 39.18 \\
 \hline
-GPT-5.2-pro & 2.7897 & 1.0740 & 101.76 & 5467.03 \\
+GPT-5 mini & 0.1706 & 0.0657 & 0.28 & 0.11 \\
 \hline
-Grok 4 & 1.0994 & 0.4233 & 11.31 & 10446.44 \\
+GPT-5 nano & 0.1706 & 0.0657 & 0.28 & 0.11 \\
 \hline
-Megatron-Turing NLG 530B & 0.7583 & 0.2919 & 14.48 & 13373.46 \\
+GPT-4o mini & 0.0155 & 0.0060 & 0.00 & 0.00 \\
 \hline
-GPT-4 & 0.7524 & 0.2897 & 14.93 & 801.83 \\
+GPT-OSS 120B & 0.0116 & 0.0045 & 0.39 & 0.15 \\
 \hline
-Claude Sonnet 4 & 0.6486 & 0.2497 & 5.03 & 4642.86 \\
+GPT-OSS 20B & 0.0074 & 0.0029 & 0.01 & 0.00 \\
 \hline
-Grok 2 & 0.2389 & 0.0920 & 2.06 & 1903.86 \\
+Claude Opus 4.1 & 2.9922 & 1.1520 & 125.63 & 48.37 \\
 \hline
-Llama 3.1 405B & 0.5530 & 0.2129 & 5.23 & 4828.64 \\
+Claude Sonnet 4 & 0.6486 & 0.2497 & 5.03 & 1.93 \\
 \hline
-Gopher 280B & 0.4136 & 0.0744 & 2.29 & 2119.57 \\
+Claude 3.5 Sonnet & 0.2957 & 0.1139 & 0.96 & 0.37 \\
 \hline
-Gemini 2.5 Pro & 0.3601 & 0.1387 & 1.26 & 1160.72 \\
+Claude 3.7 Sonnet & 0.2957 & 0.1139 & 0.96 & 0.37 \\
 \hline
-Grok 1 & 0.1590 & 0.0612 & 2.79 & 2574.94 \\
+Claude 3.5 Haiku & 0.0412 & 0.0159 & 0.02 & 0.01 \\
 \hline
-Claude 3.5 Sonnet & 0.2957 & 0.1139 & 0.96 & 888.67 \\
+Gemini 2.5 Pro & 0.3601 & 0.1387 & 1.26 & 0.48 \\
 \hline
-Claude 3.7 Sonnet & 0.2957 & 0.1139 & 0.96 & 888.67 \\
+Gemini 2.5 Flash & 0.1508 & 0.0581 & 0.20 & 0.08 \\
 \hline
-Jurassic-1 Jumbo & 0.2689 & 0.1035 & 1.42 & 1310.01 \\
+Gemini 2.5 Flash-Lite & 0.0594 & 0.0229 & 0.03 & 0.01 \\
 \hline
-GPT-3.5 Turbo & 0.2646 & 0.1019 & 0.98 & 901.55 \\
+Gemini 2.0 Flash & 0.0594 & 0.0229 & 0.03 & 0.01 \\
 \hline
+Grok 4 & 1.0994 & 0.4233 & 11.31 & 4.35 \\
 \hline
-OPT 175B & 0.2337 & 0.0900 & 1.12 & 1030.35 \\
+Llama 3.1 8B & 0.0133 & 0.0051 & 0.00 & 0.00 \\
 \hline
-LaMDA 1 & 0.2097 & 0.0807 & 0.56 & 1006.92 \\
+Llama 3.1 70B & 0.1043 & 0.0402 & 0.16 & 0.06 \\
 \hline
-Mistral Large & 0.2074 & 0.0083 & 0.48 & 852.50 \\
+Llama 3.1 405B & 0.5530 & 0.2129 & 5.23 & 2.01 \\
 \hline
-GLaM 130B & 0.1845 & 0.0710 & 0.64 & 1146.57 \\
+Ministral 3B & 0.0056 & 0.0002 & 0.00 & 0.00 \\
 \hline
-Claude 2 & 0.1738 & 0.0669 & 0.31 & 563.48 \\
+Ministral 8B & 0.0142 & 0.0006 & 0.00 & 0.00 \\
 \hline
-GPT-5 mini & 0.1706 & 0.0657 & 0.28 & 508.54 \\
+Mistral Large & 0.2074 & 0.0083 & 0.48 & 0.02 \\
 \hline
-GPT-5 nano & 0.1706 & 0.0657 & 0.28 & 508.54 \\
+Mistral Small 3.1 24B & 0.0413 & 0.0017 & 0.02 & 0.00 \\
 \hline
-Gemini 2.5 Flash & 0.1508 & 0.0581 & 0.20 & 360.63 \\
+Codestral 22B & 0.0347 & 0.0014 & 0.01 & 0.00 \\
 \hline
-Qwen2.5 72B & 0.1072 & 0.0579 & 0.17 & 296.34 \\
+Qwen2.5 7B & 0.0117 & 0.0063 & 0.00 & 0.00 \\
 \hline
-Llama 3.1 70B & 0.1043 & 0.0402 & 0.16 & 280.11 \\
+Qwen2.5 32B & 0.0496 & 0.0268 & 0.03 & 0.02 \\
 \hline
-DeepSeek R1 & 0.0836 & 0.0451 & 12.30 & 11360.91 \\
+Qwen2.5 72B & 0.1072 & 0.0579 & 0.17 & 0.09 \\
 \hline
-DeepSeek V3 & 0.0798 & 0.0431 & 12.30 & 11360.91 \\
+DeepSeek V3 & 0.0798 & 0.0431 & 12.30 & 6.64 \\
 \hline
-Gemini 2.5 Flash-Lite & 0.0594 & 0.0229 & 0.03 & 50.71 \\
+DeepSeek R1 & 0.0836 & 0.0451 & 12.30 & 6.64 \\
 \hline
-Gemini 2.0 Flash & 0.0594 & 0.0229 & 0.03 & 50.71 \\
+GPT-3.5 Turbo & 0.2646 & 0.1019 & 0.98 & 0.38 \\
 \hline
-Qwen2.5 32B & 0.0496 & 0.0268 & 0.03 & 58.54 \\
+GPT-4 & 0.7524 & 0.2897 & 14.93 & 5.75 \\
 \hline
-Mistral Small 3.1 24B & 0.0413 & 0.0017 & 0.02 & 36.06 \\
+Claude 2 & 0.1738 & 0.0669 & 0.31 & 0.12 \\
 \hline
-Claude 3.5 Haiku & 0.0412 & 0.0159 & 0.02 & 27.27 \\
+Grok 1 & 0.1590 & 0.0612 & 2.79 & 1.07 \\
 \hline
-Codestral 22B & 0.0347 & 0.0014 & 0.01 & 26.35 \\
+Grok 2 & 0.2389 & 0.0920 & 2.06 & 0.79 \\
 \hline
-Ministral 8B & 0.0142 & 0.0006 & 0.00 & 223.32 \\
+Megatron-Turing NLG 530B & 0.7583 & 0.2919 & 14.48 & 5.57 \\
 \hline
-GPT-4o mini & 0.0155 & 0.0060 & 0.00 & 231.14 \\
+Jurassic-1 Jumbo & 0.2689 & 0.1035 & 1.42 & 0.55 \\
 \hline
-Llama 3.1 8B & 0.0133 & 0.0051 & 0.00 & 234.49 \\
+Gopher 280B & 0.4136 & 0.0744 & 2.29 & 0.41 \\
 \hline
-Qwen2.5 7B & 0.0117 & 0.0063 & 0.00 & 179.53 \\
+GLaM 130B & 0.1845 & 0.0710 & 0.64 & 0.25 \\
 \hline
-GPT-OSS 120B & 0.0116 & 0.0045 & 0.39 & 704.28 \\
+LaMDA 1 & 0.2097 & 0.0807 & 0.56 & 0.22 \\
 \hline
-GPT-OSS 20B & 0.0074 & 0.0029 & 0.01 & 22.69 \\
-\hline
-Ministral 3B & 0.0056 & 0.0002 & 0.00 & 59.06 \\
+OPT 175B & 0.2337 & 0.0900 & 1.12 & 0.43 \\
 \hline
 \end{longtable}
 
