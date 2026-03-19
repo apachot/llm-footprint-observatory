@@ -1,9 +1,9 @@
-\documentclass[10pt,a4paper]{article}
+\documentclass[runningheads]{llncs}
 
 \usepackage[T1]{fontenc}
 \usepackage[utf8]{inputenc}
 \usepackage{lmodern}
-\usepackage{geometry}
+\usepackage{color}
 \usepackage{hyperref}
 \usepackage{microtype}
 \usepackage{graphicx}
@@ -12,10 +12,12 @@
 \usepackage{array}
 \usepackage{longtable}
 
-\geometry{margin=2.5cm}
 \setlength{\emergencystretch}{2em}
+\microtypesetup{expansion=false}
 \newcolumntype{L}[1]{>{\raggedright\arraybackslash}p{#1}}
 \newcolumntype{Y}{>{\raggedright\arraybackslash}X}
+\renewcommand\UrlFont{\color{blue}\rmfamily}
+\urlstyle{rm}
 \hypersetup{
   colorlinks=true,
   linkcolor=black,
@@ -27,8 +29,11 @@
 
 
 \title{Transparent Screening for LLM Inference and Training Impacts}
-\author{Arnault Pachot \and Thierry Petit}
-\date{March 14, 2026}
+\titlerunning{Transparent Screening for LLM Impacts}
+\author{Arnault Pachot\inst{1}\thanks{Corresponding author: Arnault Pachot, \email{apachot@emotia.com}} \and Thierry Petit\inst{1}}
+\authorrunning{A. Pachot and T. Petit}
+\institute{Emotia, Paris, France\\
+\email{\{apachot,tpetit\}@emotia.com}}
 
 \begin{document}
 
@@ -36,9 +41,10 @@
 
 \begin{abstract}
 This paper presents the transparent screening framework used in ImpactLLM to estimate inference and training impacts for current large language models. It documents the algorithms that convert natural-language application descriptions into bounded environmental estimates, and it also reports the comparative tables and visual results published in the observatory. The objective is not to claim direct measurement for opaque proprietary services, but to provide an auditable, source-linked proxy framework that improves comparability and public discussion under conditions of limited observability.
+
+\keywords{Large language models \and environmental impact \and screening method \and transparent estimation}
 \end{abstract}
 
-\textbf{Keywords:} LLMs, source-linked evidence, screening method, natural language interface.
 \section{Introduction}
 This paper documents the transparent screening framework used in the \emph{ImpactLLM Observatory}. The observatory now covers 41 models, and this manuscript explains how the interface extracts scenarios from natural-language descriptions, propagates them through bounded multi-factor screening proxies, and publishes the resulting comparative tables and figures. The goal is to keep those proxies auditable while keeping the application workflow fast and interpretable.
 
@@ -281,6 +287,14 @@ The contribution of this manuscript is both methodological and documentary: it e
 
 That contribution should not be read as an attempt to eliminate uncertainty. For the most widely used proprietary LLM services, uncertainty is structurally unavoidable because the decisive telemetry remains inaccessible. The relevant methodological task is therefore to organize approximation rather than to pretend to escape it. This paper argues that a transparent, source-linked, reproducible screening proxy is a better basis for comparison and discussion than the current situation in which strong environmental claims often circulate without explicit assumptions, traceable derivation, or shared comparison rules.
 
-\bibliographystyle{plain}
+\begin{credits}
+\subsubsection{\ackname}
+The authors thank the ImpactLLM project contributors and reviewers of earlier internal drafts for helping clarify the presentation of the screening framework.
+
+\subsubsection{\discintname}
+The authors have no competing interests to declare that are relevant to the content of this article.
+\end{credits}
+
+\bibliographystyle{splncs04}
 \bibliography{references_ImpactLLM}
 \end{document}
