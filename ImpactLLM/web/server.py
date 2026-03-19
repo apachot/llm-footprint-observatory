@@ -2958,21 +2958,25 @@ def build_training_models_view(records):
             """
         )
 
+    max_training_energy_wh = max((row.get("direct_training_energy_wh", 0.0) for row in chart_rows), default=0.0)
+    max_training_carbon_tco2e = max((row.get("direct_training_carbon_tco2e", 0.0) for row in chart_rows), default=0.0)
+    households_equivalent = max_training_energy_wh / 2_500_000.0 if max_training_energy_wh > 0 else 0.0
+    flights_equivalent = max_training_carbon_tco2e / (577_968_750.0 / 27_451_887.0) if max_training_carbon_tco2e > 0 else 0.0
     chart_rows.extend(
         [
             {
-                "label": "2,760,139 households (annual domestic use)",
+                "label": f"{households_equivalent:,.0f} households (annual domestic use)",
                 "provider": "Everyday benchmark",
                 "kind": "reference",
-                "direct_training_energy_wh": 6900346573084.866,
+                "direct_training_energy_wh": max_training_energy_wh,
                 "direct_training_carbon_tco2e": 235.0,
             },
             {
-                "label": "292,210 full commercial flights",
+                "label": f"{flights_equivalent:,.0f} full commercial flights",
                 "provider": "Everyday benchmark",
                 "kind": "reference",
                 "direct_training_energy_wh": 0.0,
-                "direct_training_carbon_tco2e": 6166824.8704,
+                "direct_training_carbon_tco2e": max_training_carbon_tco2e,
             },
         ]
     )
@@ -2983,6 +2987,10 @@ def build_training_models_view(records):
         "factor_heatmap_rows": factor_heatmap_rows,
         "uncertainty_chart_rows": uncertainty_chart_rows,
         "release_timeline_rows": release_timeline_rows,
+        "benchmark_households_equivalent": households_equivalent,
+        "benchmark_training_energy_wh": max_training_energy_wh,
+        "benchmark_flights_equivalent": flights_equivalent,
+        "benchmark_training_carbon_tco2e": max_training_carbon_tco2e,
         "table_body": "".join(body),
     }
 
@@ -2992,6 +3000,10 @@ def render_training_models_charts(records):
     rows = view["rows"]
     if not rows:
         return ""
+    benchmark_households = int(round(view.get("benchmark_households_equivalent", 0.0)))
+    benchmark_energy_twh = (view.get("benchmark_training_energy_wh", 0.0) / 1_000_000_000_000.0)
+    benchmark_flights = int(round(view.get("benchmark_flights_equivalent", 0.0)))
+    benchmark_carbon_tco2e = view.get("benchmark_training_carbon_tco2e", 0.0)
     return f"""
     <section class="panel reference-panel">
       <div class="summary-header">
@@ -3006,7 +3018,7 @@ def render_training_models_charts(records):
         <button type="button" class="chart-tab-button" data-training-chart-control="metric-tab" data-metric-value="direct_training_carbon" aria-selected="false">Carbon</button>
       </div>
       <div id="training-impact-chart" class="models-impact-chart" data-training-chart-rows='{escape(json.dumps(view["chart_rows"], ensure_ascii=False), quote=True)}'></div>
-      <p class="summary-intro models-benchmark-note">Benchmarks integrated into the chart: household electricity for <strong>2,760,139 households</strong> over one year of domestic use, i.e. ≈ <strong>6.90 TWh</strong> based on an average consumption of 2,500 kWh per household (RTE, 2021 estimate), and full-flight aviation derived from Klöwer et al. (2025) from 577.97 MtCO2 and 27.45 million commercial flights observed in 2023, i.e. ≈ <strong>6,166,824.9 tCO2e</strong> for <strong>292,210 full flights</strong>. These comparison points are aligned with the current central screening order of magnitude of Claude Opus 4.1 in the training chart, not with a direct provider-side measurement.</p>
+      <p class="summary-intro models-benchmark-note">Benchmarks integrated into the chart: household electricity for <strong>{benchmark_households:,.0f}</strong> households over one year of domestic use, i.e. ≈ <strong>{benchmark_energy_twh:.2f} TWh</strong> based on an average consumption of 2,500 kWh per household (RTE, 2021 estimate), and full-flight aviation derived from Klöwer et al. (2025) from 577.97 MtCO2 and 27.45 million commercial flights observed in 2023, i.e. ≈ <strong>{benchmark_carbon_tco2e:,.1f} tCO2e</strong> for <strong>{benchmark_flights:,.0f} full flights</strong>. These comparison points are aligned with the current maximum central screening order of magnitude in the training chart, not with a direct provider-side measurement.</p>
     </section>
     <section class="panel reference-panel">
       <div class="summary-header">

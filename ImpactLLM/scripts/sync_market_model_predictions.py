@@ -90,6 +90,16 @@ def update_training_estimates(row, prediction):
         row[f"training_energy_wh_{scenario}"] = format_float(scenario_energy)
         row[f"training_carbon_tco2e_{scenario}"] = format_float(scenario_carbon)
 
+    carbon_anchors = carbon_result.get("anchors") or []
+    if carbon_anchors:
+        row["training_multifactor_anchor"] = "; ".join(
+            f"{anchor.get('source_model')} ({anchor.get('record_id')})"
+            for anchor in carbon_anchors
+            if anchor.get("source_model") and anchor.get("record_id")
+        )
+    if carbon_result.get("notes"):
+        row["training_multifactor_notes"] = carbon_result["notes"]
+
 
 def main():
     with MARKET_MODELS_PATH.open("r", encoding="utf-8", newline="") as handle:

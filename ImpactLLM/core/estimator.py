@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import csv
 import math
+import statistics
 from pathlib import Path
 
 
@@ -1703,6 +1704,33 @@ def build_training_prediction_anchors(records):
     return families
 
 
+def retain_comparable_training_anchors(anchors, target_params):
+    if not anchors or target_params in (None, 0):
+        return []
+
+    # Discard anchors that are too far from the target scale to avoid
+    # unstable frontier extrapolations from very small training runs.
+    min_ratio = 0.05
+    max_ratio = 20.0
+    min_source_params = max(1.0, target_params * min_ratio)
+    max_source_params = target_params * max_ratio
+
+    filtered = [
+        anchor
+        for anchor in anchors
+        if min_source_params <= to_float(anchor.get("source_params"), default=0.0) <= max_source_params
+    ]
+    if filtered:
+        return filtered
+
+    # Fallback to the closest anchors by parameter count if the comparable window is empty.
+    ranked = sorted(
+        anchors,
+        key=lambda anchor: abs(math.log(max(to_float(anchor.get("source_params"), default=1e-9), 1e-9) / target_params)),
+    )
+    return ranked[: min(3, len(ranked))]
+
+
 def build_training_market_predictions(records):
     anchors_by_family = build_training_prediction_anchors(records)
     predictions = []
@@ -1731,9 +1759,12 @@ def build_training_market_predictions(records):
         for family_name, anchors in anchors_by_family.items():
             if not anchors or target_params in (None, 0) or target_tokens in (None, 0):
                 continue
+            retained_anchor_pool = retain_comparable_training_anchors(anchors, target_params)
+            if not retained_anchor_pool:
+                continue
             scenario_estimates = {"low": [], "central": [], "high": []}
             retained_anchors = []
-            for anchor in anchors:
+            for anchor in retained_anchor_pool:
                 source_params = to_float(anchor.get("source_params"), default=None)
                 if source_params in (None, 0):
                     continue
@@ -1753,9 +1784,9 @@ def build_training_market_predictions(records):
 
             if not retained_anchors:
                 continue
-            central_estimate = sum(scenario_estimates["central"]) / len(scenario_estimates["central"])
-            low_estimate = sum(scenario_estimates["low"]) / len(scenario_estimates["low"])
-            high_estimate = sum(scenario_estimates["high"]) / len(scenario_estimates["high"])
+            central_estimate = statistics.median(scenario_estimates["central"])
+            low_estimate = statistics.median(scenario_estimates["low"])
+            high_estimate = statistics.median(scenario_estimates["high"])
             range_low = min(low_estimate, central_estimate, high_estimate)
             range_high = max(low_estimate, central_estimate, high_estimate)
             family_results[family_name] = {
@@ -1771,9 +1802,9 @@ def build_training_market_predictions(records):
                 "training_regime": training_regime,
                 "training_hardware_class_proxy": hardware_class,
                 "notes": (
-                    "Central estimate = literature training anchor scaled by retained parameter count, training-token prior, "
-                    "training regime, architecture profile, and hardware-class proxy. Low/high values widen the parameter "
-                    "and token exponents together with contextual factors."
+                    "Central estimate = median of comparable literature training anchors scaled by retained parameter count, "
+                    "training-token prior, training regime, architecture profile, and hardware-class proxy. Low/high values "
+                    "widen the parameter and token exponents together with contextual factors."
                 ),
             }
             selected_factors.extend(anchor["record_id"] for anchor in retained_anchors)
