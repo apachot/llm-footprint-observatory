@@ -58,7 +58,7 @@ The main practical question addressed by the tool is straightforward: given a so
 
 The current answer is deliberately limited. The estimator is \emph{inference-only}. It excludes model training, embodied impacts, application-side software consumption, and ancillary infrastructure from the displayed result. This is not because those dimensions are unimportant, but because the available inference anchors are structured enough to support a transparent screening method, whereas mixing them with broader lifecycle terms would blur the meaning of the result.
 
-The design objective is also practical speed. Instead of asking users to fill a large technical form, the web interface starts from a natural-language description such as ``We use GPT-4o-mini for customer support, around 4{,}000 uses per month in France.'' A parser then maps this text to a compact scenario with model, request type, approximate tokens, usage volume, and country assumptions. The output is therefore fast to obtain, but every inferred parameter remains visible to the user and can be inspected or challenged.
+The design objective is also practical speed. Instead of asking users to fill a large technical form, the web interface starts from a natural-language description such as ``We use GPT-4o-mini for customer support, around 4{,}000 uses per month.'' A parser then maps this text to a compact scenario with model, request type, approximate tokens, usage volume, and country assumptions. The output is therefore fast to obtain, but every inferred parameter remains visible to the user and can be inspected or challenged.
 
 The current market-model release follows five rules.
 \begin{itemize}
