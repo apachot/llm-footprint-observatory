@@ -250,16 +250,16 @@ A second family of sources informs the infrastructural and contextual layers nee
 Some source families play a different role: they do not provide direct environmental measurements but document model properties or frame the interpretation of the results. Examples include model and provider documentation such as the Llama 3.1 model card \cite{meta2024llama}, broader environmental framing from Rillig et al. \cite{rillig2023}, and earlier conceptual work on sustainable AI and environmental decision support \cite{pachot2022book,pachot2023sustainableai}. The observatory and the site itself are part of this transparency layer because the project republishes those linked records in reusable interfaces \cite{impactllmrepo2026}.
 
 \section{Discussion and Perspectives}
-Beyond the catalog table and the static release timelines, the observatory can also be read as a dynamic screening signal about the acceleration of frontier-model impacts. Figure \ref{fig:training-doubling} summarizes that intuition with a simple log-linear reading of the GPT, Claude, and Grok flagship series for retained training impacts. The purpose is not to claim a physical law or a universal growth constant. It is to provide a compact interpretation of the retained central estimates under the current observatory assumptions.
+Beyond the catalog table and the static release timelines, the observatory can also be read as a dynamic screening signal about the acceleration of frontier-model impacts. Figure \ref{fig:inference-doubling} summarizes that intuition with a simple log-linear reading of the GPT, Claude, and Grok flagship series for retained inference impacts per standardized request. The purpose is not to claim a physical law or a universal growth constant. It is to provide a compact interpretation of the retained central estimates under the current observatory assumptions.
 
 \begin{figure}[ht]
 \centering
-\includegraphics[width=0.92\linewidth]{figures/paper_training_co2_doubling.png}
-\caption{Illustrative reading of the observatory's central training-screening estimates for flagship GPT, Claude, and Grok models. The visual condenses the current retained values into an approximate doubling-time interpretation.}
-\label{fig:training-doubling}
+\includegraphics[width=0.92\linewidth]{figures/paper_inference_co2_doubling.png}
+\caption{Illustrative reading of the observatory's central inference-screening estimates for flagship GPT, Claude, and Grok models, expressed per standardized request. The visual condenses the current retained values into an approximate doubling-time interpretation.}
+\label{fig:inference-doubling}
 \end{figure}
 
-Two lessons follow from this perspective view. First, training remains the dimension where screening values grow fastest. This is consistent with the current screening structure: training combines retained parameter count, token priors, architecture effects, and hardware assumptions, so frontier-model scaling quickly reaches very high orders of magnitude. Inference, by contrast, is represented in this paper at the per-request level, where comparisons remain useful but less visually dominant than the corresponding training orders of magnitude.
+Two lessons follow from this perspective view. First, even at the per-request level, inference screening values can rise quickly across flagship model generations. This makes the comparative observatory useful not only for static ranking but also for making shifts in model-scale inference orders of magnitude more legible over time.
 
 Second, these visuals are useful precisely because they remain interpretive rather than declarative. They help communicate that the observatory does not only contain isolated point estimates; it also suggests a market trajectory in which the environmental stakes of frontier models may be rising rapidly. But the value of that reading depends entirely on the transparency of the underlying assumptions. If those assumptions change, the apparent doubling times change as well. The figure should therefore be read as a discussion tool and policy prompt, not as a direct provider-side measurement or immutable forecasting law.
 
