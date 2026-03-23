@@ -111,7 +111,7 @@ where $P_t$ is the retained parameter count, $Tok_t$ is a training-token prior, 
 This second proxy is not used in the application estimator shown to users, which remains inference-only. It is used in the observatory and the comparative tables to avoid suggesting that training impacts can be projected from parameter count alone. The result should still be read as a screening order of magnitude rather than as an audited declaration of model-development impact.
 
 \section{Results and Comparative Outputs}
-The public observatory standardizes model comparison under one hour of active use corresponding to 1,000 input tokens, 550 output tokens, one LLM request per interaction, and approximately 34.6 interactions per hour, derived from a reading-speed convention \cite{brysbaert2019}. The underlying dataset and derived tables were refreshed for the March 2026 release, so the published values mirror the recalculated inference and training columns for the expanded market-model catalog. This provides a common comparison space before application-specific annualization.
+The reported values reflect the recalculated inference and training columns for the expanded market-model catalog. The observatory emphasizes the central prompt-level proxy per standardized request before any application-specific annualization.
 
 Table \ref{tab:short-results-method} summarizes a few illustrative outputs. The first block shows how the standardized observatory makes model orders of magnitude legible. The second block shows how the same proxy can be annualized at the software-feature level from compact, natural-language scenarios.
 
