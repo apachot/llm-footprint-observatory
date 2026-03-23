@@ -73,7 +73,7 @@ Formally, let $E_a = 0.24$ Wh be the anchor value and $P_a = 180$ the active-par
 \begin{equation}
 V_t = T_{in} + \omega T_{out},
 \end{equation}
-with $\omega = 1.8$ in the current release. This value is used as an internal screening prior: its role is to reflect, in a simple and auditable way, that autoregressive output generation is typically more compute-intensive than input processing, consistently with the distinction between prefill and decode phases discussed in the LLM inference literature \cite{zhou2024survey}. It is not presented here as a universal physical constant or as a direct measurement result, but as a transparent modeling assumption for the current release. The project reference scenario is:
+with $\omega = 1.8$ in the current release. The LLM inference literature distinguishes a prompt prefilling stage from an autoregressive decoding stage for output generation \cite{zhou2024survey}. Here, $\omega = 1.8$ is used as an internal screening prior to reflect that asymmetry, not as a directly measured constant from the cited source. The project reference scenario is:
 \begin{equation}
 V_{ref} = 1000 + 1.8 \times 550 = 1990.
 \end{equation}
