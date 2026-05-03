@@ -328,6 +328,7 @@ def get_market_model_profile(model_id):
     for profile in load_market_models():
         aliases = [normalize_identifier(profile.get("model_id"))]
         aliases.extend(normalize_identifier(part) for part in profile.get("display_name", "").split("|") if part.strip())
+        aliases.extend(normalize_identifier(part) for part in profile.get("reference_aliases", "").split("|") if part.strip())
         if normalized_model in aliases:
             return dict(profile)
     return None
@@ -1583,7 +1584,6 @@ def compute_market_screening_proxy(row, input_tokens=None, output_tokens=None, r
             "architecture overhead, and reference token volume. Low/high values widen the exponent and overhead assumptions."
         ),
     }
-
 
 def training_parameter_count_billion(row):
     total = to_float(row.get("total_parameters_billion"), default=None)

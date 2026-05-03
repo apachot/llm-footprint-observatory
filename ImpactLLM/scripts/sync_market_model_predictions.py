@@ -109,8 +109,9 @@ def main():
             raise SystemExit("market_models.csv has no header")
         rows = [dict(row) for row in reader]
 
-    inference_predictions = build_market_model_predictions(rows)
-    training_predictions = build_training_market_predictions(load_records())
+    records = load_records()
+    inference_predictions = build_market_model_predictions(records)
+    training_predictions = build_training_market_predictions(records)
     inference_by_id = {pred["model_id"]: pred for pred in inference_predictions}
     training_by_id = {pred["model_id"]: pred for pred in training_predictions}
 

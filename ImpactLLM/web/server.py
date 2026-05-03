@@ -806,7 +806,7 @@ def format_scaled_value(value, unit_kind):
 def format_range_display(range_obj, unit_kind):
     low_value, unit = format_scaled_value(range_obj["low"], unit_kind)
     high_value, _ = format_scaled_value(range_obj["high"], unit_kind)
-    return f"{low_value} - {high_value} {unit}"
+    return f"{low_value} - {high_value} {unit}".strip()
 
 
 def format_result_card_display(range_obj, unit_kind):
@@ -1137,8 +1137,6 @@ def infer_source_intensity(energy_record, metric_record, metric_kind):
         return water_l / energy_kwh
 
     return None
-
-
 def build_method_modal_body(method, analysis_refs=None):
     annual_requests = float(method.get("annual_requests", 0.0) or 0.0)
     annual_feature_uses = float(method.get("annual_feature_uses", 0.0) or 0.0)
@@ -2834,6 +2832,12 @@ def build_model_detail_index(records):
         def register_source(label, citation, url, status=""):
             citation_text = str(citation or "").strip()
             url_text = str(url or "").strip()
+            if citation_text and not url_text and (
+                citation_text.startswith("Project screening prior")
+                or citation_text.startswith("ImpactLLM method note")
+                or citation_text.startswith("Project screening default")
+            ):
+                url_text = app_url("/downloads/ImpactLLM_paper.pdf")
             if not citation_text and not url_text:
                 return
             key = (label, citation_text, url_text, status)
@@ -5033,6 +5037,9 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
       ['References', 'Sources'],
       ['Biliography', 'Sources'],
       ['Bibliography', 'Sources'],
+      ['Price', 'Prix'],
+      ['Annual energy', 'Énergie annuelle'],
+      ['Annual carbon', 'Carbone annuel'],
       ['Inference', 'Inférence'],
       ['Training', 'Entraînement'],
       ['Positioning', 'Positionnement'],
