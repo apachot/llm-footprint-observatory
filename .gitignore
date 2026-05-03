@@ -11,3 +11,4 @@ __pycache__/
 *.synctex.gz
 .env
 * copie.pdf
+/ImpactLLM-paper/

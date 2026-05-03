@@ -9,7 +9,7 @@ The project is designed as a transparent screening tool rather than a black-box 
 This repository brings together two main components:
 
 - `ImpactLLM/`: the open dataset, local HTTP API, MCP server, web calculation interface, and estimation logic
-- `ImpactLLM-paper/`: the scientific paper, bibliography, and related materials
+- `ImpactLLM-paper/`: local-only publication materials kept outside Git versioning
 
 ImpactLLM is useful for:
 
@@ -35,10 +35,6 @@ Our work on responsible AI emphasizes methodological rigor, traceability, and de
 To use the software stack:
 
 - [Software README](/Users/apachot/Documents/GitHub/ImpactLLM/ImpactLLM/README.md)
-
-To browse the publication materials:
-
-- [Paper README](/Users/apachot/Documents/GitHub/ImpactLLM/ImpactLLM-paper/README.md)
 
 ## Technical Overview
 
