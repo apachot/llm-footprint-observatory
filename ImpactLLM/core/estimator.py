@@ -249,6 +249,10 @@ def get_model_profile(model_id=None, provider=None, estimated_active_parameters_
             result["matching_strategy"] = "model_id"
             return result
 
+    market_profile = get_market_model_profile(model_id)
+    if market_profile:
+        return build_reference_profile_from_market_profile(market_profile, "market_model_id")
+
     if not normalized_model:
         for profile in load_models():
             if normalized_provider and normalize_identifier(profile.get("provider")) == normalized_provider:
@@ -256,7 +260,26 @@ def get_model_profile(model_id=None, provider=None, estimated_active_parameters_
                 result["matching_strategy"] = "provider_family"
                 return result
 
+    market_provider_profile = get_market_provider_profile(provider)
+    if market_provider_profile:
+        return build_reference_profile_from_market_profile(market_provider_profile, "provider_market_family")
+
     return None
+
+
+def build_reference_profile_from_market_profile(profile, matching_strategy):
+    return {
+        "model_id": profile.get("model_id"),
+        "provider": profile.get("provider"),
+        "active_parameters_billion": profile.get("active_parameters_billion"),
+        "total_parameters_billion": profile.get("total_parameters_billion"),
+        "parameter_value_status": profile.get("parameter_value_status"),
+        "parameter_confidence": profile.get("parameter_confidence"),
+        "parameter_source": profile.get("parameter_source"),
+        "parameter_source_url": profile.get("parameter_source_url"),
+        "notes": profile.get("notes"),
+        "matching_strategy": matching_strategy,
+    }
 
 
 def get_country_mix(country_code):
@@ -1638,6 +1661,15 @@ def normalize_training_metric_value(record):
     if value is None:
         return None, None
 
+    if metric_name == "training_energy":
+        if unit == "wh":
+            return value, "Wh"
+        if unit == "kwh":
+            return value * 1000.0, "Wh"
+        if unit == "mwh":
+            return value * 1_000_000.0, "Wh"
+        if unit == "gwh":
+            return value * 1_000_000_000.0, "Wh"
     if metric_name in {"training_emissions", "creation_lifecycle_emissions"}:
         if "lb" in unit:
             return value * 0.00045359237, "tCO2e"
@@ -1653,7 +1685,35 @@ def normalize_training_metric_value(record):
     return None, None
 
 
+def build_training_token_lookup(records):
+    lookup = {}
+    for record in records:
+        if record.get("metric_name") != "training_tokens":
+            continue
+        value = to_float(record.get("metric_value"), default=None)
+        if value in (None, 0):
+            continue
+        unit = str(record.get("metric_unit", "") or "").strip().lower()
+        if "trillion" in unit:
+            normalized_value = value
+        elif "billion" in unit:
+            normalized_value = value / 1000.0
+        elif "million" in unit:
+            normalized_value = value / 1_000_000.0
+        else:
+            continue
+        model_key = normalize_identifier(record.get("llm_normalized") or record.get("model_or_scope"))
+        if not model_key:
+            continue
+        rounded_value = round(normalized_value, 4)
+        current = lookup.get(model_key)
+        if current is None or rounded_value > current:
+            lookup[model_key] = rounded_value
+    return lookup
+
+
 def build_training_prediction_anchors(records):
+    token_lookup = build_training_token_lookup(records)
     families = {
         "direct_training_energy": [],
         "direct_training_carbon": [],
@@ -1663,7 +1723,9 @@ def build_training_prediction_anchors(records):
     for record in records:
         metric_name = record.get("metric_name")
         phase = record.get("phase")
-        if metric_name == "training_emissions" and phase == "training":
+        if metric_name == "training_energy" and phase == "training":
+            family = "direct_training_energy"
+        elif metric_name == "training_emissions" and phase == "training":
             family = "direct_training_carbon"
         elif metric_name == "creation_lifecycle_emissions" and phase == "lifecycle":
             family = "creation_lifecycle_carbon"
@@ -1678,13 +1740,15 @@ def build_training_prediction_anchors(records):
         normalized_value, normalized_unit = normalize_training_metric_value(record)
         if normalized_value is None:
             continue
+        source_model = record.get("llm_normalized") or record.get("model_or_scope")
         anchor_payload = {
             "record_id": record.get("record_id"),
-            "source_model": record.get("llm_normalized") or record.get("model_or_scope"),
+            "source_model": source_model,
             "source_params": source_params,
             "source_country": record.get("country_normalized") or "Non spécifié",
             "source_value": normalized_value,
             "source_unit": normalized_unit,
+            "source_tokens_trillion": token_lookup.get(normalize_identifier(source_model)),
         }
         families[family].append(anchor_payload)
 
@@ -1768,7 +1832,9 @@ def build_training_market_predictions(records):
                 source_params = to_float(anchor.get("source_params"), default=None)
                 if source_params in (None, 0):
                     continue
-                source_tokens = round((source_params * TRAINING_REFERENCE_TOKENS_PER_PARAMETER) / 1000.0, 4)
+                source_tokens = to_float(anchor.get("source_tokens_trillion"), default=None)
+                if source_tokens in (None, 0):
+                    source_tokens = round((source_params * TRAINING_REFERENCE_TOKENS_PER_PARAMETER) / 1000.0, 4)
                 if source_tokens in (None, 0):
                     continue
                 retained_anchors.append({**anchor, "source_tokens_trillion": source_tokens})

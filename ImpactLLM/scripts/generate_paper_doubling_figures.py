@@ -27,13 +27,21 @@ KEEP_NAMES = [
     "GPT-3.5 Turbo",
     "GPT-4",
     "GPT-5.2",
+    "GPT-5.4",
+    "GPT-5.5",
     "Claude 2",
     "Claude 3.5 Sonnet",
     "Claude Sonnet 4",
+    "Claude Sonnet 4.6",
     "Claude Opus 4.1",
+    "Claude Opus 4.7",
+    "Claude Mythos Preview",
     "Grok 1",
     "Grok 2",
     "Grok 4",
+    "Grok 4.1 Fast",
+    "Grok 4.20",
+    "Grok 4.3",
 ]
 
 FAMILY_COLORS = {
@@ -118,13 +126,21 @@ def draw_figure(rows: list[dict[str, object]], title: str, ylabel: str, output_n
         "GPT-3.5 Turbo": (4, 8),
         "GPT-4": (4, -12),
         "GPT-5.2": (4, 8),
+        "GPT-5.4": (4, -12),
+        "GPT-5.5": (4, 8),
         "Claude 2": (4, 8),
         "Claude 3.5 Sonnet": (4, -12),
         "Claude Sonnet 4": (4, -12),
+        "Claude Sonnet 4.6": (4, 8),
         "Claude Opus 4.1": (4, 8),
+        "Claude Opus 4.7": (4, -12),
+        "Claude Mythos Preview": (4, 8),
         "Grok 1": (4, 8),
         "Grok 2": (4, -12),
         "Grok 4": (4, 8),
+        "Grok 4.1 Fast": (4, -12),
+        "Grok 4.20": (4, 8),
+        "Grok 4.3": (4, -12),
     }
     for row in rows:
         dx, dy = label_offsets.get(row["name"], (4, 8))

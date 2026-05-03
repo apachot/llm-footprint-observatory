@@ -210,10 +210,42 @@ REAL_WORLD_INDICATOR_ROWS = [
     },
     {
         "domain": "Energy",
+        "indicator": "Laptop for 3 hours",
+        "value": "96 Wh",
+        "citation": "Carroll, N. J., & Kruse, J. (n.d.). Energy investigators 2: Facilitator’s guide. Purdue Extension. https://www.extension.purdue.edu/extmedia/4H/4-H-1015-W.pdf",
+        "locator": "Project derivation from the Purdue laptop example retained at 32 Wh for 1 hour, rescaled here to 3 hours of use.",
+        "url": "https://www.extension.purdue.edu/extmedia/4H/4-H-1015-W.pdf",
+    },
+    {
+        "domain": "Energy",
         "indicator": "Electric space heater for 1 hour",
         "value": "1.5 kWh",
         "citation": "Project calculation convention.",
         "locator": "Nominal power assumption fixed at 1,500 W, i.e. 1.5 kWh for 1 hour.",
+        "url": "",
+    },
+    {
+        "domain": "Energy",
+        "indicator": "Microwave oven for 6 minutes",
+        "value": "100 Wh",
+        "citation": "Project calculation convention.",
+        "locator": "Nominal power assumption fixed at 1,000 W, i.e. 100 Wh for 6 minutes of use.",
+        "url": "",
+    },
+    {
+        "domain": "Energy",
+        "indicator": "Electric kettle for 3.5 minutes",
+        "value": "105 Wh",
+        "citation": "Project calculation convention.",
+        "locator": "Nominal power assumption fixed at 1,800 W, i.e. 105 Wh for 3.5 minutes of use.",
+        "url": "",
+    },
+    {
+        "domain": "Energy",
+        "indicator": "Electric space heater for 4.1 minutes",
+        "value": "103.5 Wh",
+        "citation": "Project calculation convention.",
+        "locator": "Project derivation from the retained 1,500 W space-heater convention, rescaled to 4.1 minutes of use.",
         "url": "",
     },
     {
@@ -226,18 +258,18 @@ REAL_WORLD_INDICATOR_ROWS = [
     },
     {
         "domain": "Carbon",
-        "indicator": "Average internal-combustion car",
-        "value": "235 gCO2e/km",
+        "indicator": "Average gasoline car for 1 km",
+        "value": "235 gCO2e",
         "citation": "International Council on Clean Transportation. (2025). Life-cycle greenhouse gas emissions from passenger cars in the European Union: A 2025 update and key factors to consider. https://theicct.org/publication/electric-cars-life-cycle-analysis-emissions-europe-jul25/",
-        "locator": "Key findings ; Figure 1 ; gasoline ICEV running on the average blend of fossil gasoline and ethanol estimated at 235 gCO2e/km.",
+        "locator": "Key findings ; Figure 1 ; gasoline ICEV running on the average blend of fossil gasoline and ethanol estimated at 235 gCO2e/km, i.e. 235 gCO2e over 1 km.",
         "url": "https://theicct.org/publication/electric-cars-life-cycle-analysis-emissions-europe-jul25/",
     },
     {
         "domain": "Carbon",
-        "indicator": "Average gasoline car for 0.17 km",
+        "indicator": "Average gasoline car for 170 m",
         "value": "40.0 gCO2e",
         "citation": "International Council on Clean Transportation. (2025). Life-cycle greenhouse gas emissions from passenger cars in the European Union: A 2025 update and key factors to consider. https://theicct.org/publication/electric-cars-life-cycle-analysis-emissions-europe-jul25/",
-        "locator": "Project derivation from the ICCT benchmark of 235 gCO2e/km for an average gasoline car, rescaled here to 0.17 km to align with the order of magnitude of Claude Opus 4.1 in the inference comparison.",
+        "locator": "Project derivation from the ICCT benchmark of 235 gCO2e/km for an average gasoline car, rescaled here to 170 meters to align with the upper-end proprietary inference tier retained in the current comparison.",
         "url": "https://theicct.org/publication/electric-cars-life-cycle-analysis-emissions-europe-jul25/",
     },
     {
@@ -279,6 +311,81 @@ REAL_WORLD_INDICATOR_ROWS = [
         "citation": "ADEME. (n.d.). Nos conseils pour économiser l'eau à la maison. Agir pour la transition écologique. https://agirpourlatransition.ademe.fr/particuliers/maison/economies-denergie-deau/comment-reduire-consommation-facture-deau",
         "locator": "Section “Did you know?”: “On average, in France, we consume 148 liters of water per person each day.”",
         "url": "https://agirpourlatransition.ademe.fr/particuliers/maison/economies-denergie-deau/comment-reduire-consommation-facture-deau",
+    },
+]
+
+INFERENCE_CHART_REFERENCE_ROWS = [
+    {
+        "label": "Fluorescent lamp 1 h",
+        "provider": "Everyday benchmark",
+        "kind": "reference",
+        "prompt_energy_wh": 9.3,
+        "page_energy_wh": 9.3,
+        "prompt_carbon_gco2e": 0.0,
+        "page_carbon_gco2e": 0.0,
+    },
+    {
+        "label": "Laptop 1 h",
+        "provider": "Everyday benchmark",
+        "kind": "reference",
+        "prompt_energy_wh": 32.0,
+        "page_energy_wh": 32.0,
+        "prompt_carbon_gco2e": 0.0,
+        "page_carbon_gco2e": 0.0,
+    },
+    {
+        "label": "Laptop 3 h",
+        "provider": "Everyday benchmark",
+        "kind": "reference",
+        "prompt_energy_wh": 96.0,
+        "page_energy_wh": 96.0,
+        "prompt_carbon_gco2e": 0.0,
+        "page_carbon_gco2e": 0.0,
+    },
+    {
+        "label": "Microwave oven 6 min",
+        "provider": "Everyday benchmark",
+        "kind": "reference",
+        "prompt_energy_wh": 100.0,
+        "page_energy_wh": 100.0,
+        "prompt_carbon_gco2e": 0.0,
+        "page_carbon_gco2e": 0.0,
+    },
+    {
+        "label": "Electric kettle 3.5 min",
+        "provider": "Everyday benchmark",
+        "kind": "reference",
+        "prompt_energy_wh": 105.0,
+        "page_energy_wh": 105.0,
+        "prompt_carbon_gco2e": 0.0,
+        "page_carbon_gco2e": 0.0,
+    },
+    {
+        "label": "Electric heater 4.1 min",
+        "provider": "Everyday benchmark",
+        "kind": "reference",
+        "prompt_energy_wh": 103.5,
+        "page_energy_wh": 103.5,
+        "prompt_carbon_gco2e": 0.0,
+        "page_carbon_gco2e": 0.0,
+    },
+    {
+        "label": "Average gasoline car 170 m",
+        "provider": "Everyday benchmark",
+        "kind": "reference",
+        "prompt_energy_wh": 0.0,
+        "page_energy_wh": 0.0,
+        "prompt_carbon_gco2e": 40.0,
+        "page_carbon_gco2e": 40.0,
+    },
+    {
+        "label": "Average gasoline car 1 km",
+        "provider": "Everyday benchmark",
+        "kind": "reference",
+        "prompt_energy_wh": 0.0,
+        "page_energy_wh": 0.0,
+        "prompt_carbon_gco2e": 235.0,
+        "page_carbon_gco2e": 235.0,
     },
 ]
 
@@ -1851,7 +1958,7 @@ def render_bibliography_tab():
         <div class="reference-subtable" id="market-training-screening-factors">
           <h4>Central training screening factors retained for market models</h4>
           <div class="reference-copy-block">
-            <p class="summary-intro">This table documents the central values retained by the project for the multi-factor training proxy of each catalog model: retained training parameter count, training-token prior, training regime, multimodal training flag, hardware-class proxy, and the resulting central factors <code>F_reg</code>, <code>F_arch-tr</code>, and <code>F_hw</code>. These are project screening factors, not provider-published measurements.</p>
+            <p class="summary-intro">This table documents the central values retained by the project for the multi-factor training proxy of each catalog model: retained training parameter count, training-token prior, training regime, multimodal training flag, hardware-class proxy, and the resulting central factors <code>F_reg</code>, <code>F_arch-tr</code>, and <code>F_hw</code>. These are project screening factors, not provider-published measurements. When a field is retained as an estimate or screening prior, its citation anchors the release line or methodological basis rather than an exact provider-published numeric value.</p>
           </div>
           <div class="reference-table-wrap">
             <table class="reference-table">
@@ -2458,46 +2565,7 @@ def build_market_models_view(records):
             """
         )
 
-    chart_rows.extend(
-        [
-            {
-                "label": "Lampe fluorescente 1 h",
-                "provider": "Everyday benchmark",
-                "kind": "reference",
-                "prompt_energy_wh": 9.3,
-                "page_energy_wh": 9.3,
-                "prompt_carbon_gco2e": 0.0,
-                "page_carbon_gco2e": 0.0,
-            },
-            {
-                "label": "Ordinateur portable 1 h",
-                "provider": "Everyday benchmark",
-                "kind": "reference",
-                "prompt_energy_wh": 32.0,
-                "page_energy_wh": 32.0,
-                "prompt_carbon_gco2e": 0.0,
-                "page_carbon_gco2e": 0.0,
-            },
-            {
-                "label": "Electric heater 4.1 min",
-                "provider": "Everyday benchmark",
-                "kind": "reference",
-                "prompt_energy_wh": 103.5,
-                "page_energy_wh": 103.5,
-                "prompt_carbon_gco2e": 0.0,
-                "page_carbon_gco2e": 0.0,
-            },
-            {
-                "label": "Average gasoline car for 0.17 km",
-                "provider": "Everyday benchmark",
-                "kind": "reference",
-                "prompt_energy_wh": 0.0,
-                "page_energy_wh": 0.0,
-                "prompt_carbon_gco2e": 40.0,
-                "page_carbon_gco2e": 40.0,
-            },
-        ]
-    )
+    chart_rows.extend(INFERENCE_CHART_REFERENCE_ROWS)
     return {
         "rows": rows,
         "requests_per_hour": requests_per_hour,
@@ -2532,9 +2600,10 @@ def render_market_models_charts(records):
         <button type="button" class="chart-tab-button is-active" data-model-chart-control="metric-tab" data-metric-value="energy" aria-selected="true">Energy</button>
         <button type="button" class="chart-tab-button" data-model-chart-control="metric-tab" data-metric-value="carbon" aria-selected="false">Carbon</button>
       </div>
+      <div class="scenario-callout" data-i18n-html="inference-scenario-banner"><span class="scenario-callout-label">Retained inference scenario</span><strong class="scenario-callout-value">1 hour of active use</strong></div>
       <div id="models-impact-chart" class="models-impact-chart" data-chart-rows='{escape(json.dumps(view["chart_rows"], ensure_ascii=False), quote=True)}'></div>
       <p class="summary-intro models-chart-note">The chart below shows the estimated central values for all catalog models under a standardized inference scenario corresponding to <strong>1 hour of active use</strong>: <strong>{view["requests_per_hour"]} interactions/hour</strong>, <strong>1000 input tokens</strong>, <strong>550 output tokens</strong>, and one LLM request per use. The hourly pace is derived from an average reading speed of <strong>{view["reading_wpm"]} words/min</strong> (<a href="https://www.sciencedirect.com/science/article/pii/S0749596X19300786" target="_blank" rel="noopener noreferrer">Brysbaert, 2019</a>) and a project convention of <strong>1 token ≈ {view["words_per_token"]} word</strong>.</p>
-      <p class="summary-intro models-chart-note models-benchmark-note">Benchmarks integrated into the chart, all expressed over one hour or rescaled to a comparable order of magnitude: household electricity from <a href="https://www.extension.purdue.edu/extmedia/4H/4-H-1015-W.pdf" target="_blank" rel="noopener noreferrer">Purdue Extension</a> measurements (fluorescent lamp ≈ 9.3 Wh over 1 h; laptop ≈ 32 Wh over 1 h) and a 1500 W electric space heater rescaled here to <strong>4.1 minutes</strong> to obtain ≈ <strong>103.5 Wh</strong>, close to the order of magnitude of Claude Opus 4.1 in the inference scenario; for carbon, an average gasoline car benchmark derived from the <a href="https://theicct.org/publication/electric-cars-life-cycle-analysis-emissions-europe-jul25/" target="_blank" rel="noopener noreferrer">ICCT (2025)</a> factor retained by the project (235 gCO2e/km), here rescaled to <strong>0.17 km</strong> to obtain ≈ <strong>40.0 gCO2e</strong>, close to the order of magnitude of Claude Opus 4.1 in the inference scenario.</p>
+      <p class="summary-intro models-chart-note models-benchmark-note">Benchmarks integrated into the chart now include direct household-use examples from <a href="https://www.extension.purdue.edu/extmedia/4H/4-H-1015-W.pdf" target="_blank" rel="noopener noreferrer">Purdue Extension</a> (fluorescent lamp ≈ 9.3 Wh over 1 h; laptop ≈ 32 Wh over 1 h), plus explicit project-scale equivalents for everyday appliances: laptop use for <strong>3 h</strong> ≈ <strong>96 Wh</strong>, microwave oven for <strong>6 min</strong> ≈ <strong>100 Wh</strong>, electric kettle for <strong>3.5 min</strong> ≈ <strong>105 Wh</strong>, and electric space heater for <strong>4.1 min</strong> ≈ <strong>103.5 Wh</strong>. For carbon, the chart uses an average gasoline car benchmark derived from the <a href="https://theicct.org/publication/electric-cars-life-cycle-analysis-emissions-europe-jul25/" target="_blank" rel="noopener noreferrer">ICCT (2025)</a> factor retained by the project (235 gCO2e/km), shown here both for <strong>170 m</strong> ≈ <strong>40.0 gCO2e</strong> and for <strong>1 km</strong> ≈ <strong>235 gCO2e</strong>. Exact retained benchmark values are listed in the annex.</p>
     </section>
     <section class="panel reference-panel">
       <div class="summary-header">
@@ -4426,6 +4495,37 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
       padding: 0.45rem 0.5rem;
       min-height: 480px;
     }}
+    .scenario-callout {{
+      display: inline-flex;
+      align-items: center;
+      gap: 0.7rem;
+      flex-wrap: wrap;
+      margin: 0 0 0.95rem;
+      padding: 0.72rem 0.9rem;
+      border: 1px solid rgba(36,59,99,0.16);
+      border-radius: 0.55rem;
+      background: linear-gradient(135deg, rgba(36,59,99,0.08), rgba(184,92,56,0.06));
+      box-shadow: 0 10px 24px rgba(36,59,99,0.06);
+    }}
+    .scenario-callout-label {{
+      font-size: 0.78rem;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: var(--accent);
+    }}
+    .scenario-callout-value {{
+      display: inline-flex;
+      align-items: center;
+      min-height: 2rem;
+      padding: 0.2rem 0.72rem;
+      border-radius: 999px;
+      background: #243b63;
+      color: #fff;
+      font-size: 0.95rem;
+      line-height: 1.2;
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,0.08);
+    }}
     .models-chart-note {{
       font-size: 0.88rem;
       line-height: 1.55;
@@ -4863,6 +4963,7 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
         chartMetricEnergy: 'Energy',
         chartMetricCarbon: 'Carbon',
         trainingMetricCarbon: 'Training CO2e',
+        inferenceScenarioBanner: '<span class="scenario-callout-label">Retained inference scenario</span><strong class="scenario-callout-value">1 hour of active use</strong>',
         comparisonEstimatedPrefix: 'Comparison of estimated central values over 1 hour of active use for the ',
         comparisonEstimatedMiddle: ' indicator, using the ',
         comparisonEstimatedSuffix: ' family.',
@@ -4896,6 +4997,7 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
         chartMetricEnergy: 'Énergie',
         chartMetricCarbon: 'Carbone',
         trainingMetricCarbon: 'CO2e d’entraînement',
+        inferenceScenarioBanner: '<span class="scenario-callout-label">Scénario d’inférence retenu</span><strong class="scenario-callout-value">1 heure d’utilisation active</strong>',
         comparisonEstimatedPrefix: 'Comparaison des valeurs centrales estimées sur 1 heure d’utilisation active pour l’indicateur ',
         comparisonEstimatedMiddle: ', selon la famille ',
         comparisonEstimatedSuffix: '.',
@@ -5034,8 +5136,8 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
       ['The displayed range widens the scaling exponent and the contextual overhead factors between low, central, and high scenarios.', 'La plage affichée élargit l’exposant de mise à l’échelle et les facteurs d’overhead contextuels entre les scénarios bas, central et haut.'],
       ['This family currently relies on a single literature anchor, so the displayed central value is a calibrated proxy rather than a cross-study average.', 'Cette famille repose actuellement sur un seul ancrage bibliographique, de sorte que la valeur centrale affichée est un proxy calibré plutôt qu’une moyenne inter-études.'],
       ['The table below compares the models tracked by the project under the same inference scenario. For each model, the application shows the central values produced by the project’s multi-factor prompt proxy, both per hour of standardized use and per request.', 'Le tableau ci-dessous compare les modèles suivis par le projet dans le même scénario d’inférence. Pour chaque modèle, l’application affiche les valeurs centrales produites par le proxy prompt multi-facteurs du projet, à la fois par heure d’usage standardisé et par requête.'],
-      ['The chart below shows the estimated central values for all catalog models under a standardized inference scenario corresponding to 1 hour of active use: 34.6 interactions/hour, 1000 input tokens, 550 output tokens, and one LLM request per use. The hourly pace is derived from an average reading speed of 238.0 words/min (Brysbaert, 2019) and a project convention of 1 token ≈ 0.75 word.', 'Le graphique ci-dessous présente les valeurs centrales estimées pour tous les modèles du catalogue dans un scénario d’inférence standardisé correspondant à 1 heure d’usage actif : 34,6 interactions/heure, 1000 tokens en entrée, 550 tokens en sortie et une requête LLM par usage. Le rythme horaire est dérivé d’une vitesse moyenne de lecture de 238,0 mots/min (Brysbaert, 2019) et d’une convention du projet de 1 token ≈ 0,75 mot.'],
-      ['Benchmarks integrated into the chart, all expressed over one hour or rescaled to a comparable order of magnitude: household electricity from Purdue Extension measurements (fluorescent lamp ≈ 9.3 Wh over 1 h; laptop ≈ 32 Wh over 1 h) and a 1500 W electric space heater rescaled here to <strong>4.1 minutes</strong> to obtain ≈ <strong>103.5 Wh</strong>, close to the order of magnitude of Claude Opus 4.1 in the inference scenario; for carbon, an average gasoline car benchmark derived from the ICCT (2025) factor retained by the project (235 gCO2e/km), here rescaled to <strong>0.17 km</strong> to obtain ≈ <strong>40.0 gCO2e</strong>, close to the order of magnitude of Claude Opus 4.1 in the inference scenario.', 'Repères intégrés au graphique, tous exprimés sur une heure ou redimensionnés à un ordre de grandeur comparable : consommation électrique domestique issue des mesures de Purdue Extension (lampe fluorescente ≈ 9,3 Wh sur 1 h ; ordinateur portable ≈ 32 Wh sur 1 h) et radiateur électrique de 1500 W ramené ici à <strong>4,1 minutes</strong> pour obtenir ≈ <strong>103,5 Wh</strong>, proche de l’ordre de grandeur de Claude Opus 4.1 dans le scénario d’inférence ; pour le carbone, un repère de voiture essence moyenne dérivé du facteur ICCT (2025) retenu par le projet (235 gCO2e/km), ici ramené à <strong>0,17 km</strong> pour obtenir ≈ <strong>40,0 gCO2e</strong>, proche de l’ordre de grandeur de Claude Opus 4.1 dans le scénario d’inférence.'],
+      ['The chart below shows the estimated central values for all catalog models under a standardized inference scenario corresponding to 1 hour of active use: 34.6 interactions/hour, 1000 input tokens, 550 output tokens, and one LLM request per use. The hourly pace is derived from an average reading speed of 238.0 words/min (Brysbaert, 2019) and a project convention of 1 token ≈ 0.75 word.', 'Le graphique ci-dessous présente les valeurs centrales estimées pour tous les modèles du catalogue dans un scénario d’inférence standardisé correspondant à 1 heure d’utilisation active : 34,6 interactions/heure, 1000 tokens en entrée, 550 tokens en sortie et une requête LLM par usage. Le rythme horaire est dérivé d’une vitesse moyenne de lecture de 238,0 mots/min (Brysbaert, 2019) et d’une convention du projet de 1 token ≈ 0,75 mot.'],
+      ['Benchmarks integrated into the chart now include direct household-use examples from Purdue Extension (fluorescent lamp ≈ 9.3 Wh over 1 h; laptop ≈ 32 Wh over 1 h), plus explicit project-scale equivalents for everyday appliances: laptop use for <strong>3 h</strong> ≈ <strong>96 Wh</strong>, microwave oven for <strong>6 min</strong> ≈ <strong>100 Wh</strong>, electric kettle for <strong>3.5 min</strong> ≈ <strong>105 Wh</strong>, and electric space heater for <strong>4.1 min</strong> ≈ <strong>103.5 Wh</strong>. For carbon, the chart uses an average gasoline car benchmark derived from the ICCT (2025) factor retained by the project (235 gCO2e/km), shown here both for <strong>170 m</strong> ≈ <strong>40.0 gCO2e</strong> and for <strong>1 km</strong> ≈ <strong>235 gCO2e</strong>. Exact retained benchmark values are listed in the annex.', 'Repères intégrés au graphique : on trouve désormais des exemples d’usage domestique directs issus de Purdue Extension (lampe fluorescente ≈ 9,3 Wh sur 1 h ; ordinateur portable ≈ 32 Wh sur 1 h), ainsi que des équivalents de projet explicites pour des usages du quotidien : ordinateur portable pendant <strong>3 h</strong> ≈ <strong>96 Wh</strong>, four à micro-ondes pendant <strong>6 min</strong> ≈ <strong>100 Wh</strong>, bouilloire électrique pendant <strong>3,5 min</strong> ≈ <strong>105 Wh</strong>, et radiateur électrique pendant <strong>4,1 min</strong> ≈ <strong>103,5 Wh</strong>. Pour le carbone, le graphique utilise un repère de voiture essence moyenne dérivé du facteur ICCT (2025) retenu par le projet (235 gCO2e/km), montré ici à la fois pour <strong>170 m</strong> ≈ <strong>40,0 gCO2e</strong> et pour <strong>1 km</strong> ≈ <strong>235 gCO2e</strong>. Les valeurs exactes retenues pour ces repères sont listées dans l’annexe.'],
       ['Average gasoline car for 0.17 km', 'Voiture essence moyenne sur 0,17 km'],
       ['Trade-off', 'Arbitrage'],
       ['Inference model landscape', 'Paysage des modèles en inférence'],
@@ -5089,7 +5191,7 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
       ['current models tracked by the project', 'modèles actuels suivis par le projet'],
       ['Comparative training impacts of models', 'Impacts d’entraînement comparés des modèles'],
       ['The chart below shows the central values retained for all catalog models across two training indicator families: training energy and training CO2e contextualized from retained training energy and the model country proxy. The current screening method combines retained parameter count, a training-token prior, a training-regime prior, architecture features, and a hardware-class proxy. Under these central screening assumptions, frontier models can reach very large training orders of magnitude. Everyday benchmarks are inserted directly into the list to situate those scales, not to imply direct observed equivalence.', 'Le graphique ci-dessous présente les valeurs centrales retenues pour tous les modèles du catalogue selon deux familles d’indicateurs d’entraînement : l’énergie d’entraînement et le CO2e d’entraînement contextualisé à partir de l’énergie d’entraînement retenue et du proxy pays du modèle. La méthode actuelle de screening combine le nombre de paramètres retenu, un prior sur les tokens d’entraînement, un prior sur le régime d’entraînement, des caractéristiques d’architecture et un proxy de classe matérielle. Sous ces hypothèses centrales de screening, les modèles de frontière peuvent atteindre des ordres de grandeur d’entraînement très élevés. Des repères du quotidien sont intégrés directement à la liste pour situer ces échelles, sans prétendre à une équivalence observée directe.'],
-      ['Benchmarks integrated into the chart: household electricity for <strong>2,760,139 households</strong> over one year of domestic use, i.e. ≈ <strong>6.90 TWh</strong> based on an average consumption of 2,500 kWh per household (RTE, 2021 estimate), and full-flight aviation derived from Klöwer et al. (2025) from 577.97 MtCO2 and 27.45 million commercial flights observed in 2023, i.e. ≈ <strong>6,166,824.9 tCO2e</strong> for <strong>292,210 full flights</strong>. These comparison points are aligned with the current central screening order of magnitude of Claude Opus 4.1 in the training chart, not with a direct provider-side measurement.', 'Repères intégrés au graphique : électricité domestique pour <strong>2 760 139 foyers</strong> sur une année d’usage résidentiel, soit ≈ <strong>6,90 TWh</strong> sur la base d’une consommation moyenne de 2 500 kWh par foyer (estimation RTE 2021), et aviation commerciale complète dérivée de Klöwer et al. (2025) à partir de 577.97 MtCO2 et 27.45 millions de vols commerciaux observés en 2023, soit ≈ <strong>6 166 824,9 tCO2e</strong> pour <strong>292 210 vols complets</strong>. Ces repères sont alignés sur l’ordre de grandeur central actuel du screening pour Claude Opus 4.1 dans le graphique d’entraînement, et non sur une mesure directe côté fournisseur.'],
+      ['Benchmarks integrated into the chart: household electricity for <strong>2,760,139 households</strong> over one year of domestic use, i.e. ≈ <strong>6.90 TWh</strong> based on an average consumption of 2,500 kWh per household (RTE, 2021 estimate), and full-flight aviation derived from Klöwer et al. (2025) from 577.97 MtCO2 and 27.45 million commercial flights observed in 2023, i.e. ≈ <strong>6,166,824.9 tCO2e</strong> for <strong>292,210 full flights</strong>. These comparison points are aligned with the upper-end proprietary training tier currently shown, not with a direct provider-side measurement.', 'Repères intégrés au graphique : électricité domestique pour <strong>2 760 139 foyers</strong> sur une année d’usage résidentiel, soit ≈ <strong>6,90 TWh</strong> sur la base d’une consommation moyenne de 2 500 kWh par foyer (estimation RTE 2021), et aviation commerciale complète dérivée de Klöwer et al. (2025) à partir de 577.97 MtCO2 et 27.45 millions de vols commerciaux observés en 2023, soit ≈ <strong>6 166 824,9 tCO2e</strong> pour <strong>292 210 vols complets</strong>. Ces repères sont alignés sur le haut de la gamme propriétaire actuellement affichée pour l’entraînement, et non sur une mesure directe côté fournisseur.'],
       ['current models with estimated training impacts', 'modèles actuels avec impacts d’entraînement estimés'],
       ['This table projects the training orders of magnitude of current models from the indicator families actually available in the literature, using <strong>training energy</strong> as the primary anchor and deriving <strong>training CO2e</strong> from the retained model-country electricity mix. The current screening proxy combines retained parameter count, a training-token prior, a training-regime prior, architecture features, and a hardware-class proxy.', 'Ce tableau projette les ordres de grandeur d’entraînement des modèles actuels à partir des familles d’indicateurs réellement disponibles dans la littérature, en utilisant <strong>l’énergie d’entraînement</strong> comme ancrage principal et en dérivant le <strong>CO2e d’entraînement</strong> à partir du mix électrique du pays retenu pour le modèle. Le proxy de screening actuel combine le nombre de paramètres retenu, un prior sur les tokens d’entraînement, un prior sur le régime d’entraînement, des caractéristiques d’architecture et un proxy de classe matérielle.'],
       ['`*` indicates an estimated parameter count rather than a provider-published value.', '`*` indique un nombre de paramètres estimé plutôt qu’une valeur publiée par le fournisseur.'],
@@ -5153,8 +5255,21 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
       ['Annual carbon', 'Carbone annuel'],
       ['Fluorescent lamp 1 h', 'Lampe fluorescente 1 h'],
       ['Laptop 1 h', 'Ordinateur portable 1 h'],
+      ['Laptop 3 h', 'Ordinateur portable 3 h'],
+      ['Microwave oven 6 min', 'Four à micro-ondes 6 min'],
+      ['Electric kettle 3.5 min', 'Bouilloire électrique 3,5 min'],
       ['Electric heater 4.1 min', 'Radiateur électrique 4,1 min'],
+      ['Average gasoline car 170 m', 'Voiture essence moyenne 170 m'],
+      ['Average gasoline car 1 km', 'Voiture essence moyenne 1 km'],
       ['Electric heater 10 min (US mix)', 'Radiateur électrique 10 min (mix US)'],
+      ['Fluorescent lamp for 1 hour', 'Lampe fluorescente pendant 1 heure'],
+      ['Laptop for 1 hour', 'Ordinateur portable pendant 1 heure'],
+      ['Laptop for 3 hours', 'Ordinateur portable pendant 3 heures'],
+      ['Microwave oven for 6 minutes', 'Four à micro-ondes pendant 6 minutes'],
+      ['Electric kettle for 3.5 minutes', 'Bouilloire électrique pendant 3,5 minutes'],
+      ['Electric space heater for 4.1 minutes', 'Radiateur électrique pendant 4,1 minutes'],
+      ['Average gasoline car for 170 m', 'Voiture essence moyenne sur 170 m'],
+      ['Average gasoline car for 1 km', 'Voiture essence moyenne sur 1 km'],
       ['2,760,139 households (annual domestic use)', '2 760 139 foyers (usage domestique annuel)'],
       ['292,210 full commercial flights', '292 210 vols commerciaux complets'],
     ];
@@ -5168,6 +5283,7 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
       ['.language-label', 'textContent', 'languageLabel'],
     ];
     const htmlTranslations = [
+      ['[data-i18n-html="inference-scenario-banner"]', 'inferenceScenarioBanner'],
       ['[data-i18n-html="method-anchor-body"]', 'methodAnchorBody'],
       ['[data-i18n-html="method-proxy-body"]', 'methodProxyBody'],
       ['[data-i18n-html="method-tokens-body"]', 'methodTokensBody'],
@@ -5180,7 +5296,18 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
       'Ordinateur portable 1 h': 'Laptop 1 h',
       'Fluorescent lamp 1 h': 'Fluorescent lamp 1 h',
       'Laptop 1 h': 'Laptop 1 h',
+      'Ordinateur portable 3 h': 'Laptop 3 h',
+      'Laptop 3 h': 'Laptop 3 h',
+      'Four à micro-ondes 6 min': 'Microwave oven 6 min',
+      'Microwave oven 6 min': 'Microwave oven 6 min',
+      'Bouilloire électrique 3,5 min': 'Electric kettle 3.5 min',
+      'Electric kettle 3.5 min': 'Electric kettle 3.5 min',
       'Electric heater 4.1 min': 'Electric heater 4.1 min',
+      'Radiateur électrique 4,1 min': 'Electric heater 4.1 min',
+      'Voiture essence moyenne 170 m': 'Average gasoline car 170 m',
+      'Average gasoline car 170 m': 'Average gasoline car 170 m',
+      'Voiture essence moyenne 1 km': 'Average gasoline car 1 km',
+      'Average gasoline car 1 km': 'Average gasoline car 1 km',
       'Electric heater 10 min (US mix)': 'Electric heater 10 min (US mix)',
       '2,760,139 households (annual domestic use)': '2,760,139 households (annual domestic use)',
       '292,210 full commercial flights': '292,210 full commercial flights',
@@ -7129,7 +7256,7 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
       }},
     }});
     renderDoublingTimelineChart(inferenceDoublingTimelineChart, 'data-release-timeline-rows', {{
-      keepLabels: ['GPT-3.5 Turbo', 'GPT-4', 'GPT-5.2', 'Claude 2', 'Claude 3.5 Sonnet', 'Claude Sonnet 4', 'Claude Opus 4.1', 'Grok 1', 'Grok 2', 'Grok 4'],
+      keepLabels: ['GPT-3.5 Turbo', 'GPT-4', 'GPT-5.2', 'GPT-5.4', 'GPT-5.5', 'Claude 2', 'Claude 3.5 Sonnet', 'Claude Sonnet 4', 'Claude Sonnet 4.6', 'Claude Opus 4.1', 'Claude Opus 4.7', 'Claude Mythos Preview', 'Grok 1', 'Grok 2', 'Grok 4', 'Grok 4.1 Fast', 'Grok 4.20', 'Grok 4.3'],
       valueKey: 'hour_carbon_gco2e',
       formatValue: (value) => value >= 1000 ? `${{(value / 1000).toFixed(1)}} kg` : `${{value.toFixed(1)}} g`,
       intro: {{
@@ -7291,7 +7418,7 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
       }},
     }});
     renderDoublingTimelineChart(trainingDoublingTimelineChart, 'data-training-release-timeline-rows', {{
-      keepLabels: ['GPT-3.5 Turbo', 'GPT-4', 'GPT-5.2', 'Claude 2', 'Claude 3.5 Sonnet', 'Claude Sonnet 4', 'Claude Opus 4.1', 'Grok 1', 'Grok 2', 'Grok 4'],
+      keepLabels: ['GPT-3.5 Turbo', 'GPT-4', 'GPT-5.2', 'GPT-5.4', 'GPT-5.5', 'Claude 2', 'Claude 3.5 Sonnet', 'Claude Sonnet 4', 'Claude Sonnet 4.6', 'Claude Opus 4.1', 'Claude Opus 4.7', 'Claude Mythos Preview', 'Grok 1', 'Grok 2', 'Grok 4', 'Grok 4.1 Fast', 'Grok 4.20', 'Grok 4.3'],
       valueKey: 'direct_training_carbon_tco2e',
       formatValue: (value) => value >= 1000 ? `${{(value / 1000).toFixed(1)}} kt` : `${{value.toFixed(1)}} t`,
       intro: {{

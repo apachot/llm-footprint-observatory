@@ -1,0 +1,348 @@
+\documentclass[11pt,a4paper]{article}
+\usepackage[a4paper,margin=2.2cm]{geometry}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[french]{babel}
+\usepackage{textcomp}
+\usepackage{lmodern}
+\usepackage{graphicx}
+\usepackage{longtable}
+\usepackage{array}
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage[table]{xcolor}
+\usepackage{tikz}
+\usetikzlibrary{calc}
+\usepackage{hyperref}
+\usepackage{fancyhdr}
+\IfFileExists{enumitem.sty}{\usepackage{enumitem}}{}
+\IfFileExists{needspace.sty}{\usepackage{needspace}}{}
+\usepackage{etoolbox}
+\renewcommand{\familydefault}{\sfdefault}
+\IfFileExists{enumitem.sty}{\setlist[itemize]{noitemsep,topsep=2pt}}{}
+\setlength{\parskip}{4pt}
+\setlength{\parindent}{0pt}
+\IfFileExists{needspace.sty}{\preto{\section}{\Needspace{12\baselineskip}}}{}
+\IfFileExists{needspace.sty}{\preto{\subsection}{\Needspace{8\baselineskip}}}{}
+
+\definecolor{emotiaCover}{HTML}{00A5D4}
+\colorlet{emotiaBlue}{emotiaCover}
+\definecolor{emotiaBlueDark}{HTML}{1F5D73}
+\definecolor{emotiaBlueMuted}{HTML}{4A879D}
+\definecolor{emotiaBlueSoft}{HTML}{8EC9DB}
+\definecolor{emotiaLightBlue}{HTML}{EAF6FB}
+\definecolor{emotiaGray}{HTML}{E7F0F4}
+\definecolor{emotiaTableAlt}{HTML}{F3F5F7}
+
+\hypersetup{
+  colorlinks=true,
+  allcolors=emotiaBlueDark,
+  linkcolor=emotiaBlueDark,
+  citecolor=emotiaBlueDark,
+  urlcolor=emotiaBlueDark,
+  pdftitle={ImpactLLM - Presentation},
+  pdfauthor={Arnault Pachot et Thierry Petit}
+}
+
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\footnotesize\color{emotiaBlueMuted}ImpactLLM}
+\fancyhead[R]{\footnotesize\color{emotiaBlueMuted}Presentation}
+\fancyfoot[L]{\footnotesize Emotia}
+\fancyfoot[C]{}
+\fancyfoot[R]{\footnotesize \thepage/\pageref{LastPage}}
+\renewcommand{\headrulewidth}{0pt}
+\fancypagestyle{plain}{%
+  \fancyhf{}
+  \fancyhead[L]{\footnotesize\color{emotiaBlueMuted}ImpactLLM}
+  \fancyhead[R]{\footnotesize\color{emotiaBlueMuted}Presentation}
+  \fancyfoot[L]{\footnotesize Emotia}
+  \fancyfoot[C]{}
+  \fancyfoot[R]{\footnotesize \thepage/\pageref{LastPage}}
+  \renewcommand{\headrulewidth}{0pt}%
+}
+
+\setlength{\footskip}{1.1cm}
+\setlength{\headheight}{14pt}
+\linespread{1.05}
+\setlength{\emergencystretch}{3em}
+
+\AddToHook{shipout/background}{%
+  \ifnum\value{page}>1
+    \begin{tikzpicture}[remember picture, overlay]
+      \fill[emotiaCover] (current page.north west) rectangle ([yshift=-0.34cm]current page.north east);
+    \end{tikzpicture}%
+  \fi
+}
+
+\newcommand{\sectionlead}[1]{%
+  \noindent\colorbox{emotiaLightBlue}{%
+    \parbox{\dimexpr\textwidth-2\fboxsep}{\small #1}%
+  }\par
+  \vspace{0.45em}
+}
+
+\newcolumntype{M}[1]{>{\raggedright\arraybackslash}m{#1}}
+
+\newcommand{\impactTableSetup}{%
+  \setlength{\tabcolsep}{6pt}%
+  \renewcommand{\arraystretch}{1.08}%
+}
+
+\newcommand{\impactTableReset}{%
+  \setlength{\tabcolsep}{6pt}%
+  \renewcommand{\arraystretch}{1.0}%
+}
+
+\newcommand{\impactHeaderRow}{\rowcolor{emotiaCover}\color{white}\bfseries}
+\newcommand{\impactHeaderCell}[1]{\parbox[c][2.8ex][c]{\linewidth}{\raggedright\arraybackslash\color{white}\bfseries #1}}
+\setlength{\arrayrulewidth}{0pt}
+\newcommand{\impactLastPageRef}{\pageref{LastPage}}
+
+\title{ImpactLLM\\Presentation}
+\author{Arnault Pachot \and Thierry Petit}
+\date{18 mars 2026}
+
+\begin{document}
+\begin{titlepage}
+\newgeometry{margin=1.8cm}
+\thispagestyle{empty}
+
+{\sffamily
+\begin{tikzpicture}[remember picture, overlay]
+  \fill[emotiaBlue] (current page.north west) rectangle ([yshift=-1.2cm]current page.north east);
+  \node[anchor=north west] at ($(current page.north west)+(1.8cm,-1.58cm)$) {\includegraphics[width=4.8cm]{impactllm-logo.pdf}};
+\end{tikzpicture}
+
+\vspace*{2.8cm}
+
+{\Large\color{emotiaBlue}\textbf{ImpactLLM}\par}
+\vspace{0.4cm}
+{\Huge\textbf{Comprendre simplement}\par}
+{\Huge\textbf{les impacts environnementaux}\par}
+{\Huge\textbf{des grands modeles de langage}\par}
+\vspace{0.55cm}
+{\large\color{emotiaBlueMuted}Un document d'introduction pour le grand public\par}
+
+\vspace{1.3cm}
+
+\noindent\colorbox{emotiaLightBlue}{%
+  \parbox{\dimexpr\textwidth-2\fboxsep}{%
+    \small Ce document presente le projet ImpactLLM, son utilite, sa methode generale et les raisons pour lesquelles il devient necessaire de comparer plus rigoureusement les impacts environnementaux des grands modeles de langage.
+  }%
+}
+
+\vfill
+
+\impactTableSetup
+\begin{tabularx}{\textwidth}{@{}M{0.24\textwidth}M{\dimexpr0.76\textwidth-2\tabcolsep\relax}@{}}
+\impactHeaderRow
+\impactHeaderCell{Document} & \impactHeaderCell{Presentation d'ImpactLLM} \\
+\rowcolor{emotiaTableAlt}
+\textbf{Objet} & Expliquer le projet, ses objectifs, ses limites et ses usages de maniere simple et accessible \\
+\textbf{Emetteur} & Emotia / Projet ImpactLLM \\
+\rowcolor{emotiaTableAlt}
+\textbf{Date} & 18 mars 2026 \\
+\end{tabularx}
+\impactTableReset
+
+\vspace{0.9cm}
+
+{\small\color{emotiaBlueMuted}Document d'introduction destine aux organisations, aux acteurs publics, aux journalistes et a toute personne souhaitant comprendre les impacts environnementaux de l'IA.\par}
+
+\restoregeometry
+}
+\end{titlepage}
+
+\setcounter{page}{2}
+\thispagestyle{empty}
+\tableofcontents
+\newpage
+
+\section{Pourquoi ImpactLLM ?}
+\sectionlead{On parle de plus en plus des impacts environnementaux de l'IA, mais il reste tres difficile de comparer les grands modeles de langage de maniere claire, transparente et verifiable.}
+
+Aujourd'hui, de nombreux chiffres circulent sur l'energie, le CO2 ou l'eau lies a l'intelligence artificielle. Pourtant, lorsqu'on cherche a comprendre ce que representent reellement ChatGPT, Claude, Gemini, Mistral ou Grok, plusieurs difficultes apparaissent rapidement :
+\begin{itemize}
+  \item les fournisseurs publient peu de donnees directes sur leurs infrastructures ;
+  \item les chiffres repris dans le debat public ne sont pas toujours comparables ;
+  \item les hypotheses de calcul restent souvent implicites ;
+  \item il devient tres difficile de savoir quel modele comparer, pour quel usage et avec quel niveau de confiance.
+\end{itemize}
+
+ImpactLLM est ne de ce constat. Le projet propose un observatoire ouvert qui ne pretend pas mesurer parfaitement ce qui reste largement invisible, mais qui cherche a rendre les ordres de grandeur plus lisibles, plus explicites et plus discutables.
+
+\section{A quoi sert ImpactLLM ?}
+\sectionlead{ImpactLLM aide a comparer des modeles, a decrire des usages et a visualiser les hypotheses de calcul, plutot que de produire un score opaque.}
+
+Concretement, ImpactLLM permet de :
+\begin{itemize}
+  \item comparer les grands modeles de langage selon des ordres de grandeur d'energie et de CO2 ;
+  \item decrire un usage en langage naturel et obtenir une estimation structuree ;
+  \item retrouver les hypotheses retenues pour un resultat ;
+  \item relier les estimations a des sources scientifiques, techniques ou documentaires ;
+  \item soutenir des arbitrages de conception, de politique publique ou de numerique responsable.
+\end{itemize}
+
+Le projet s'adresse a plusieurs publics :
+\begin{itemize}
+  \item le grand public qui cherche a comprendre les ordres de grandeur ;
+  \item les organisations qui veulent comparer plusieurs modeles ou plusieurs usages ;
+  \item les chercheurs, journalistes et acteurs publics qui ont besoin d'un cadre plus transparent.
+\end{itemize}
+
+\section{Ce que le projet fait, et ce qu'il ne fait pas}
+
+\subsection{Ce qu'ImpactLLM fait}
+ImpactLLM produit des \textbf{estimations de screening}. Cela signifie que le projet construit des ordres de grandeur comparables a partir :
+\begin{itemize}
+  \item de donnees issues de la litterature ;
+  \item de caracteristiques connues ou estimees des modeles ;
+  \item d'hypotheses explicites sur les tokens, les requetes, l'architecture ou le mode de service ;
+  \item de facteurs de conversion lies au mix electrique retenu.
+\end{itemize}
+
+\subsection{Ce qu'ImpactLLM ne fait pas}
+ImpactLLM n'est pas :
+\begin{itemize}
+  \item un audit officiel des fournisseurs ;
+  \item une mesure directe des centres de donnees ;
+  \item un score magique qui resoudrait a lui seul le debat ;
+  \item un outil reduisant l'impact environnemental a un indicateur unique.
+\end{itemize}
+
+Autrement dit, le projet ne remplace pas la transparence des fournisseurs. Il propose plutot un cadre commun pour raisonner dans un contexte ou la transparence reste limitee.
+
+\section{Pourquoi la transparence est-elle si importante ?}
+\sectionlead{Un chiffre n'est utile que si l'on sait ce qu'il represente, avec quelles hypotheses et dans quel perimetre.}
+
+Lorsqu'on parle d'impact environnemental, il ne suffit pas d'afficher un nombre. Il faut aussi pouvoir repondre a des questions simples :
+\begin{itemize}
+  \item de quel modele parle-t-on ?
+  \item pour quel usage ?
+  \item avec combien de requetes ou de tokens ?
+  \item dans quel pays ou avec quel mix electrique ?
+  \item quelles sources et quelles hypotheses ont ete retenues ?
+\end{itemize}
+
+L'une des contributions centrales d'ImpactLLM est justement de rendre ces choix visibles. L'objectif n'est pas de rendre toute discussion impossible, mais au contraire de la rendre plus rigoureuse.
+
+\section{Pourquoi le mix electrique compte-t-il autant ?}
+\sectionlead{Une meme consommation electrique ne produit pas le meme contenu carbone partout.}
+
+Deux usages identiques peuvent avoir un contenu carbone tres different selon l'electricite qui alimente l'infrastructure. En pratique :
+\begin{itemize}
+  \item la consommation electrique est une chose ;
+  \item le contenu carbone de cette electricite en est une autre ;
+  \item un meme usage peut donc conduire a des emissions tres differentes selon le pays ou la region retenus.
+\end{itemize}
+
+C'est pourquoi ImpactLLM distingue, autant que possible :
+\begin{itemize}
+  \item l'energie estimee ;
+  \item le CO2 derive de cette energie ;
+  \item le contexte geographique retenu pour la comparaison.
+\end{itemize}
+
+Cette distinction est essentielle pour comprendre que le carbone ne depend pas seulement du modele, mais aussi de l'infrastructure et du contexte energetique.
+
+\section{Pourquoi l'usage compte autant que le modele ?}
+\sectionlead{L'impact environnemental d'un LLM depend a la fois de son intensite et de son volume d'usage.}
+
+Un modele plus lourd n'est pas le seul sujet. L'autre variable, souvent decisive, est le volume d'usage :
+\begin{itemize}
+  \item combien d'utilisateurs ;
+  \item combien de requetes ;
+  \item combien de tokens ;
+  \item quelle frequence d'utilisation.
+\end{itemize}
+
+Deux dynamiques peuvent alors se combiner :
+\begin{itemize}
+  \item des modeles de plus en plus intensifs ;
+  \item des usages de plus en plus nombreux.
+\end{itemize}
+
+Quand ces deux courbes montent ensemble, les impacts peuvent croitre rapidement. Cela signifie qu'un bon arbitrage ne consiste pas seulement a choisir ``la meilleure IA'', mais plutot :
+\begin{itemize}
+  \item le bon modele pour le bon besoin ;
+  \item le bon niveau de performance pour le bon usage ;
+  \item le bon niveau d'exigence au regard des impacts.
+\end{itemize}
+
+\section{Un exemple de resultat}
+\sectionlead{L'observatoire permet aussi de visualiser des tendances simples. Ci-dessous, un exemple de lecture sur l'evolution du CO2 d'inference dans la famille GPT, en indice base 100.}
+
+\begin{center}
+\includegraphics[width=0.92\textwidth]{../artifacts/linkedin_today/01d_gpt_inference_index_fr.png}
+\end{center}
+
+\small
+\textbf{Lecture du graphique.} Cette figure compare plusieurs generations de modeles GPT dans l'observatoire ImpactLLM. Elle prend GPT-3.5 Turbo comme base 100, puis montre l'evolution relative du CO2 d'inference estime jusqu'aux generations GPT-5.4 et GPT-5.5. L'interet de ce type de visualisation est de rendre visible une tendance : les modeles ne sont pas seulement plus puissants, ils peuvent aussi devenir plus intensifs du point de vue environnemental.
+\normalsize
+
+\section{Pourquoi ce projet est-il utile pour le grand public ?}
+\sectionlead{Le debat public sur l'IA et l'environnement est tres present, mais encore rarement structure de facon comparable.}
+
+Aujourd'hui, on entend beaucoup d'affirmations sur l'impact environnemental de l'IA :
+\begin{itemize}
+  \item des chiffres impressionnants mais peu expliques ;
+  \item des comparaisons difficiles a verifier ;
+  \item des oppositions simplifiees entre ``IA utile'' et ``IA nuisible''.
+\end{itemize}
+
+ImpactLLM propose une autre voie :
+\begin{itemize}
+  \item rendre les ordres de grandeur plus lisibles ;
+  \item montrer les hypotheses plutot que les cacher ;
+  \item aider a poser de meilleures questions ;
+  \item outiller des arbitrages plus concrets.
+\end{itemize}
+
+Le projet ne cherche donc pas seulement a produire des chiffres, mais a rendre le debat plus intelligible.
+
+\section{Comment utiliser ImpactLLM ?}
+\sectionlead{Le projet existe sous plusieurs formes : site web, referentiel, papier technique et depot open source.}
+
+\impactTableSetup
+\begin{tabularx}{\textwidth}{M{0.23\textwidth}M{\dimexpr0.77\textwidth-2\tabcolsep\relax}}
+\impactHeaderRow
+\impactHeaderCell{Ressource} & \impactHeaderCell{Description} \\
+\rowcolor{emotiaTableAlt}
+Site web & Explorer les modeles, les graphiques et lancer une analyse a partir d'une description en langage naturel \\
+Depot GitHub & Consulter le code, les donnees, la logique de calcul et contribuer au projet \\
+\rowcolor{emotiaTableAlt}
+Papier technique & Comprendre plus en detail la methode de screening, ses hypotheses et ses limites \\
+Referentiel & Parcourir les modeles, les facteurs retenus et les sources associees \\
+\end{tabularx}
+\impactTableReset
+
+\textbf{Liens utiles}
+\begin{itemize}
+  \item Site : \url{https://dev.emotia.com/impact-llm/}
+  \item Depot GitHub : \url{https://github.com/apachot/ImpactLLM}
+  \item Papier technique : \url{https://dev.emotia.com/impact-llm/downloads/ImpactLLM_paper.pdf}
+\end{itemize}
+
+\section{En resume}
+\sectionlead{ImpactLLM ne pretend pas produire une verite parfaite. Sa valeur vient du fait qu'il rend visibles les hypotheses, les sources et les ordres de grandeur.}
+
+Dans un domaine ou beaucoup d'affirmations circulent sans cadre clair, une approximation transparente et discutable vaut souvent mieux qu'une certitude apparente mais opaque.
+
+La contribution du projet peut se resumer en quatre points :
+\begin{itemize}
+  \item rendre visible ce qui reste souvent opaque ;
+  \item fournir un cadre commun pour comparer ;
+  \item expliciter les hypotheses de calcul ;
+  \item aider a des choix plus coherents et plus responsables.
+\end{itemize}
+
+\vfill
+
+\begin{center}
+\small
+Document d'introduction. Pour les details methodologiques, consulter le papier technique ImpactLLM.
+\end{center}
+
+\label{LastPage}
+\end{document}
