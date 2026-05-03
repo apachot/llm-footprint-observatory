@@ -7,6 +7,10 @@ This web app is a plain Python HTTP server. The simplest production setup is:
 - one `nginx` reverse proxy in front;
 - one `.env` file containing the OpenAI key.
 
+The commands below use `/opt/ImpactLLM` and `ImpactLLM-web.service` as generic example names.
+The current production deployment uses `/opt/llm-environment-opendata`, the service
+`llm-environment-opendata-web`, and the public domain `impactllm.eu`.
+
 ## 1. Copy the project to the server
 
 ```bash
@@ -29,7 +33,7 @@ pip install -r requirements.txt
 
 ## 3. Configure OpenAI
 
-Create `/opt/ImpactLLM/.env`:
+Create either `/opt/ImpactLLM/.env` or `/opt/ImpactLLM/web/.env`:
 
 ```bash
 OPENAI_API_KEY=...
@@ -61,6 +65,8 @@ sudo systemctl status ImpactLLM-web
 ```
 
 If your Linux user is not `www-data`, change `User`, `Group`, `WorkingDirectory`, and `ExecStart` in the service file.
+If you follow the current production naming instead of the generic example, adapt the service name and
+working directory accordingly.
 
 ## 6. Install and configure `nginx`
 
@@ -80,7 +86,7 @@ If the server has a real domain:
 ```bash
 sudo apt-get update
 sudo apt-get install -y certbot python3-certbot-nginx
-sudo certbot --nginx -d dev.emotia.com
+sudo certbot --nginx -d impactllm.eu
 ```
 
 ## 8. Logs
@@ -92,6 +98,7 @@ journalctl -u ImpactLLM-web -f
 ## Notes
 
 - The web app listens on `LLM_WEB_HOST` and `LLM_WEB_PORT`.
-- Set `LLM_WEB_PREFIX=/impact-llm` when the app is exposed under `https://dev.emotia.com/impact-llm`.
+- Set `LLM_WEB_PREFIX=/impact-llm` when the app is exposed under a prefixed route such as `https://example.org/impact-llm`.
+- If the app is served directly at the domain root, keep the reverse proxy aligned with the deployed prefix behavior.
 - Keep the Python server bound to `127.0.0.1` and expose it through `nginx`.
 - This app uses the Python standard library HTTP server. For moderate traffic and a research/demo site, that is usually sufficient. For heavier traffic, put it behind a stronger application server or rewrite it on a production WSGI/ASGI stack.

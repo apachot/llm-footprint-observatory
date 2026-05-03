@@ -6,10 +6,11 @@ The project is designed as a transparent screening tool rather than a black-box 
 
 ## What This Repository Contains
 
-This repository brings together two main components:
+This Git repository version-controls the open software and data stack of ImpactLLM:
 
 - `ImpactLLM/`: the open dataset, local HTTP API, MCP server, web calculation interface, and estimation logic
-- `ImpactLLM-paper/`: local-only publication materials kept outside Git versioning
+
+A separate local-only `ImpactLLM-paper/` workspace may live next to the repository for manuscript work, but it is intentionally excluded from Git versioning.
 
 ImpactLLM is useful for:
 
@@ -26,8 +27,8 @@ Our work on responsible AI emphasizes methodological rigor, traceability, and de
 
 ## Quick Links
 
-- Demo: `https://dev.emotia.com/impact-llm/`
-- Paper PDF: `https://dev.emotia.com/impact-llm/downloads/ImpactLLM_paper.pdf` (`Transparent Screening for LLM Inference and Training Impacts`)
+- Demo: `https://impactllm.eu/`
+- Public paper PDF: `https://impactllm.eu/downloads/ImpactLLM_paper.pdf` (`Transparent Screening for LLM Inference and Training Impacts`)
 - GitHub repository: `https://github.com/apachot/ImpactLLM`
 
 ## Get Started
