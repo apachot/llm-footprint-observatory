@@ -4,6 +4,7 @@
 import csv
 from decimal import Decimal
 from pathlib import Path
+from urllib.parse import urlparse
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -25,6 +26,38 @@ DEFAULT_TRAINING_ANCHOR = (
     "BLOOM 176B (luccioni2023_bloom_extended)"
 )
 DEFAULT_ESTIMATION_SOURCE = "Project screening proxy when exact serving country is not publicly specified"
+THIRD_PARTY_ESTIMATE_DOMAINS = {
+    "artificialanalysis.ai",
+    "explodingtopics.com",
+    "lifearchitect.ai",
+    "nexos.ai",
+}
+OFFICIAL_PROVIDER_DOMAINS = {
+    "openai": {
+        "cdn.openai.com",
+        "developers.openai.com",
+        "openai.com",
+        "platform.openai.com",
+    },
+    "anthropic": {
+        "anthropic.com",
+        "claude.com",
+        "docs.anthropic.com",
+        "platform.claude.com",
+    },
+    "google": {
+        "ai.google.dev",
+        "blog.google",
+        "deepmind.google",
+        "research.google",
+        "storage.googleapis.com",
+    },
+    "xai": {
+        "console.x.ai",
+        "docs.x.ai",
+        "x.ai",
+    },
+}
 
 
 def stringify(value):
@@ -51,6 +84,74 @@ def build_alias_string(row):
             if part and part not in aliases:
                 aliases.append(part)
     return "|".join(aliases)
+
+
+def url_domain(url):
+    if not url:
+        return ""
+    return urlparse(url).netloc.replace("www.", "")
+
+
+def is_official_provider_url(provider, url):
+    domain = url_domain(url)
+    if not domain:
+        return False
+    allowed = OFFICIAL_PROVIDER_DOMAINS.get(provider, set())
+    return any(domain == base or domain.endswith(f".{base}") for base in allowed)
+
+
+def normalize_parameter_source_fields(row):
+    model_id = row.get("model_id", "")
+    provider = row.get("provider", "")
+    status = row.get("parameter_value_status", "")
+    source = row.get("parameter_source", "")
+    notes = row.get("notes", "")
+    source_url = row.get("parameter_source_url", "")
+    source_domain = url_domain(source_url)
+    lower_source = source.lower()
+    lower_notes = notes.lower()
+
+    if model_id == "lamda-1":
+        row["parameter_source"] = "LaMDA research paper / Google Research summary"
+        row["parameter_source_url"] = "https://research.google/pubs/lamda-language-models-for-dialog-applications/"
+        row["notes"] = (
+            "Historical dense dialog model retained for comparison; the cited Google Research summary "
+            "reports a LaMDA family with up to 137B parameters and 1.56T training words."
+        )
+        return row
+
+    if status not in {"observed", "documented"}:
+        if (
+            source.startswith("Project screening")
+            or source.startswith("Project frontier")
+            or source.startswith("Internal approximate profile")
+        ):
+            row["parameter_source_url"] = ""
+            source_url = ""
+            source_domain = ""
+        elif "does not publish" in lower_notes and is_official_provider_url(provider, source_url):
+            row["parameter_source_url"] = ""
+            source_url = ""
+            source_domain = ""
+
+        if source_domain == "lifearchitect.ai":
+            if "family proxy" in lower_notes or "family proxy" in lower_source or "reused" in lower_source:
+                row["parameter_source"] = "Third-party family-level screening estimate from Alan D. Thompson Models Table"
+            else:
+                row["parameter_source"] = "Third-party screening estimate from Alan D. Thompson Models Table"
+        elif source_domain == "artificialanalysis.ai":
+            if "size class" in lower_source or "size taxonomy" in lower_source or "midpoint" in lower_source:
+                row["parameter_source"] = "Artificial Analysis size-class midpoint retained as screening estimate"
+            else:
+                row["parameter_source"] = "Third-party screening estimate from Artificial Analysis"
+        elif source_domain == "explodingtopics.com":
+            row["parameter_source"] = "Third-party parameter estimate from Exploding Topics"
+        elif source_domain == "nexos.ai":
+            row["parameter_source"] = "Third-party screening estimate from Nexos"
+        elif model_id == "grok-2" and source_domain == "huggingface.co":
+            row["parameter_source"] = "Third-party screening estimate from the Grok-2 open-weight config discussion"
+
+    return row
 
 
 def market_row(**values):
@@ -1313,9 +1414,23 @@ def upsert_rows(path, updates):
             writer.writerow(normalize_row(row, header))
 
 
+def normalize_existing_parameter_sources(path):
+    header, rows = load_csv_rows(path)
+    for row in rows:
+        normalize_parameter_source_fields(row)
+
+    with path.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=header)
+        writer.writeheader()
+        for row in rows:
+            writer.writerow(normalize_row(row, header))
+
+
 def main():
     upsert_rows(MARKET_MODELS_PATH, MARKET_MODEL_UPDATES)
     upsert_rows(MODELS_PATH, REFERENCE_MODEL_UPDATES)
+    normalize_existing_parameter_sources(MARKET_MODELS_PATH)
+    normalize_existing_parameter_sources(MODELS_PATH)
     print(
         "Updated "
         f"{len(MARKET_MODEL_UPDATES)} market-model profiles and "
