@@ -167,6 +167,7 @@ def anthropic_row(
     context_window_tokens="1000000",
     max_output_tokens="64000",
     reference_aliases="",
+    parameter_source_url=None,
 ):
     docs_url = "https://platform.claude.com/docs/en/about-claude/models/overview"
     return market_row(
@@ -189,7 +190,7 @@ def anthropic_row(
         parameter_value_status="estimated",
         parameter_confidence="low",
         parameter_source=parameter_source,
-        parameter_source_url=release_url or docs_url,
+        parameter_source_url=(release_url or docs_url) if parameter_source_url is None else parameter_source_url,
         notes=notes,
         input_modalities="text,image",
         output_modalities="text",
@@ -907,11 +908,12 @@ MARKET_MODEL_UPDATES = [
         "https://www.anthropic.com/project/glasswing",
         "2600",
         "2600",
-        "Project frontier proxy for the Claude Mythos preview line",
-        "Restricted-preview research row retained for frontier benchmarking; public documentation remains limited and Anthropic does not publish a parameter count.",
+        "Project frontier proxy for the Claude Mythos preview line; no public parameter count found",
+        "Restricted-preview research row retained for frontier benchmarking; the Glasswing page documents the model's existence and preview status, but not a 2600B parameter count.",
         market_status="research",
         serving_mode="research",
         reference_aliases="claude mythos|mythos|mythos preview",
+        parameter_source_url="",
     ),
     google_row(
         "gemini-3-pro",
