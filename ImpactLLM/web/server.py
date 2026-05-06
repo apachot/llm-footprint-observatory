@@ -2748,6 +2748,12 @@ def render_market_models_charts(records):
     rows = view["rows"]
     if not rows:
         return ""
+    tracked_summary = ""
+    if view["tracked_count"]:
+        tracked_summary = (
+            f" <strong>{view['tracked_count']}</strong> tracked models remain outside the "
+            "quantitative comparison when even that partial-data derivation is not available."
+        )
     return f"""
     <section class="panel reference-panel">
       <div class="summary-header">
@@ -2756,7 +2762,7 @@ def render_market_models_charts(records):
           <h3>Comparative environmental impact of models</h3>
         </div>
       </div>
-      <p class="summary-intro">This public benchmark currently quantifies <strong>{view["benchmark_count"]}</strong> market models. <strong>{view["strict_count"]}</strong> use a strict parameter basis (directly sourced, directly derivable, or sourced from an explicit third-party estimate), while <strong>{view["partial_count"]}</strong> additional recent models use a documented partial-data donor prior derived from the strict catalog. <strong>{view["tracked_count"]}</strong> tracked models remain outside the quantitative comparison when even that partial-data derivation is not available.</p>
+      <p class="summary-intro">This public benchmark currently quantifies <strong>{view["benchmark_count"]}</strong> market models. <strong>{view["strict_count"]}</strong> use a strict parameter basis (directly sourced, directly derivable, or sourced from an explicit third-party estimate), while <strong>{view["partial_count"]}</strong> additional recent models use a documented partial-data donor prior derived from the strict catalog.{tracked_summary}</p>
       <div class="chart-tabbar" role="tablist" aria-label="Inference chart indicator">
         <button type="button" class="chart-tab-button is-active" data-model-chart-control="metric-tab" data-metric-value="energy" aria-selected="true">Energy</button>
         <button type="button" class="chart-tab-button" data-model-chart-control="metric-tab" data-metric-value="carbon" aria-selected="false">Carbon</button>
@@ -3336,6 +3342,12 @@ def render_training_models_charts(records):
     benchmark_energy_twh = (view.get("benchmark_training_energy_wh", 0.0) / 1_000_000_000_000.0)
     benchmark_flights = int(round(view.get("benchmark_flights_equivalent", 0.0)))
     benchmark_carbon_tco2e = view.get("benchmark_training_carbon_tco2e", 0.0)
+    tracked_summary = ""
+    if view["tracked_count"]:
+        tracked_summary = (
+            f" <strong>{view['tracked_count']}</strong> additional tracked models are excluded "
+            "when no quantitative basis can be derived."
+        )
     return f"""
     <section class="panel reference-panel">
       <div class="summary-header">
@@ -3344,7 +3356,7 @@ def render_training_models_charts(records):
           <h3>Comparative training impacts of models</h3>
         </div>
       </div>
-      <p class="summary-intro">This public training benchmark currently quantifies <strong>{view["benchmark_count"]}</strong> market models: <strong>{view["strict_count"]}</strong> with a strict retained parameter basis and <strong>{view["partial_count"]}</strong> with a documented partial-data donor prior. <strong>{view["tracked_count"]}</strong> additional tracked models are excluded when no quantitative basis can be derived.</p>
+      <p class="summary-intro">This public training benchmark currently quantifies <strong>{view["benchmark_count"]}</strong> market models: <strong>{view["strict_count"]}</strong> with a strict retained parameter basis and <strong>{view["partial_count"]}</strong> with a documented partial-data donor prior.{tracked_summary}</p>
       <p class="summary-intro">The chart below shows the central values retained for the quantified models across two training indicator families: training energy and training CO2e contextualized from retained training energy and the model country proxy. The current screening method combines retained parameter count, a training-token prior, a training-regime prior, architecture features, and a hardware-class proxy. Everyday benchmarks are inserted directly into the list to situate those scales, not to imply direct observed equivalence.</p>
       <div class="chart-tabbar" role="tablist" aria-label="Training chart indicator">
         <button type="button" class="chart-tab-button is-active" data-training-chart-control="metric-tab" data-metric-value="direct_training_energy" aria-selected="true">Energy</button>
