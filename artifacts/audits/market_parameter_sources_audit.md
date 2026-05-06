@@ -3,8 +3,8 @@
 - lignes auditees : 83
 - `exact_in_cited_source` : 31
 - `derivable_from_cited_source` : 1
-- `third_party_estimate` : 17
-- `project_proxy_no_url` : 33
+- `third_party_estimate` : 15
+- `project_proxy_no_url` : 35
 - `internal_proxy_no_url` : 1
 - `needs_cleanup` : 0
 - `manual_review` : 0

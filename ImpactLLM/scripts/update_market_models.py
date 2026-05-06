@@ -32,6 +32,28 @@ THIRD_PARTY_ESTIMATE_DOMAINS = {
     "lifearchitect.ai",
     "nexos.ai",
 }
+ANTHROPIC_FAMILY_PROXY_OVERRIDES = {
+    "claude-opus-4.1": (
+        "Project screening family proxy for Claude Opus 4.x",
+        "Conservative Opus-family proxy retained for comparability across the Claude Opus 4.x line. Anthropic does not publish parameter counts, and current third-party estimates vary substantially across revisions.",
+    ),
+    "claude-opus-4.6": (
+        "Project screening family proxy for Claude Opus 4.x",
+        "Conservative Opus-family proxy retained for comparability across the Claude Opus 4.x line. Anthropic does not publish parameter counts, and current third-party estimates vary substantially across revisions.",
+    ),
+    "claude-opus-4.7": (
+        "Project screening family proxy for Claude Opus 4.x",
+        "Conservative Opus-family proxy retained for comparability across the Claude Opus 4.x line. Anthropic does not publish parameter counts, and current third-party estimates vary substantially across revisions.",
+    ),
+    "claude-sonnet-4": (
+        "Project screening family proxy for Claude Sonnet 4.x",
+        "Conservative Sonnet-family proxy retained for comparability across the Claude Sonnet 4.x line. Anthropic does not publish parameter counts for these revisions.",
+    ),
+    "claude-sonnet-4.6": (
+        "Project screening family proxy for Claude Sonnet 4.x",
+        "Conservative Sonnet-family proxy retained for comparability across the Claude Sonnet 4.x line. Anthropic does not publish parameter counts for these revisions.",
+    ),
+}
 OFFICIAL_PROVIDER_DOMAINS = {
     "openai": {
         "cdn.openai.com",
@@ -118,6 +140,13 @@ def normalize_parameter_source_fields(row):
             "Historical dense dialog model retained for comparison; the cited Google Research summary "
             "reports a LaMDA family with up to 137B parameters and 1.56T training words."
         )
+        return row
+
+    if model_id in ANTHROPIC_FAMILY_PROXY_OVERRIDES:
+        parameter_source, notes = ANTHROPIC_FAMILY_PROXY_OVERRIDES[model_id]
+        row["parameter_source"] = parameter_source
+        row["parameter_source_url"] = ""
+        row["notes"] = notes
         return row
 
     if status not in {"observed", "documented"}:
