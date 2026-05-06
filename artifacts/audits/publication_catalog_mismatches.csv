@@ -1,0 +1,6 @@
+table,display_name,issue,paper_inference_wh,catalog_inference_wh,paper_inference_gco2e,catalog_inference_gco2e,paper_training_gwh,catalog_training_gwh
+illustrative_outputs,GPT-5.5,"inference_wh,inference_gco2e",3.0833,4.5322,1.1871,1.7449,,
+illustrative_outputs,Claude Mythos Preview,"inference_wh,inference_gco2e",3.8014,7.6502,1.4635,2.9453,,
+representative_models,Claude Mythos Preview,"inference_wh,inference_gco2e,training_gwh",3.8014,7.6502,1.4635,2.9453,139.48,50.9455
+representative_models,GPT-5.5,"inference_wh,inference_gco2e,training_gwh",3.0833,4.5322,1.1871,1.7449,74.50,123.7950
+representative_models,Gemini 3.1 Pro,"inference_wh,inference_gco2e,training_gwh",0.4282,4.7180,0.1649,1.8164,1.07,185.6926

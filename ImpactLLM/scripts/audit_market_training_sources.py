@@ -42,6 +42,18 @@ def classify_parameter(row):
             "The cited xAI post publishes 314B total parameters and says 25% of weights are active per token; the retained 78.5B active value is derived from that ratio.",
         )
 
+    if model_id == "lamda-1" and "research.google/pubs/lamda-language-models-for-dialog-applications/" in url:
+        return (
+            "exact_in_cited_source",
+            "The cited Google Research summary explicitly states that the LaMDA family has up to 137B parameters.",
+        )
+
+    if source.startswith("Partial-data donor prior"):
+        return (
+            "partial_data_prior",
+            "The retained parameter value is a catalog-level partial-data prior derived from benchmark-ready donor models with source-linked parameter counts.",
+        )
+
     if status in {"observed", "documented"}:
         if model_id in {"qwen3-32b", "qwen3-235b-a22b"} and "github.com/QwenLM/Qwen3" in url:
             return (

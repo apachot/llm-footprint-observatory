@@ -3,9 +3,10 @@
 - lignes auditees : 83
 - `exact_in_cited_source` : 31
 - `derivable_from_cited_source` : 1
-- `third_party_estimate` : 15
-- `project_proxy_no_url` : 35
-- `internal_proxy_no_url` : 1
+- `third_party_estimate` : 24
+- `partial_data_prior` : 27
+- `project_proxy_no_url` : 0
+- `internal_proxy_no_url` : 0
 - `needs_cleanup` : 0
 - `manual_review` : 0
 
@@ -18,5 +19,6 @@
 - `exact_in_cited_source` : la valeur retenue devrait apparaitre explicitement dans la source citee.
 - `derivable_from_cited_source` : la valeur retenue est derivee directement d'une information explicite de la source citee.
 - `third_party_estimate` : la valeur retenue vient d'une estimation tierce, pas d'une divulgation du fournisseur.
+- `partial_data_prior` : la valeur retenue est derivee du catalogue strict a partir de donneurs sourcés partageant des metadonnees documentees avec le modele cible.
 - `project_proxy_no_url` : la valeur retenue est un proxy de screening interne et le champ `parameter_source_url` est volontairement vide.
 - `internal_proxy_no_url` : la valeur retenue est une approximation interne conservee sans URL de source de parametres.

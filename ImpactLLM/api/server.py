@@ -26,6 +26,7 @@ from core.estimator import (
     list_sources,
     load_country_energy_mix,
     load_extrapolation_rules,
+    load_market_models,
     load_models,
     load_records,
     predict_inference_externalities,
@@ -82,7 +83,23 @@ class Handler(BaseHTTPRequestHandler):
             return
 
         if path == "/market-models":
-            self._write_json({"market_models": build_market_model_predictions(records)})
+            all_rows = build_market_model_predictions(records, scope="partial")
+            strict_rows = build_market_model_predictions(records, scope="strict")
+            partial_rows = [row for row in all_rows if row.get("quantification_tier") == "partial_data_benchmark"]
+            tracked_rows = [row for row in load_market_models() if row.get("benchmark_included") != "yes"]
+            self._write_json(
+                {
+                    "market_models": all_rows,
+                    "strict_market_models": strict_rows,
+                    "partial_data_market_models": partial_rows,
+                    "tracked_only_market_models": tracked_rows,
+                    "market_model_count": len(all_rows),
+                    "benchmark_count": len(all_rows),
+                    "strict_count": len(strict_rows),
+                    "partial_data_count": len(partial_rows),
+                    "tracked_only_count": len(tracked_rows),
+                }
+            )
             return
 
         if path.startswith("/models/"):

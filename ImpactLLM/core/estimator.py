@@ -4,6 +4,19 @@ import math
 import statistics
 from pathlib import Path
 
+try:
+    from core.market_catalog import (
+        annotate_market_catalog,
+        is_market_model_quantified,
+        is_market_model_strict_ready,
+    )
+except ModuleNotFoundError:  # pragma: no cover - package import fallback
+    from .market_catalog import (
+        annotate_market_catalog,
+        is_market_model_quantified,
+        is_market_model_strict_ready,
+    )
+
 
 ROOT = Path(__file__).resolve().parents[1]
 DATASET_PATH = ROOT / "data" / "records.csv"
@@ -54,7 +67,14 @@ def load_country_energy_mix():
 
 def load_market_models():
     with MARKET_MODELS_PATH.open("r", encoding="utf-8", newline="") as handle:
-        return [row for row in csv.DictReader(handle)]
+        return annotate_market_catalog(list(csv.DictReader(handle)))
+
+
+def load_quantified_market_models(scope="partial"):
+    rows = load_market_models()
+    if scope == "strict":
+        return [row for row in rows if is_market_model_strict_ready(row)]
+    return [row for row in rows if is_market_model_quantified(row)]
 
 
 def load_extrapolation_rules():
@@ -246,21 +266,45 @@ def get_model_profile(model_id=None, provider=None, estimated_active_parameters_
         aliases.extend(normalize_identifier(part) for part in profile.get("aliases", "").split("|") if part.strip())
         if normalized_model and normalized_model in aliases:
             result = dict(profile)
+            market_profile = get_market_model_profile(profile.get("model_id"), scope="partial")
+            if market_profile:
+                for key in (
+                    "parameter_source_audit",
+                    "benchmark_readiness",
+                    "quantification_tier",
+                    "quantification_note",
+                    "quantification_donor_models",
+                    "benchmark_exclusion_reason",
+                ):
+                    result[key] = market_profile.get(key)
             result["matching_strategy"] = "model_id"
             return result
 
-    market_profile = get_market_model_profile(model_id)
-    if market_profile:
-        return build_reference_profile_from_market_profile(market_profile, "market_model_id")
+    tracked_market_profile = get_market_model_profile(model_id, scope="partial")
+    if tracked_market_profile:
+        if is_market_model_quantified(tracked_market_profile):
+            return build_reference_profile_from_market_profile(tracked_market_profile, "market_model_id")
+        return build_unbenchmarkable_reference_profile(tracked_market_profile, "tracked_market_model")
 
     if not normalized_model:
         for profile in load_models():
             if normalized_provider and normalize_identifier(profile.get("provider")) == normalized_provider:
                 result = dict(profile)
+                market_profile = get_market_provider_profile(profile.get("provider"), scope="partial")
+                if market_profile:
+                    for key in (
+                        "parameter_source_audit",
+                        "benchmark_readiness",
+                        "quantification_tier",
+                        "quantification_note",
+                        "quantification_donor_models",
+                        "benchmark_exclusion_reason",
+                    ):
+                        result[key] = market_profile.get(key)
                 result["matching_strategy"] = "provider_family"
                 return result
 
-    market_provider_profile = get_market_provider_profile(provider)
+    market_provider_profile = get_market_provider_profile(provider, scope="partial")
     if market_provider_profile:
         return build_reference_profile_from_market_profile(market_provider_profile, "provider_market_family")
 
@@ -278,6 +322,38 @@ def build_reference_profile_from_market_profile(profile, matching_strategy):
         "parameter_source": profile.get("parameter_source"),
         "parameter_source_url": profile.get("parameter_source_url"),
         "notes": profile.get("notes"),
+        "parameter_source_audit": profile.get("parameter_source_audit"),
+        "benchmark_readiness": profile.get("benchmark_readiness"),
+        "quantification_tier": profile.get("quantification_tier"),
+        "quantification_note": profile.get("quantification_note"),
+        "quantification_donor_models": profile.get("quantification_donor_models"),
+        "benchmark_exclusion_reason": profile.get("benchmark_exclusion_reason"),
+        "matching_strategy": matching_strategy,
+    }
+
+
+def build_unbenchmarkable_reference_profile(profile, matching_strategy):
+    notes = str(profile.get("notes", "") or "").strip()
+    exclusion_reason = str(profile.get("benchmark_exclusion_reason", "") or "").strip()
+    combined_notes = notes
+    if exclusion_reason:
+        combined_notes = f"{notes} Benchmark excluded: {exclusion_reason}".strip()
+    return {
+        "model_id": profile.get("model_id"),
+        "provider": profile.get("provider"),
+        "active_parameters_billion": "",
+        "total_parameters_billion": "",
+        "parameter_value_status": profile.get("parameter_value_status"),
+        "parameter_confidence": profile.get("parameter_confidence"),
+        "parameter_source": profile.get("parameter_source"),
+        "parameter_source_url": profile.get("parameter_source_url"),
+        "notes": combined_notes,
+        "parameter_source_audit": profile.get("parameter_source_audit"),
+        "benchmark_readiness": profile.get("benchmark_readiness"),
+        "quantification_tier": profile.get("quantification_tier"),
+        "quantification_note": profile.get("quantification_note"),
+        "quantification_donor_models": profile.get("quantification_donor_models"),
+        "benchmark_exclusion_reason": exclusion_reason,
         "matching_strategy": matching_strategy,
     }
 
@@ -321,11 +397,15 @@ def get_record_country_mix(record):
     return None
 
 
-def get_market_model_profile(model_id):
+def get_market_model_profile(model_id, scope="strict"):
     normalized_model = normalize_identifier(model_id)
     if not normalized_model:
         return None
     for profile in load_market_models():
+        if scope == "strict" and not is_market_model_strict_ready(profile):
+            continue
+        if scope == "partial" and not is_market_model_quantified(profile):
+            continue
         aliases = [normalize_identifier(profile.get("model_id"))]
         aliases.extend(normalize_identifier(part) for part in profile.get("display_name", "").split("|") if part.strip())
         aliases.extend(normalize_identifier(part) for part in profile.get("reference_aliases", "").split("|") if part.strip())
@@ -334,13 +414,17 @@ def get_market_model_profile(model_id):
     return None
 
 
-def get_market_provider_profile(provider):
+def get_market_provider_profile(provider, scope="strict"):
     normalized_provider = normalize_identifier(provider)
     if not normalized_provider:
         return None
     candidates = []
     for profile in load_market_models():
         if normalize_identifier(profile.get("provider")) != normalized_provider:
+            continue
+        if scope == "strict" and not is_market_model_strict_ready(profile):
+            continue
+        if scope == "partial" and not is_market_model_quantified(profile):
             continue
         candidates.append(dict(profile))
     if not candidates:
@@ -364,9 +448,9 @@ def get_market_provider_profile(provider):
 def resolve_inference_country_mix(payload):
     explicit_country = payload.get("country")
     explicit_mix = get_country_mix(explicit_country) if explicit_country else None
-    market_profile = get_market_model_profile(payload.get("model_id"))
+    market_profile = get_market_model_profile(payload.get("model_id"), scope="partial")
     if not market_profile:
-        market_profile = get_market_provider_profile(payload.get("provider"))
+        market_profile = get_market_provider_profile(payload.get("provider"), scope="partial")
     deployment_mode = normalize_identifier(payload.get("deployment_mode"))
 
     if not market_profile:
@@ -855,8 +939,16 @@ def build_inference_method_set(records, payload):
     ]
     if target_params is not None:
         assumptions.append(f"Model-size scaling enabled with target profile at {target_params:g}B active parameters")
+        if (model_profile or {}).get("quantification_tier") == "partial_data_benchmark":
+            assumptions.append(
+                "The retained parameter basis comes from a partial-data donor prior derived from benchmark-ready market models that share sourced metadata with the requested model."
+            )
     else:
         assumptions.append("No parameter count available for the target model; parametric scaling disabled")
+        if (model_profile or {}).get("quantification_tier") == "tracked_only":
+            assumptions.append(
+                "The requested model is tracked in the market catalog but excluded from the quantitative benchmark because no traceable parameter count is available; the estimate therefore falls back to non-parametric literature anchors."
+            )
     if country_mix:
         if country_resolution == "publisher_country":
             assumptions.append(
@@ -891,7 +983,7 @@ def build_inference_method_set(records, payload):
         else:
             assumptions.append("Page-family method marked as not applicable for this scenario by the parser")
 
-    exact_market_profile = get_market_model_profile(payload.get("model_id"))
+    exact_market_profile = get_market_model_profile(payload.get("model_id"), scope="partial")
     multifactor_profile = dict(exact_market_profile) if exact_market_profile else None
     if not multifactor_profile and target_params not in (None, 0):
         inferred_serving_mode = "closed" if country_resolution == "publisher_country" else "open"
@@ -1208,6 +1300,11 @@ def estimate_externalities(records, payload):
     requests_count = to_float(payload.get("requests_count", 1.0), default=1.0)
     input_tokens = to_float(payload.get("input_tokens", 0.0), default=0.0)
     output_tokens = to_float(payload.get("output_tokens", 0.0), default=0.0)
+    model_profile = get_model_profile(
+        model_id=payload.get("model_id"),
+        provider=payload.get("provider"),
+        estimated_active_parameters_billion=payload.get("estimated_active_parameters_billion"),
+    )
     country_mix, country_resolution, market_profile = resolve_inference_country_mix(payload)
     grid_carbon_intensity = to_float(payload.get("grid_carbon_intensity_gco2_per_kwh"), default=None)
     water_intensity = to_float(payload.get("water_intensity_l_per_kwh"), default=None)
@@ -1268,6 +1365,14 @@ def estimate_externalities(records, payload):
         )
     else:
         assumptions.append("No token counts provided; literature factors used without prompt-size scaling")
+    if (model_profile or {}).get("quantification_tier") == "tracked_only":
+        assumptions.append(
+            "The requested model is tracked in the market catalog but excluded from the quantitative benchmark because no traceable parameter count is available; the estimate therefore falls back to non-parametric literature anchors."
+        )
+    elif (model_profile or {}).get("quantification_tier") == "partial_data_benchmark":
+        assumptions.append(
+            "The requested model uses a partial-data donor prior derived from benchmark-ready market models with comparable sourced metadata."
+        )
 
     assumptions.append(f"Request type classified as {request_type}")
     if country_mix:
@@ -1357,11 +1462,7 @@ def estimate_externalities(records, payload):
         "uncertainty_level": uncertainty_level,
         "applicability_note": applicability_note,
         "method": "literature_proxy",
-        "model_profile": get_model_profile(
-            model_id=payload.get("model_id"),
-            provider=payload.get("provider"),
-            estimated_active_parameters_billion=payload.get("estimated_active_parameters_billion"),
-        ),
+        "model_profile": model_profile,
         "country_energy_mix": country_mix,
         "country_resolution": country_resolution,
         "market_model_profile": market_profile,
@@ -1378,9 +1479,9 @@ def predict_inference_externalities(records, payload):
     return build_inference_method_set(records, payload)
 
 
-def build_market_model_predictions(records):
+def build_market_model_predictions(records, scope="partial"):
     predictions = []
-    for row in load_market_models():
+    for row in load_quantified_market_models(scope=scope):
         active_parameters = to_float(row.get("active_parameters_billion"), default=None)
         payload = {
             "scenario_id": f"market-{row.get('model_id')}",
@@ -1412,7 +1513,7 @@ def build_market_model_predictions(records):
                 },
                 "estimate_status": "estimated",
                 "estimate_method": estimate.get("method"),
-                "evidence_level": "measured_proxy" if active_parameters is not None else "generic_proxy",
+                "evidence_level": row.get("quantification_tier") or ("measured_proxy" if active_parameters is not None else "generic_proxy"),
                 "per_request_energy_wh": estimate.get("per_request_llm", {}).get("energy_wh", {}),
                 "per_request_carbon_gco2e": estimate.get("per_request_llm", {}).get("carbon_gco2e", {}),
                 "per_request_water_ml": estimate.get("per_request_llm", {}).get("water_ml", {}),
@@ -1433,6 +1534,26 @@ def parse_market_bool(value):
     return normalize_identifier(value) in {"yes", "true", "1"}
 
 
+def quantified_market_active_parameters_billion(row, scenario="central"):
+    quantified = to_float(row.get(f"quantified_active_parameters_billion_{scenario}"), default=None)
+    if quantified not in (None, 0):
+        return quantified
+    return to_float(row.get("active_parameters_billion"), default=None)
+
+
+def quantified_market_total_parameters_billion(row, scenario="central"):
+    quantified = to_float(row.get(f"quantified_total_parameters_billion_{scenario}"), default=None)
+    if quantified not in (None, 0):
+        return quantified
+    quantified_central = to_float(row.get("quantified_total_parameters_billion_central"), default=None)
+    if quantified_central not in (None, 0):
+        return quantified_central
+    total = to_float(row.get("total_parameters_billion"), default=None)
+    if total not in (None, 0):
+        return total
+    return quantified_market_active_parameters_billion(row, scenario=scenario)
+
+
 def market_context_factor(context_window_tokens, scenario="central"):
     context_tokens = to_float(context_window_tokens, default=131072.0)
     coefficients = {
@@ -1451,6 +1572,7 @@ def market_serving_factor(serving_mode, scenario="central"):
         "open": {"low": 1.0, "central": 1.0, "high": 1.02},
         "hybrid": {"low": 1.03, "central": 1.07, "high": 1.1},
         "closed": {"low": 1.08, "central": 1.14, "high": 1.2},
+        "research": {"low": 1.08, "central": 1.14, "high": 1.2},
     }
     bucket = factors.get(normalized, {"low": 1.02, "central": 1.05, "high": 1.1})
     return bucket.get(scenario, bucket["central"])
@@ -1468,8 +1590,8 @@ def market_modality_factor(row, scenario="central"):
 
 
 def market_architecture_factor(row, scenario="central"):
-    active = to_float(row.get("active_parameters_billion"), default=None)
-    total = to_float(row.get("total_parameters_billion"), default=active)
+    active = quantified_market_active_parameters_billion(row, scenario=scenario)
+    total = quantified_market_total_parameters_billion(row, scenario=scenario)
     if active in (None, 0):
         return 1.0
     total = total or active
@@ -1508,8 +1630,8 @@ def market_token_factor(input_tokens, output_tokens, scenario="central"):
 
 
 def compute_market_screening_proxy(row, input_tokens=None, output_tokens=None, requests_per_hour=None):
-    active = to_float(row.get("active_parameters_billion"), default=None)
-    if active in (None, 0):
+    active_central = quantified_market_active_parameters_billion(row, scenario="central")
+    if active_central in (None, 0):
         return None
 
     if input_tokens is None:
@@ -1525,7 +1647,9 @@ def compute_market_screening_proxy(row, input_tokens=None, output_tokens=None, r
     ranges = {}
     effective_params = {}
     for scenario, exponent in (("low", 0.85), ("central", 0.95), ("high", 1.05)):
-        effective_active = active
+        effective_active = quantified_market_active_parameters_billion(row, scenario=scenario)
+        if effective_active in (None, 0):
+            return None
         effective_active *= market_context_factor(row.get("context_window_tokens"), scenario=scenario)
         effective_active *= market_serving_factor(row.get("serving_mode"), scenario=scenario)
         effective_active *= market_modality_factor(row, scenario=scenario)
@@ -1585,18 +1709,18 @@ def compute_market_screening_proxy(row, input_tokens=None, output_tokens=None, r
         ),
     }
 
-def training_parameter_count_billion(row):
-    total = to_float(row.get("total_parameters_billion"), default=None)
+def training_parameter_count_billion(row, scenario="central"):
+    total = quantified_market_total_parameters_billion(row, scenario=scenario)
     if total not in (None, 0):
         return total
-    return to_float(row.get("active_parameters_billion"), default=None)
+    return quantified_market_active_parameters_billion(row, scenario=scenario)
 
 
-def training_tokens_estimate_trillion(row):
+def training_tokens_estimate_trillion(row, scenario="central"):
     explicit = to_float(row.get("training_tokens_estimate_trillion"), default=None)
     if explicit not in (None, 0):
         return explicit
-    params = training_parameter_count_billion(row)
+    params = training_parameter_count_billion(row, scenario=scenario)
     if params in (None, 0):
         return None
     return round((params * TRAINING_REFERENCE_TOKENS_PER_PARAMETER) / 1000.0, 4)
@@ -1795,12 +1919,12 @@ def retain_comparable_training_anchors(anchors, target_params):
     return ranked[: min(3, len(ranked))]
 
 
-def build_training_market_predictions(records):
+def build_training_market_predictions(records, scope="partial"):
     anchors_by_family = build_training_prediction_anchors(records)
     predictions = []
-    for row in load_market_models():
-        target_params = training_parameter_count_billion(row)
-        target_tokens = training_tokens_estimate_trillion(row)
+    for row in load_quantified_market_models(scope=scope):
+        target_params = training_parameter_count_billion(row, scenario="central")
+        target_tokens = training_tokens_estimate_trillion(row, scenario="central")
         training_regime = str(row.get("training_regime") or "unknown").strip().lower() or "unknown"
         hardware_class = str(row.get("training_hardware_class_proxy") or "unknown").strip().lower() or "unknown"
         family_results = {}
@@ -1813,7 +1937,11 @@ def build_training_market_predictions(records):
             "factors": {},
         }
         for scenario, alpha, beta in (("low", 0.85, 0.70), ("central", 1.00, 1.00), ("high", 1.15, 1.20)):
+            scenario_params = training_parameter_count_billion(row, scenario=scenario)
+            scenario_tokens = training_tokens_estimate_trillion(row, scenario=scenario)
             proxy_profile["factors"][scenario] = {
+                "parameter_basis_billion": round(scenario_params, 4) if scenario_params not in (None, 0) else None,
+                "token_basis_trillion": round(scenario_tokens, 4) if scenario_tokens not in (None, 0) else None,
                 "parameter_exponent": alpha,
                 "token_exponent": beta,
                 "regime_factor": round(training_regime_factor(training_regime, scenario=scenario), 4),
@@ -1840,9 +1968,11 @@ def build_training_market_predictions(records):
                 retained_anchors.append({**anchor, "source_tokens_trillion": source_tokens})
                 for scenario, alpha, beta in (("low", 0.85, 0.70), ("central", 1.00, 1.00), ("high", 1.15, 1.20)):
                     profile = proxy_profile["factors"][scenario]
+                    scenario_target_params = to_float(profile.get("parameter_basis_billion"), default=target_params)
+                    scenario_target_tokens = to_float(profile.get("token_basis_trillion"), default=target_tokens)
                     estimate = anchor["source_value"]
-                    estimate *= (target_params / source_params) ** alpha
-                    estimate *= (target_tokens / source_tokens) ** beta
+                    estimate *= (scenario_target_params / source_params) ** alpha
+                    estimate *= (scenario_target_tokens / source_tokens) ** beta
                     estimate *= profile["regime_factor"]
                     estimate *= profile["architecture_factor"]
                     estimate *= profile["hardware_factor"]

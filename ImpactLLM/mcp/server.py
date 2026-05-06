@@ -18,6 +18,7 @@ from core.estimator import (
     list_sources,
     load_country_energy_mix,
     load_extrapolation_rules,
+    load_market_models,
     load_models,
     load_records,
     predict_inference_externalities,
@@ -199,7 +200,23 @@ def handle_call(name, arguments):
         return make_text_payload({"models": load_models()})
 
     if name == "list_market_models":
-        return make_text_payload({"market_models": build_market_model_predictions(records)})
+        all_rows = build_market_model_predictions(records, scope="partial")
+        strict_rows = build_market_model_predictions(records, scope="strict")
+        partial_rows = [row for row in all_rows if row.get("quantification_tier") == "partial_data_benchmark"]
+        tracked_rows = [row for row in load_market_models() if row.get("benchmark_included") != "yes"]
+        return make_text_payload(
+            {
+                "market_models": all_rows,
+                "strict_market_models": strict_rows,
+                "partial_data_market_models": partial_rows,
+                "tracked_only_market_models": tracked_rows,
+                "market_model_count": len(all_rows),
+                "benchmark_count": len(all_rows),
+                "strict_count": len(strict_rows),
+                "partial_data_count": len(partial_rows),
+                "tracked_only_count": len(tracked_rows),
+            }
+        )
 
     if name == "get_model_profile":
         return make_text_payload({"model_profile": get_model_profile(model_id=arguments["model_id"])})

@@ -12,6 +12,7 @@ from core.estimator import (
     MARKET_REFERENCE_REQUESTS_PER_HOUR,
     build_market_model_predictions,
     build_training_market_predictions,
+    load_market_models,
     load_records,
 )
 
@@ -29,6 +30,14 @@ def format_float(value):
 
 def update_inference_columns(row, prediction):
     if not prediction:
+        for scenario in ("low", "central", "high"):
+            row[f"screening_per_request_energy_wh_{scenario}"] = ""
+            row[f"screening_per_request_carbon_gco2e_{scenario}"] = ""
+            row[f"screening_per_hour_energy_wh_{scenario}"] = ""
+            row[f"screening_per_hour_carbon_gco2e_{scenario}"] = ""
+            row[f"screening_effective_active_parameters_billion_{scenario}"] = ""
+        row["screening_reference_anchor"] = ""
+        row["screening_notes"] = ""
         return
 
     per_request_energy = prediction.get("per_request_energy_wh") or {}
@@ -61,6 +70,12 @@ def update_inference_columns(row, prediction):
 
 def update_training_factors(row, prediction):
     if not prediction:
+        for scenario in ("low", "central", "high"):
+            row[f"training_f_params_{scenario}"] = ""
+            row[f"training_f_tokens_{scenario}"] = ""
+            row[f"training_f_regime_{scenario}"] = ""
+            row[f"training_f_arch_{scenario}"] = ""
+            row[f"training_f_hardware_{scenario}"] = ""
         return
 
     factors = prediction.get("training_proxy_profile", {}).get("factors", {})
@@ -75,6 +90,11 @@ def update_training_factors(row, prediction):
 
 def update_training_estimates(row, prediction):
     if not prediction:
+        for scenario in ("low", "central", "high"):
+            row[f"training_energy_wh_{scenario}"] = ""
+            row[f"training_carbon_tco2e_{scenario}"] = ""
+        row["training_multifactor_anchor"] = ""
+        row["training_multifactor_notes"] = ""
         return
 
     results = prediction.get("training_results_by_id", {})
@@ -110,6 +130,11 @@ def main():
         rows = [dict(row) for row in reader]
 
     records = load_records()
+    annotated_by_id = {
+        row["model_id"]: row
+        for row in load_market_models()
+        if row.get("model_id")
+    }
     inference_predictions = build_market_model_predictions(records)
     training_predictions = build_training_market_predictions(records)
     inference_by_id = {pred["model_id"]: pred for pred in inference_predictions}
@@ -117,6 +142,19 @@ def main():
 
     for row in rows:
         model_id = row.get("model_id")
+        annotated = annotated_by_id.get(model_id)
+        if annotated:
+            for field in (
+                "active_parameters_billion",
+                "total_parameters_billion",
+                "parameter_value_status",
+                "parameter_confidence",
+                "parameter_source",
+                "parameter_source_url",
+                "notes",
+            ):
+                if field in row:
+                    row[field] = annotated.get(field) or ""
         update_inference_columns(row, inference_by_id.get(model_id))
         training_prediction = training_by_id.get(model_id)
         update_training_factors(row, training_prediction)

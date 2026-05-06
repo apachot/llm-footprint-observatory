@@ -226,26 +226,26 @@ REAL_WORLD_INDICATOR_ROWS = [
     },
     {
         "domain": "Energy",
-        "indicator": "Microwave oven for 6 minutes",
-        "value": "100 Wh",
+        "indicator": "Laptop for 5 hours",
+        "value": "160 Wh",
+        "citation": "Carroll, N. J., & Kruse, J. (n.d.). Energy investigators 2: Facilitator’s guide. Purdue Extension. https://www.extension.purdue.edu/extmedia/4H/4-H-1015-W.pdf",
+        "locator": "Project derivation from the Purdue laptop example retained at 32 Wh for 1 hour, rescaled here to 5 hours of use.",
+        "url": "https://www.extension.purdue.edu/extmedia/4H/4-H-1015-W.pdf",
+    },
+    {
+        "domain": "Energy",
+        "indicator": "Electric kettle for 7 minutes",
+        "value": "210 Wh",
         "citation": "Project calculation convention.",
-        "locator": "Nominal power assumption fixed at 1,000 W, i.e. 100 Wh for 6 minutes of use.",
+        "locator": "Nominal power assumption fixed at 1,800 W, i.e. 210 Wh for 7 minutes of use.",
         "url": "",
     },
     {
         "domain": "Energy",
-        "indicator": "Electric kettle for 3.5 minutes",
-        "value": "105 Wh",
+        "indicator": "Electric space heater for 10 minutes",
+        "value": "250 Wh",
         "citation": "Project calculation convention.",
-        "locator": "Nominal power assumption fixed at 1,800 W, i.e. 105 Wh for 3.5 minutes of use.",
-        "url": "",
-    },
-    {
-        "domain": "Energy",
-        "indicator": "Electric space heater for 4.1 minutes",
-        "value": "103.5 Wh",
-        "citation": "Project calculation convention.",
-        "locator": "Project derivation from the retained 1,500 W space-heater convention, rescaled to 4.1 minutes of use.",
+        "locator": "Project derivation from the retained 1,500 W space-heater convention, rescaled to 10 minutes of use.",
         "url": "",
     },
     {
@@ -266,10 +266,10 @@ REAL_WORLD_INDICATOR_ROWS = [
     },
     {
         "domain": "Carbon",
-        "indicator": "Average gasoline car for 170 m",
-        "value": "40.0 gCO2e",
+        "indicator": "Average gasoline car for 430 m",
+        "value": "101.1 gCO2e",
         "citation": "International Council on Clean Transportation. (2025). Life-cycle greenhouse gas emissions from passenger cars in the European Union: A 2025 update and key factors to consider. https://theicct.org/publication/electric-cars-life-cycle-analysis-emissions-europe-jul25/",
-        "locator": "Project derivation from the ICCT benchmark of 235 gCO2e/km for an average gasoline car, rescaled here to 170 meters to align with the upper-end proprietary inference tier retained in the current comparison.",
+        "locator": "Project derivation from the ICCT benchmark of 235 gCO2e/km for an average gasoline car, rescaled here to 430 meters to align with the current upper-end inference carbon tier retained in the comparison.",
         "url": "https://theicct.org/publication/electric-cars-life-cycle-analysis-emissions-europe-jul25/",
     },
     {
@@ -343,40 +343,40 @@ INFERENCE_CHART_REFERENCE_ROWS = [
         "page_carbon_gco2e": 0.0,
     },
     {
-        "label": "Microwave oven 6 min",
+        "label": "Laptop 5 h",
         "provider": "Everyday benchmark",
         "kind": "reference",
-        "prompt_energy_wh": 100.0,
-        "page_energy_wh": 100.0,
+        "prompt_energy_wh": 160.0,
+        "page_energy_wh": 160.0,
         "prompt_carbon_gco2e": 0.0,
         "page_carbon_gco2e": 0.0,
     },
     {
-        "label": "Electric kettle 3.5 min",
+        "label": "Electric kettle 7 min",
         "provider": "Everyday benchmark",
         "kind": "reference",
-        "prompt_energy_wh": 105.0,
-        "page_energy_wh": 105.0,
+        "prompt_energy_wh": 210.0,
+        "page_energy_wh": 210.0,
         "prompt_carbon_gco2e": 0.0,
         "page_carbon_gco2e": 0.0,
     },
     {
-        "label": "Electric heater 4.1 min",
+        "label": "Electric heater 10 min",
         "provider": "Everyday benchmark",
         "kind": "reference",
-        "prompt_energy_wh": 103.5,
-        "page_energy_wh": 103.5,
+        "prompt_energy_wh": 250.0,
+        "page_energy_wh": 250.0,
         "prompt_carbon_gco2e": 0.0,
         "page_carbon_gco2e": 0.0,
     },
     {
-        "label": "Average gasoline car 170 m",
+        "label": "Average gasoline car 430 m",
         "provider": "Everyday benchmark",
         "kind": "reference",
         "prompt_energy_wh": 0.0,
         "page_energy_wh": 0.0,
-        "prompt_carbon_gco2e": 40.0,
-        "page_carbon_gco2e": 40.0,
+        "prompt_carbon_gco2e": 101.1,
+        "page_carbon_gco2e": 101.1,
     },
     {
         "label": "Average gasoline car 1 km",
@@ -1739,7 +1739,10 @@ def build_site_bibliography_entries():
 def render_bibliography_tab():
     reference_sections = render_reference_catalog_sections()
     country_rows = load_country_energy_mix()
-    market_model_rows = load_market_models()
+    market_model_rows = [row for row in load_market_models() if row.get("benchmark_included") == "yes"]
+    strict_market_rows_count = sum(1 for row in market_model_rows if row.get("quantification_tier") == "strict_benchmark")
+    partial_market_rows_count = sum(1 for row in market_model_rows if row.get("quantification_tier") == "partial_data_benchmark")
+    tracked_rows = tracked_only_market_rows()
     if not reference_sections:
         return ""
     factor_source_entries = []
@@ -1775,6 +1778,24 @@ def render_bibliography_tab():
             )
         entry = factor_source_index[key]
         return f' <a class="inline-ref" href="#{escape(entry["anchor_id"], quote=True)}">[{entry["number"]}]</a>'
+
+    def is_project_screening_citation(citation):
+        source_citation = str(citation or "").strip()
+        return (
+            source_citation.startswith("Project screening")
+            or source_citation.startswith("Project frontier")
+            or source_citation.startswith("Internal approximate profile")
+            or source_citation.startswith("Partial-data donor prior")
+            or source_citation.startswith("ImpactLLM method note")
+        )
+
+    def is_screening_status(status):
+        return str(status or "").strip().lower() == "screening_prior"
+
+    def render_training_value_with_source(display_html, *, is_screening, category, citation, url):
+        if is_screening:
+            return f"{display_html}*"
+        return f"{display_html}{register_factor_source(category, citation, url)}"
 
     visible_real_world_rows = [entry for entry in REAL_WORLD_INDICATOR_ROWS if entry.get("domain") != "Water"]
     real_world_rows = "".join(
@@ -1850,21 +1871,65 @@ def render_bibliography_tab():
         training_regime = str(row.get("training_regime", "n.d.") or "n.d.")
         training_hardware = str(row.get("training_hardware_class_proxy", "n.d.") or "n.d.")
         training_multimodal = "yes" if parse_market_bool(row.get("training_multimodal")) else "no"
-        training_param_ref = register_factor_source("Training parameters", row.get("parameter_source"), row.get("parameter_source_url"))
-        training_tokens_ref = register_factor_source("Training tokens", row.get("training_tokens_source"), row.get("training_tokens_source_url"))
-        training_regime_ref = register_factor_source("Training regime", row.get("training_regime_source"), row.get("training_regime_source_url"))
-        training_modality_ref = register_factor_source("Training modality", row.get("training_multimodal_source"), row.get("training_multimodal_source_url"))
-        training_hardware_ref = register_factor_source("Training hardware", row.get("training_hardware_source"), row.get("training_hardware_source_url"))
+        training_param_screening = (
+            str(row.get("parameter_source_audit", "") or "").strip().lower() == "partial_data_prior"
+            or is_project_screening_citation(row.get("parameter_source"))
+        )
+        training_tokens_screening = (
+            is_screening_status(row.get("training_tokens_status"))
+            or is_project_screening_citation(row.get("training_tokens_source"))
+        )
+        training_regime_screening = (
+            is_screening_status(row.get("training_regime_status"))
+            or is_project_screening_citation(row.get("training_regime_source"))
+        )
+        training_modality_screening = is_project_screening_citation(row.get("training_multimodal_source"))
+        training_hardware_screening = is_project_screening_citation(row.get("training_hardware_source"))
+        training_param_cell = render_training_value_with_source(
+            f"{escape(format_scalar(training_params))}B",
+            is_screening=training_param_screening,
+            category="Training parameters",
+            citation=row.get("parameter_source"),
+            url=row.get("parameter_source_url"),
+        )
+        training_tokens_cell = render_training_value_with_source(
+            f"{training_tokens:,.2f}T",
+            is_screening=training_tokens_screening,
+            category="Training tokens",
+            citation=row.get("training_tokens_source"),
+            url=row.get("training_tokens_source_url"),
+        )
+        training_regime_cell = render_training_value_with_source(
+            escape(training_regime),
+            is_screening=training_regime_screening,
+            category="Training regime",
+            citation=row.get("training_regime_source"),
+            url=row.get("training_regime_source_url"),
+        )
+        training_modality_cell = render_training_value_with_source(
+            training_multimodal,
+            is_screening=training_modality_screening,
+            category="Training modality",
+            citation=row.get("training_multimodal_source"),
+            url=row.get("training_multimodal_source_url"),
+        )
+        training_hardware_cell = render_training_value_with_source(
+            escape(training_hardware),
+            is_screening=training_hardware_screening,
+            category="Training hardware",
+            citation=row.get("training_hardware_source"),
+            url=row.get("training_hardware_source_url"),
+        )
         training_factor_table_rows.append(
             f"""
         <tr>
           <td>{render_model_detail_trigger(row)}</td>
           <td>{escape(row.get('provider', 'n.d.') or 'n.d.')}</td>
-          <td>{escape(format_scalar(training_params))}B{training_param_ref}</td>
-          <td>{training_tokens:,.2f}T{training_tokens_ref}</td>
-          <td>{escape(training_regime)}{training_regime_ref}</td>
-          <td>{training_multimodal}{training_modality_ref}</td>
-          <td>{escape(training_hardware)}{training_hardware_ref}</td>
+          <td>{training_param_cell}</td>
+          <td>{training_tokens_cell}</td>
+          <td>{training_regime_cell}</td>
+          <td>{training_modality_cell}</td>
+          <td>{training_hardware_cell}</td>
           <td>{escape(str(row.get('training_f_regime_central', 'n.d.') or 'n.d.'))}</td>
           <td>{escape(str(row.get('training_f_arch_central', 'n.d.') or 'n.d.'))}</td>
           <td>{escape(str(row.get('training_f_hardware_central', 'n.d.') or 'n.d.'))}</td>
@@ -1881,6 +1946,30 @@ def render_bibliography_tab():
         """
         for entry in factor_source_entries
     )
+    tracked_bibliography_block = ""
+    if tracked_rows:
+        tracked_bibliography_block = f"""
+        <div class="reference-subtable">
+          <h4>Tracked market models excluded from the public quantitative benchmark</h4>
+          <div class="reference-copy-block">
+            <p class="summary-intro">The rows below remain tracked for release monitoring and source collection, but they are excluded from the quantitative benchmark because the project does not retain a source-linked parameter count for them.</p>
+          </div>
+          <div class="reference-table-wrap">
+            <table class="reference-table">
+              <thead>
+                <tr>
+                  <th>Model</th>
+                  <th>Provider</th>
+                  <th>Release date</th>
+                  <th>Parameter basis</th>
+                  <th>Exclusion reason</th>
+                </tr>
+              </thead>
+              <tbody>{build_tracked_only_market_table_body(tracked_rows)}</tbody>
+            </table>
+          </div>
+        </div>
+        """
 
     return f"""
     <section class="tab-panel" id="tab-bibliography-panel" data-tab-panel="bibliography">
@@ -1927,7 +2016,7 @@ def render_bibliography_tab():
         <div class="reference-subtable" id="market-screening-factors">
           <h4>Central screening factors retained for market models</h4>
           <div class="reference-copy-block">
-            <p class="summary-intro">This table documents the central values retained by the project for the multi-factor prompt proxy of each catalog model: raw active parameters, context window, serving mode, modality support, the resulting central factors <code>F_ctx</code>, <code>F_srv</code>, <code>F_mod</code>, <code>F_arch</code>, and the resulting central effective active-parameter proxy <code>P_eff,c</code>. These are project screening factors, not provider-published measurements.</p>
+            <p class="summary-intro">This table documents the central values retained by the project for the multi-factor prompt proxy of each quantified market model: raw active parameters, context window, serving mode, modality support, the resulting central factors <code>F_ctx</code>, <code>F_srv</code>, <code>F_mod</code>, <code>F_arch</code>, and the resulting central effective active-parameter proxy <code>P_eff,c</code>. The current annex covers <strong>{strict_market_rows_count}</strong> strict rows and <strong>{partial_market_rows_count}</strong> partial-data rows derived from donor models with sourced parameter counts.</p>
           </div>
           <div class="reference-table-wrap">
             <table class="reference-table">
@@ -1956,7 +2045,7 @@ def render_bibliography_tab():
         <div class="reference-subtable" id="market-training-screening-factors">
           <h4>Central training screening factors retained for market models</h4>
           <div class="reference-copy-block">
-            <p class="summary-intro">This table documents the central values retained by the project for the multi-factor training proxy of each catalog model: retained training parameter count, training-token prior, training regime, multimodal training flag, hardware-class proxy, and the resulting central factors <code>F_reg</code>, <code>F_arch-tr</code>, and <code>F_hw</code>. These are project screening factors, not provider-published measurements. When a field is retained as an estimate or screening prior, its citation anchors the release line or methodological basis rather than an exact provider-published numeric value.</p>
+            <p class="summary-intro">This table documents the central values retained by the project for the multi-factor training proxy of each quantified market model: retained training parameter count, training-token prior, training regime, multimodal training flag, hardware-class proxy, and the resulting central factors <code>F_reg</code>, <code>F_arch-tr</code>, and <code>F_hw</code>. These are project screening factors, not provider-published measurements. When a field is retained as an estimate or screening prior, its citation anchors the release line or methodological basis rather than an exact provider-published numeric value.</p>
           </div>
           <div class="reference-table-wrap">
             <table class="reference-table">
@@ -1979,7 +2068,10 @@ def render_bibliography_tab():
               </tbody>
             </table>
           </div>
+          <p class="summary-intro" data-i18n-html="training-screening-asterisk-note"><code>*</code> indicates a value retained from the project's screening rather than directly linked to an external source in this table.</p>
         </div>
+
+        {tracked_bibliography_block}
 
         <div class="reference-subtable">
           <h4>Numbered source list for retained screening characteristics</h4>
@@ -2340,6 +2432,15 @@ def format_model_field_status(value):
         "observed": "Observed",
         "documented": "Documented",
         "estimated": "Estimated",
+        "exact_in_cited_source": "Exact in cited source",
+        "derivable_from_cited_source": "Derived from cited source",
+        "third_party_estimate": "Third-party estimate",
+        "partial_data_prior": "Partial-data donor prior",
+        "project_proxy_no_url": "Legacy unsourced project proxy",
+        "internal_proxy_no_url": "Legacy unsourced internal proxy",
+        "strict_benchmark": "Strict benchmark",
+        "partial_data_benchmark": "Partial-data benchmark",
+        "tracked_only": "Tracked, not quantified",
         "screening_prior": "Screening prior",
         "screening_proxy": "Screening proxy",
         "provider_country_proxy": "Provider-country proxy",
@@ -2363,6 +2464,56 @@ def format_model_field_status(value):
         "older_or_unknown_cluster": "Older or unknown cluster",
     }
     return labels.get(str(value or "").strip(), str(value or "n.d.").replace("_", " ").title())
+
+
+def strict_market_rows():
+    rows = [row for row in load_market_models() if row.get("quantification_tier") == "strict_benchmark"]
+    return sorted(
+        rows,
+        key=lambda item: (
+            str(item.get("provider", "") or "").lower(),
+            str(item.get("display_name", "") or item.get("model_id", "") or "").lower(),
+        ),
+    )
+
+
+def partial_data_market_rows():
+    rows = [row for row in load_market_models() if row.get("quantification_tier") == "partial_data_benchmark"]
+    return sorted(
+        rows,
+        key=lambda item: (
+            str(item.get("provider", "") or "").lower(),
+            str(item.get("display_name", "") or item.get("model_id", "") or "").lower(),
+        ),
+    )
+
+
+def tracked_only_market_rows():
+    rows = [row for row in load_market_models() if row.get("benchmark_included") != "yes"]
+    return sorted(
+        rows,
+        key=lambda item: (
+            str(item.get("provider", "") or "").lower(),
+            str(item.get("display_name", "") or item.get("model_id", "") or "").lower(),
+        ),
+    )
+
+
+def build_tracked_only_market_table_body(rows):
+    body = []
+    for row in rows:
+        body.append(
+            f"""
+            <tr>
+              <td>{render_model_detail_trigger(row)}</td>
+              <td>{escape(row.get('provider', 'n.d.') or 'n.d.')}</td>
+              <td>{escape(row.get('release_date', 'n.d.') or 'n.d.')}</td>
+              <td>{escape(format_model_field_status(row.get('parameter_source_audit')))}</td>
+              <td>{escape(row.get('benchmark_exclusion_reason', 'n.d.') or 'n.d.')}</td>
+            </tr>
+            """
+        )
+    return "".join(body)
 
 
 def render_model_detail_trigger(row):
@@ -2402,9 +2553,12 @@ def market_parameter_sort_value(row):
 
 def build_market_models_view(records):
     rows = sorted(
-        build_market_model_predictions(records),
+        build_market_model_predictions(records, scope="partial"),
         key=lambda item: str(item.get("display_name", "") or item.get("model_id", "") or "").lower(),
     )
+    strict_rows = strict_market_rows()
+    partial_rows = partial_data_market_rows()
+    tracked_rows = tracked_only_market_rows()
     standard_scenario = rows[0].get("standard_scenario", {}) if rows else {}
     requests_per_hour = standard_scenario.get("requests_per_hour", 0)
     reading_wpm = standard_scenario.get("reading_words_per_minute", 0)
@@ -2566,6 +2720,13 @@ def build_market_models_view(records):
     chart_rows.extend(INFERENCE_CHART_REFERENCE_ROWS)
     return {
         "rows": rows,
+        "strict_rows": strict_rows,
+        "partial_rows": partial_rows,
+        "tracked_rows": tracked_rows,
+        "benchmark_count": len(rows),
+        "strict_count": len(strict_rows),
+        "partial_count": len(partial_rows),
+        "tracked_count": len(tracked_rows),
         "requests_per_hour": requests_per_hour,
         "reading_wpm": reading_wpm,
         "words_per_token": words_per_token,
@@ -2578,6 +2739,7 @@ def build_market_models_view(records):
         "country_mix_chart_rows": country_mix_chart_rows,
         "release_timeline_rows": release_timeline_rows,
         "table_body": "".join(body),
+        "tracked_table_body": build_tracked_only_market_table_body(tracked_rows),
     }
 
 
@@ -2594,14 +2756,15 @@ def render_market_models_charts(records):
           <h3>Comparative environmental impact of models</h3>
         </div>
       </div>
+      <p class="summary-intro">This public benchmark currently quantifies <strong>{view["benchmark_count"]}</strong> market models. <strong>{view["strict_count"]}</strong> use a strict parameter basis (directly sourced, directly derivable, or sourced from an explicit third-party estimate), while <strong>{view["partial_count"]}</strong> additional recent models use a documented partial-data donor prior derived from the strict catalog. <strong>{view["tracked_count"]}</strong> tracked models remain outside the quantitative comparison when even that partial-data derivation is not available.</p>
       <div class="chart-tabbar" role="tablist" aria-label="Inference chart indicator">
         <button type="button" class="chart-tab-button is-active" data-model-chart-control="metric-tab" data-metric-value="energy" aria-selected="true">Energy</button>
         <button type="button" class="chart-tab-button" data-model-chart-control="metric-tab" data-metric-value="carbon" aria-selected="false">Carbon</button>
       </div>
       <div class="scenario-callout" data-i18n-html="inference-scenario-banner"><span class="scenario-callout-label">Retained inference scenario</span><strong class="scenario-callout-value">1 hour of active use</strong></div>
       <div id="models-impact-chart" class="models-impact-chart" data-chart-rows='{escape(json.dumps(view["chart_rows"], ensure_ascii=False), quote=True)}'></div>
-      <p class="summary-intro models-chart-note">The chart below shows the estimated central values for all catalog models under a standardized inference scenario corresponding to <strong>1 hour of active use</strong>: <strong>{view["requests_per_hour"]} interactions/hour</strong>, <strong>1000 input tokens</strong>, <strong>550 output tokens</strong>, and one LLM request per use. The hourly pace is derived from an average reading speed of <strong>{view["reading_wpm"]} words/min</strong> (<a href="https://www.sciencedirect.com/science/article/pii/S0749596X19300786" target="_blank" rel="noopener noreferrer">Brysbaert, 2019</a>) and a project convention of <strong>1 token ≈ {view["words_per_token"]} word</strong>.</p>
-      <p class="summary-intro models-chart-note models-benchmark-note">Benchmarks integrated into the chart now include direct household-use examples from <a href="https://www.extension.purdue.edu/extmedia/4H/4-H-1015-W.pdf" target="_blank" rel="noopener noreferrer">Purdue Extension</a> (fluorescent lamp ≈ 9.3 Wh over 1 h; laptop ≈ 32 Wh over 1 h), plus explicit project-scale equivalents for everyday appliances: laptop use for <strong>3 h</strong> ≈ <strong>96 Wh</strong>, microwave oven for <strong>6 min</strong> ≈ <strong>100 Wh</strong>, electric kettle for <strong>3.5 min</strong> ≈ <strong>105 Wh</strong>, and electric space heater for <strong>4.1 min</strong> ≈ <strong>103.5 Wh</strong>. For carbon, the chart uses an average gasoline car benchmark derived from the <a href="https://theicct.org/publication/electric-cars-life-cycle-analysis-emissions-europe-jul25/" target="_blank" rel="noopener noreferrer">ICCT (2025)</a> factor retained by the project (235 gCO2e/km), shown here both for <strong>170 m</strong> ≈ <strong>40.0 gCO2e</strong> and for <strong>1 km</strong> ≈ <strong>235 gCO2e</strong>. Exact retained benchmark values are listed in the annex.</p>
+      <p class="summary-intro models-chart-note">The chart below shows the estimated central values for the <strong>{view["benchmark_count"]} quantified catalog models</strong> under a standardized inference scenario corresponding to <strong>1 hour of active use</strong>: <strong>{view["requests_per_hour"]} interactions/hour</strong>, <strong>1000 input tokens</strong>, <strong>550 output tokens</strong>, and one LLM request per use. The hourly pace is derived from an average reading speed of <strong>{view["reading_wpm"]} words/min</strong> (<a href="https://www.sciencedirect.com/science/article/pii/S0749596X19300786" target="_blank" rel="noopener noreferrer">Brysbaert, 2019</a>) and a project convention of <strong>1 token ≈ {view["words_per_token"]} word</strong>.</p>
+      <p class="summary-intro models-chart-note models-benchmark-note">Benchmarks integrated into the chart now include direct household-use examples from <a href="https://www.extension.purdue.edu/extmedia/4H/4-H-1015-W.pdf" target="_blank" rel="noopener noreferrer">Purdue Extension</a> (fluorescent lamp ≈ 9.3 Wh over 1 h; laptop ≈ 32 Wh over 1 h), plus explicit project-scale equivalents for everyday uses better aligned with the current LLM range: laptop use for <strong>3 h</strong> ≈ <strong>96 Wh</strong>, laptop use for <strong>5 h</strong> ≈ <strong>160 Wh</strong>, electric kettle for <strong>7 min</strong> ≈ <strong>210 Wh</strong>, and electric space heater for <strong>10 min</strong> ≈ <strong>250 Wh</strong>. For carbon, the chart uses an average gasoline car benchmark derived from the <a href="https://theicct.org/publication/electric-cars-life-cycle-analysis-emissions-europe-jul25/" target="_blank" rel="noopener noreferrer">ICCT (2025)</a> factor retained by the project (235 gCO2e/km), shown here both for <strong>430 m</strong> ≈ <strong>101.1 gCO2e</strong> and for <strong>1 km</strong> ≈ <strong>235 gCO2e</strong>. Exact retained benchmark values are listed in the annex.</p>
     </section>
     <section class="panel reference-panel">
       <div class="summary-header">
@@ -2610,7 +2773,7 @@ def render_market_models_charts(records):
           <h3>Inference vs. training impact map</h3>
         </div>
       </div>
-      <p class="summary-intro">This scatter plot compares each catalog model on two axes at once: standardized inference impact over one hour on the horizontal axis and retained training impact on the vertical axis. Point size follows the retained active parameter count, while colors distinguish providers.</p>
+      <p class="summary-intro">This scatter plot compares each quantified model on two axes at once: standardized inference impact over one hour on the horizontal axis and retained training impact on the vertical axis. Point size follows the retained active parameter basis, while colors distinguish providers.</p>
       <div class="chart-tabbar" role="tablist" aria-label="Inference and training trade-off metric">
         <button type="button" class="chart-tab-button is-active" data-cross-impact-control="metric-tab" data-metric-value="energy" aria-selected="true">Energy</button>
         <button type="button" class="chart-tab-button" data-cross-impact-control="metric-tab" data-metric-value="carbon" aria-selected="false">Carbon</button>
@@ -2652,7 +2815,7 @@ def render_market_models_charts(records):
           <h3>Inference model landscape</h3>
         </div>
       </div>
-      <p class="summary-intro">This landscape view clusters the catalog models from the characteristics retained by the project for inference screening: active and effective parameters, context window, serving mode, modality support, architecture notes, and central energy and carbon outputs. Nearby points indicate models with similar retained screening profiles, not a simple one-metric ranking.</p>
+      <p class="summary-intro">This landscape view clusters the quantified models from the characteristics retained by the project for inference screening: active and effective parameter basis, context window, serving mode, modality support, architecture notes, and central energy and carbon outputs. Nearby points indicate models with similar retained screening profiles, not a simple one-metric ranking.</p>
       <div id="carbon-params-scatter-chart" class="models-impact-chart" data-scatter-chart-rows='{escape(json.dumps(view["scatter_chart_rows"], ensure_ascii=False), quote=True)}'></div>
     </section>
     <section class="panel reference-panel">
@@ -2662,7 +2825,7 @@ def render_market_models_charts(records):
           <h3>Inference screening factor heatmap</h3>
         </div>
       </div>
-      <p class="summary-intro">This heatmap exposes the central screening factors retained for each market model. It shows the four multiplicative factors used by the project’s prompt proxy and the resulting ratio between effective and raw active parameters.</p>
+      <p class="summary-intro">This heatmap exposes the central screening factors retained for each quantified market model. It shows the four multiplicative factors used by the project’s prompt proxy and the resulting ratio between effective and raw active parameters.</p>
       <div id="inference-factor-heatmap" class="models-impact-chart" data-factor-heatmap-rows='{escape(json.dumps(view["factor_heatmap_rows"], ensure_ascii=False), quote=True)}'></div>
     </section>
     <section class="panel reference-panel">
@@ -2714,15 +2877,38 @@ def render_market_models_table(records):
     rows = view["rows"]
     if not rows:
         return ""
+    tracked_block = ""
+    if view["tracked_count"]:
+        tracked_block = f"""
+      <div class="reference-subtable">
+        <h4>{view["tracked_count"]} additional market models tracked but not yet quantified</h4>
+        <div class="reference-copy-block">
+          <p class="summary-intro">These rows stay visible in the catalog because the release, modality, serving, and country metadata remain useful. They are excluded from the public quantitative benchmark because the project does not retain a traceable parameter count for them.</p>
+        </div>
+        <div class="reference-table-wrap">
+          <table class="reference-table">
+            <thead>
+              <tr>
+                <th>Model</th>
+                <th>Provider</th>
+                <th>Release date</th>
+                <th>Parameter basis</th>
+                <th>Exclusion reason</th>
+              </tr>
+            </thead>
+            <tbody>{view["tracked_table_body"]}</tbody>
+          </table>
+        </div>
+      </div>"""
     return f"""
     <section class="panel reference-panel">
       <div class="summary-header">
         <div>
           <div class="summary-kicker">Models</div>
-          <h3>{len(rows)} current models tracked by the project</h3>
+          <h3>{view["benchmark_count"]} market models quantified by the project</h3>
         </div>
       </div>
-      <p class="summary-intro">The table below compares the models tracked by the project under the same inference scenario. For each model, the application shows the central values produced by the project’s multi-factor prompt proxy, both per hour of standardized use and per request.</p>
+      <p class="summary-intro">The table below compares the market models retained in the public quantitative benchmark under the same inference scenario. For each model, the application shows the central values produced by the project’s multi-factor prompt proxy, both per hour of standardized use and per request. The current catalog combines <strong>{view["strict_count"]}</strong> strict source-linked rows and <strong>{view["partial_count"]}</strong> partial-data rows derived from donor models with comparable sourced metadata.</p>
       <div class="table-toolbar">
         <label class="table-search-label" for="market-model-search">Search for a model</label>
         <input id="market-model-search" class="table-search-input" type="search" placeholder="Example: GPT, Claude, Mistral, US, 70B" data-table-search="market-models-table">
@@ -2746,6 +2932,7 @@ def render_market_models_table(records):
       <p class="summary-intro">`Retained country` is the country actually used to recalculate CO2 via the electricity mix. When the exact country is not published, the project uses an explicit screening proxy rather than presenting a location as certain.</p>
       <p class="summary-intro">`*` indicates an estimated parameter count rather than a provider-published value.</p>
       <p class="summary-intro">The market-model comparison now relies on <code>market_multifactor_prompt_proxy_v1</code>: a prompt-energy screening proxy whose main prompt-level calibration anchor comes from Elsworth et al. (2025), then adjusted by active parameters, context window, serving mode, modality support, architecture overhead, and standardized token volume, and interpreted alongside other inference references.</p>
+      {tracked_block}
     </section>
     """
 
@@ -2790,6 +2977,7 @@ def build_model_detail_index(records):
         model_id = str(row.get("model_id", "") or "").strip()
         if not model_id:
             continue
+        benchmark_ready = row.get("benchmark_included") == "yes"
         training_row = training_by_model_id.get(model_id, {})
         training_results = training_row.get("training_results_by_id") or {}
         energy_result = training_results.get("direct_training_energy") or {}
@@ -2860,44 +3048,24 @@ def build_model_detail_index(records):
         register_source("Architecture", row.get("architecture_source"), row.get("architecture_source_url"), "documented")
         register_source("Retained country", row.get("estimation_country_source"), row.get("estimation_country_source_url"), row.get("estimation_country_status"))
         register_source("Server country", row.get("server_country_source"), row.get("server_country_source_url"), row.get("server_country_status"))
-        register_source("Inference method anchor", row.get("screening_reference_anchor"), "", row.get("screening_method_id"))
-        register_source("Training tokens", row.get("training_tokens_source"), row.get("training_tokens_source_url"), row.get("training_tokens_status"))
-        register_source("Training regime", row.get("training_regime_source"), row.get("training_regime_source_url"), row.get("training_regime_status"))
-        register_source("Training modality", row.get("training_multimodal_source"), row.get("training_multimodal_source_url"), "documented")
-        register_source("Training hardware", row.get("training_hardware_source"), row.get("training_hardware_source_url"), "screening_proxy")
-        register_source("Training method anchor", row.get("training_multifactor_anchor"), "", row.get("training_multifactor_method_id"))
+        if benchmark_ready:
+            register_source("Inference method anchor", row.get("screening_reference_anchor"), "", row.get("screening_method_id"))
+            register_source("Training tokens", row.get("training_tokens_source"), row.get("training_tokens_source_url"), row.get("training_tokens_status"))
+            register_source("Training regime", row.get("training_regime_source"), row.get("training_regime_source_url"), row.get("training_regime_status"))
+            register_source("Training modality", row.get("training_multimodal_source"), row.get("training_multimodal_source_url"), "documented")
+            register_source("Training hardware", row.get("training_hardware_source"), row.get("training_hardware_source_url"), "screening_proxy")
+            register_source("Training method anchor", row.get("training_multifactor_anchor"), "", row.get("training_multifactor_method_id"))
 
-        details[model_id] = {
-            "key": model_id,
-            "display_name": str(row.get("display_name", "") or model_id),
-            "model_id": model_id,
-            "provider": str(row.get("provider", "") or ""),
-            "market_status": format_model_field_status(row.get("market_status")),
-            "serving_mode": format_model_field_status(row.get("serving_mode")),
-            "release_date": str(row.get("release_date", "") or "n.d."),
-            "retained_country": str(row.get("estimation_country_code", "") or "n.d."),
-            "retained_country_status": format_market_country_status(row.get("estimation_country_status")),
-            "server_country": str(row.get("server_country", "") or "n.d."),
-            "parameter_display": format_market_parameter_display(row),
-            "parameter_status": format_model_field_status(row.get("parameter_value_status")),
-            "effective_active_parameters_billion": format_scalar(to_float(row.get("screening_effective_active_parameters_billion_central"), default=0.0)),
-            "context_window_tokens": format_count(to_float(row.get("context_window_tokens"), default=0.0)) if to_float(row.get("context_window_tokens"), default=0.0) else "n.d.",
-            "vision_support": "Yes" if parse_market_bool(row.get("vision_support")) else "No",
-            "input_modalities": str(row.get("input_modalities", "") or "n.d."),
-            "output_modalities": str(row.get("output_modalities", "") or "n.d."),
-            "architecture_notes": str(row.get("architecture_notes", "") or "n.d."),
-            "notes": str(row.get("notes", "") or "n.d."),
-            "screening_method_id": str(row.get("screening_method_id", "") or "n.d."),
-            "screening_reference_anchor": str(row.get("screening_reference_anchor", "") or "n.d."),
-            "training_method_id": str(row.get("training_multifactor_method_id", "") or "n.d."),
-            "training_multifactor_anchor": str(row.get("training_multifactor_anchor", "") or "n.d."),
-            "training_tokens_estimate_trillion": format_scalar(to_float(row.get("training_tokens_estimate_trillion"), default=0.0)) if to_float(row.get("training_tokens_estimate_trillion"), default=0.0) else "n.d.",
-            "training_tokens_status": format_model_field_status(row.get("training_tokens_status")),
-            "training_regime": format_model_field_status(row.get("training_regime")),
-            "training_regime_status": format_model_field_status(row.get("training_regime_status")),
-            "training_hardware": format_model_field_status(row.get("training_hardware_class_proxy")),
-            "training_multimodal": "Yes" if parse_market_bool(row.get("training_multimodal")) else "No",
-            "inference": {
+        if benchmark_ready:
+            effective_active_parameters_billion = format_scalar(
+                to_float(row.get("screening_effective_active_parameters_billion_central"), default=0.0)
+            )
+            training_tokens_display = (
+                format_scalar(to_float(row.get("training_tokens_estimate_trillion"), default=0.0))
+                if to_float(row.get("training_tokens_estimate_trillion"), default=0.0)
+                else "n.d."
+            )
+            inference_display = {
                 "energy": {
                     "low": format_value_display(inference_energy["low"], "energy"),
                     "central": format_value_display(inference_energy["central"], "energy"),
@@ -2908,8 +3076,8 @@ def build_model_detail_index(records):
                     "central": format_value_display(inference_carbon["central"], "carbon"),
                     "high": format_value_display(inference_carbon["high"], "carbon"),
                 },
-            },
-            "training": {
+            }
+            training_display = {
                 "energy": {
                     "low": format_training_estimate(training_energy["low"], "Wh"),
                     "central": format_training_estimate(training_energy["central"], "Wh"),
@@ -2920,7 +3088,60 @@ def build_model_detail_index(records):
                     "central": format_training_estimate(training_carbon["central"], "tCO2e"),
                     "high": format_training_estimate(training_carbon["high"], "tCO2e"),
                 },
-            },
+            }
+        else:
+            effective_active_parameters_billion = "n.d."
+            training_tokens_display = "n.d."
+            inference_display = {
+                "energy": {"low": "n.d.", "central": "n.d.", "high": "n.d."},
+                "carbon": {"low": "n.d.", "central": "n.d.", "high": "n.d."},
+            }
+            training_display = {
+                "energy": {"low": "n.d.", "central": "n.d.", "high": "n.d."},
+                "carbon": {"low": "n.d.", "central": "n.d.", "high": "n.d."},
+            }
+
+        details[model_id] = {
+            "key": model_id,
+            "display_name": str(row.get("display_name", "") or model_id),
+            "model_id": model_id,
+            "provider": str(row.get("provider", "") or ""),
+            "market_status": format_model_field_status(row.get("market_status")),
+            "serving_mode": format_model_field_status(row.get("serving_mode")),
+            "benchmark_status": format_model_field_status(row.get("benchmark_readiness")),
+            "benchmark_included": "yes" if benchmark_ready else "no",
+            "benchmark_exclusion_reason": str(row.get("benchmark_exclusion_reason", "") or "n.d."),
+            "benchmark_note": str(
+                row.get("quantification_note")
+                or row.get("benchmark_exclusion_reason")
+                or "n.d."
+            ),
+            "release_date": str(row.get("release_date", "") or "n.d."),
+            "retained_country": str(row.get("estimation_country_code", "") or "n.d."),
+            "retained_country_status": format_market_country_status(row.get("estimation_country_status")),
+            "server_country": str(row.get("server_country", "") or "n.d."),
+            "parameter_display": format_market_parameter_display(row),
+            "parameter_status": format_model_field_status(row.get("parameter_value_status")),
+            "parameter_source_audit": format_model_field_status(row.get("parameter_source_audit")),
+            "effective_active_parameters_billion": effective_active_parameters_billion,
+            "context_window_tokens": format_count(to_float(row.get("context_window_tokens"), default=0.0)) if to_float(row.get("context_window_tokens"), default=0.0) else "n.d.",
+            "vision_support": "Yes" if parse_market_bool(row.get("vision_support")) else "No",
+            "input_modalities": str(row.get("input_modalities", "") or "n.d."),
+            "output_modalities": str(row.get("output_modalities", "") or "n.d."),
+            "architecture_notes": str(row.get("architecture_notes", "") or "n.d."),
+            "notes": str(row.get("notes", "") or "n.d."),
+            "screening_method_id": str(row.get("screening_method_id", "") or "n.d.") if benchmark_ready else "n.d.",
+            "screening_reference_anchor": str(row.get("screening_reference_anchor", "") or "n.d.") if benchmark_ready else "n.d.",
+            "training_method_id": str(row.get("training_multifactor_method_id", "") or "n.d.") if benchmark_ready else "n.d.",
+            "training_multifactor_anchor": str(row.get("training_multifactor_anchor", "") or "n.d.") if benchmark_ready else "n.d.",
+            "training_tokens_estimate_trillion": training_tokens_display,
+            "training_tokens_status": format_model_field_status(row.get("training_tokens_status")),
+            "training_regime": format_model_field_status(row.get("training_regime")),
+            "training_regime_status": format_model_field_status(row.get("training_regime_status")),
+            "training_hardware": format_model_field_status(row.get("training_hardware_class_proxy")),
+            "training_multimodal": "Yes" if parse_market_bool(row.get("training_multimodal")) else "No",
+            "inference": inference_display,
+            "training": training_display,
             "sources": source_entries,
         }
     return details
@@ -2928,9 +3149,12 @@ def build_model_detail_index(records):
 
 def build_training_models_view(records):
     rows = sorted(
-        build_training_market_predictions(records),
+        build_training_market_predictions(records, scope="partial"),
         key=lambda item: str(item.get("display_name", "") or item.get("model_id", "") or "").lower(),
     )
+    strict_rows = strict_market_rows()
+    partial_rows = partial_data_market_rows()
+    tracked_rows = tracked_only_market_rows()
     chart_rows = []
     scatter_chart_rows = []
     factor_heatmap_rows = []
@@ -3082,6 +3306,13 @@ def build_training_models_view(records):
     )
     return {
         "rows": rows,
+        "strict_rows": strict_rows,
+        "partial_rows": partial_rows,
+        "tracked_rows": tracked_rows,
+        "benchmark_count": len(rows),
+        "strict_count": len(strict_rows),
+        "partial_count": len(partial_rows),
+        "tracked_count": len(tracked_rows),
         "chart_rows": chart_rows,
         "scatter_chart_rows": scatter_chart_rows,
         "factor_heatmap_rows": factor_heatmap_rows,
@@ -3092,6 +3323,7 @@ def build_training_models_view(records):
         "benchmark_flights_equivalent": flights_equivalent,
         "benchmark_training_carbon_tco2e": max_training_carbon_tco2e,
         "table_body": "".join(body),
+        "tracked_table_body": build_tracked_only_market_table_body(tracked_rows),
     }
 
 
@@ -3112,7 +3344,8 @@ def render_training_models_charts(records):
           <h3>Comparative training impacts of models</h3>
         </div>
       </div>
-      <p class="summary-intro">The chart below shows the central values retained for all catalog models across two training indicator families: training energy and training CO2e contextualized from retained training energy and the model country proxy. The current screening method combines retained parameter count, a training-token prior, a training-regime prior, architecture features, and a hardware-class proxy. Under these central screening assumptions, frontier models can reach very large training orders of magnitude. Everyday benchmarks are inserted directly into the list to situate those scales, not to imply direct observed equivalence.</p>
+      <p class="summary-intro">This public training benchmark currently quantifies <strong>{view["benchmark_count"]}</strong> market models: <strong>{view["strict_count"]}</strong> with a strict retained parameter basis and <strong>{view["partial_count"]}</strong> with a documented partial-data donor prior. <strong>{view["tracked_count"]}</strong> additional tracked models are excluded when no quantitative basis can be derived.</p>
+      <p class="summary-intro">The chart below shows the central values retained for the quantified models across two training indicator families: training energy and training CO2e contextualized from retained training energy and the model country proxy. The current screening method combines retained parameter count, a training-token prior, a training-regime prior, architecture features, and a hardware-class proxy. Everyday benchmarks are inserted directly into the list to situate those scales, not to imply direct observed equivalence.</p>
       <div class="chart-tabbar" role="tablist" aria-label="Training chart indicator">
         <button type="button" class="chart-tab-button is-active" data-training-chart-control="metric-tab" data-metric-value="direct_training_energy" aria-selected="true">Energy</button>
         <button type="button" class="chart-tab-button" data-training-chart-control="metric-tab" data-metric-value="direct_training_carbon" aria-selected="false">Carbon</button>
@@ -3127,7 +3360,7 @@ def render_training_models_charts(records):
           <h3>Training model landscape</h3>
         </div>
       </div>
-      <p class="summary-intro">This landscape view clusters the catalog models from the characteristics retained by the project for training screening: retained parameter count, training-token prior, training regime, hardware-class proxy, modality support, architecture notes, and central training energy and carbon outputs. Nearby points indicate similar retained screening profiles rather than a direct ranking on one axis.</p>
+      <p class="summary-intro">This landscape view clusters the quantified models from the characteristics retained by the project for training screening: retained parameter basis, training-token prior, training regime, hardware-class proxy, modality support, architecture notes, and central training energy and carbon outputs. Nearby points indicate similar retained screening profiles rather than a direct ranking on one axis.</p>
       <div id="training-carbon-params-scatter-chart" class="models-impact-chart" data-training-scatter-chart-rows='{escape(json.dumps(view["scatter_chart_rows"], ensure_ascii=False), quote=True)}'></div>
     </section>
     <section class="panel reference-panel">
@@ -3137,7 +3370,7 @@ def render_training_models_charts(records):
           <h3>Training screening factor heatmap</h3>
         </div>
       </div>
-      <p class="summary-intro">This heatmap exposes the central screening factors retained for each market model in the training proxy. It shows the regime, architecture, and hardware factors together with the retained training-token ratio per parameter.</p>
+      <p class="summary-intro">This heatmap exposes the central screening factors retained for each quantified market model in the training proxy. It shows the regime, architecture, and hardware factors together with the retained training-token ratio per parameter.</p>
       <div id="training-factor-heatmap" class="models-impact-chart" data-training-factor-heatmap-rows='{escape(json.dumps(view["factor_heatmap_rows"], ensure_ascii=False), quote=True)}'></div>
     </section>
     <section class="panel reference-panel">
@@ -3147,7 +3380,7 @@ def render_training_models_charts(records):
           <h3>Training uncertainty span by model</h3>
         </div>
       </div>
-      <p class="summary-intro">This view shows the low, central, and high training CO2e values contextualized from retained training energy for each market model. It makes explicit how widely the training proxy can vary once the parameter and token exponents and contextual factors are widened.</p>
+      <p class="summary-intro">This view shows the low, central, and high training CO2e values contextualized from retained training energy for each quantified market model. It makes explicit how widely the training proxy can vary once the parameter and token exponents, donor priors, and contextual factors are widened.</p>
       <div id="training-uncertainty-chart" class="models-impact-chart" data-training-uncertainty-rows='{escape(json.dumps(view["uncertainty_chart_rows"], ensure_ascii=False), quote=True)}'></div>
     </section>
     <section class="panel reference-panel">
@@ -3189,15 +3422,38 @@ def render_training_models_table(records):
     rows = view["rows"]
     if not rows:
         return ""
+    tracked_block = ""
+    if view["tracked_count"]:
+        tracked_block = f"""
+      <div class="reference-subtable">
+        <h4>{view["tracked_count"]} additional market models tracked but not yet quantified</h4>
+        <div class="reference-copy-block">
+          <p class="summary-intro">These tracked rows remain useful for release monitoring and source collection, but they are excluded from training comparisons because the project does not retain a traceable parameter count for them.</p>
+        </div>
+        <div class="reference-table-wrap">
+          <table class="reference-table">
+            <thead>
+              <tr>
+                <th>Model</th>
+                <th>Provider</th>
+                <th>Release date</th>
+                <th>Parameter basis</th>
+                <th>Exclusion reason</th>
+              </tr>
+            </thead>
+            <tbody>{view["tracked_table_body"]}</tbody>
+          </table>
+        </div>
+      </div>"""
     return f"""
     <section class="panel reference-panel">
       <div class="summary-header">
         <div>
           <div class="summary-kicker">Models</div>
-          <h3>{len(rows)} current models with estimated training impacts</h3>
+          <h3>{view["benchmark_count"]} market models with quantified training impacts</h3>
         </div>
       </div>
-      <p class="summary-intro">This table projects the training orders of magnitude of current models from the indicator families actually available in the literature: <strong>training energy</strong> derived from emissions when the source country is documented in the electricity-mix table, and <strong>training CO2e</strong> contextualized from that retained energy and the model country proxy. The current screening proxy combines retained parameter count, a training-token prior, a training-regime prior, architecture features, and a hardware-class proxy.</p>
+      <p class="summary-intro">This table projects the training orders of magnitude of the quantified market models from the indicator families actually available in the literature: <strong>training energy</strong> derived from emissions when the source country is documented in the electricity-mix table, and <strong>training CO2e</strong> contextualized from that retained energy and the model country proxy. The current screening proxy combines retained parameter count, a training-token prior, a training-regime prior, architecture features, and a hardware-class proxy. The quantified layer combines <strong>{view["strict_count"]}</strong> strict rows and <strong>{view["partial_count"]}</strong> partial-data donor priors.</p>
       <div class="table-toolbar">
         <label class="table-search-label" for="training-model-search">Search for a model</label>
         <input id="training-model-search" class="table-search-input" type="search" placeholder="Example: GPT, Claude, 70B, Meta" data-table-search="training-models-table">
@@ -3216,6 +3472,7 @@ def render_training_models_table(records):
         </table>
       </div>
       <p class="summary-intro">`*` indicates an estimated parameter count rather than a provider-published value.</p>
+      {tracked_block}
     </section>
     """
 
@@ -4981,6 +5238,7 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
         methodBoundBody: 'The current prompt-level branch is a screening proxy, not an audited benchmark. For this reason, the application returns a bounded low-central-high result rather than one falsely precise deterministic value.',
         methodCarbonBody: 'Carbon is not copied mechanically from the source paper. It is recalculated from the retained energy estimate using the electricity mix associated with the selected country context.',
         methodResearchBody: 'The result is an auditable estimate intended for comparison, software design, and methodological discussion. It is useful precisely because the assumptions, factors, and retained sources remain visible and inspectable.',
+        trainingScreeningAsteriskNote: '<code>*</code> indicates a value retained from the project\\'s screening rather than directly linked to an external source in this table.',
         examplePrompt1: 'We have a customer-support assistant based on GPT-4, used about 4,000 times per month in France by our support team.',
         examplePrompt2: 'We use Claude 3.5 Sonnet in our app to summarize internal documents for around 120 consultants, with about 15,000 summaries generated per month.',
         examplePrompt3: 'We have a RAG assistant based on Mistral Large, with a vector database and logging, used by about 800 employees and handling roughly 25,000 requests per month. If you know them, you can also add token volumes or request counts.',
@@ -5015,6 +5273,7 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
         methodBoundBody: 'La branche actuelle au niveau prompt est un proxy de screening, pas un benchmark audité. Pour cette raison, l’application renvoie un résultat borné bas-central-haut plutôt qu’une valeur déterministe faussement précise.',
         methodCarbonBody: 'Le carbone n’est pas repris mécaniquement depuis l’article source. Il est recalculé à partir de l’estimation énergétique retenue en utilisant le mix électrique associé au contexte pays sélectionné.',
         methodResearchBody: 'Le résultat est une estimation auditable destinée à la comparaison, à la conception logicielle et à la discussion méthodologique. Son intérêt vient précisément du fait que les hypothèses, les facteurs et les sources retenues restent visibles et inspectables.',
+        trainingScreeningAsteriskNote: '<code>*</code> indique une valeur issue du screening du projet plutôt qu’une valeur directement reliée à une source externe dans ce tableau.',
         examplePrompt1: 'Nous avons un assistant de support client basé sur GPT-4, utilisé environ 4 000 fois par mois en France par notre équipe support.',
         examplePrompt2: 'Nous utilisons Claude 3.5 Sonnet dans notre application pour résumer des documents internes pour environ 120 consultants, avec près de 15 000 résumés générés par mois.',
         examplePrompt3: 'Nous avons un assistant RAG basé sur Mistral Large, avec une base vectorielle et de la journalisation, utilisé par environ 800 collaborateurs et traitant près de 25 000 requêtes par mois.',
@@ -5144,7 +5403,7 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
       ['This family currently relies on a single literature anchor, so the displayed central value is a calibrated proxy rather than a cross-study average.', 'Cette famille repose actuellement sur un seul ancrage bibliographique, de sorte que la valeur centrale affichée est un proxy calibré plutôt qu’une moyenne inter-études.'],
       ['The table below compares the models tracked by the project under the same inference scenario. For each model, the application shows the central values produced by the project’s multi-factor prompt proxy, both per hour of standardized use and per request.', 'Le tableau ci-dessous compare les modèles suivis par le projet dans le même scénario d’inférence. Pour chaque modèle, l’application affiche les valeurs centrales produites par le proxy prompt multi-facteurs du projet, à la fois par heure d’usage standardisé et par requête.'],
       ['The chart below shows the estimated central values for all catalog models under a standardized inference scenario corresponding to 1 hour of active use: 34.6 interactions/hour, 1000 input tokens, 550 output tokens, and one LLM request per use. The hourly pace is derived from an average reading speed of 238.0 words/min (Brysbaert, 2019) and a project convention of 1 token ≈ 0.75 word.', 'Le graphique ci-dessous présente les valeurs centrales estimées pour tous les modèles du catalogue dans un scénario d’inférence standardisé correspondant à 1 heure d’utilisation active : 34,6 interactions/heure, 1000 tokens en entrée, 550 tokens en sortie et une requête LLM par usage. Le rythme horaire est dérivé d’une vitesse moyenne de lecture de 238,0 mots/min (Brysbaert, 2019) et d’une convention du projet de 1 token ≈ 0,75 mot.'],
-      ['Benchmarks integrated into the chart now include direct household-use examples from Purdue Extension (fluorescent lamp ≈ 9.3 Wh over 1 h; laptop ≈ 32 Wh over 1 h), plus explicit project-scale equivalents for everyday appliances: laptop use for <strong>3 h</strong> ≈ <strong>96 Wh</strong>, microwave oven for <strong>6 min</strong> ≈ <strong>100 Wh</strong>, electric kettle for <strong>3.5 min</strong> ≈ <strong>105 Wh</strong>, and electric space heater for <strong>4.1 min</strong> ≈ <strong>103.5 Wh</strong>. For carbon, the chart uses an average gasoline car benchmark derived from the ICCT (2025) factor retained by the project (235 gCO2e/km), shown here both for <strong>170 m</strong> ≈ <strong>40.0 gCO2e</strong> and for <strong>1 km</strong> ≈ <strong>235 gCO2e</strong>. Exact retained benchmark values are listed in the annex.', 'Repères intégrés au graphique : on trouve désormais des exemples d’usage domestique directs issus de Purdue Extension (lampe fluorescente ≈ 9,3 Wh sur 1 h ; ordinateur portable ≈ 32 Wh sur 1 h), ainsi que des équivalents de projet explicites pour des usages du quotidien : ordinateur portable pendant <strong>3 h</strong> ≈ <strong>96 Wh</strong>, four à micro-ondes pendant <strong>6 min</strong> ≈ <strong>100 Wh</strong>, bouilloire électrique pendant <strong>3,5 min</strong> ≈ <strong>105 Wh</strong>, et radiateur électrique pendant <strong>4,1 min</strong> ≈ <strong>103,5 Wh</strong>. Pour le carbone, le graphique utilise un repère de voiture essence moyenne dérivé du facteur ICCT (2025) retenu par le projet (235 gCO2e/km), montré ici à la fois pour <strong>170 m</strong> ≈ <strong>40,0 gCO2e</strong> et pour <strong>1 km</strong> ≈ <strong>235 gCO2e</strong>. Les valeurs exactes retenues pour ces repères sont listées dans l’annexe.'],
+      ['Benchmarks integrated into the chart now include direct household-use examples from Purdue Extension (fluorescent lamp ≈ 9.3 Wh over 1 h; laptop ≈ 32 Wh over 1 h), plus explicit project-scale equivalents for everyday uses better aligned with the current LLM range: laptop use for <strong>3 h</strong> ≈ <strong>96 Wh</strong>, laptop use for <strong>5 h</strong> ≈ <strong>160 Wh</strong>, electric kettle for <strong>7 min</strong> ≈ <strong>210 Wh</strong>, and electric space heater for <strong>10 min</strong> ≈ <strong>250 Wh</strong>. For carbon, the chart uses an average gasoline car benchmark derived from the ICCT (2025) factor retained by the project (235 gCO2e/km), shown here both for <strong>430 m</strong> ≈ <strong>101.1 gCO2e</strong> and for <strong>1 km</strong> ≈ <strong>235 gCO2e</strong>. Exact retained benchmark values are listed in the annex.', 'Repères intégrés au graphique : on trouve désormais des exemples d’usage domestique directs issus de Purdue Extension (lampe fluorescente ≈ 9,3 Wh sur 1 h ; ordinateur portable ≈ 32 Wh sur 1 h), ainsi que des équivalents de projet explicites pour des usages du quotidien mieux alignés sur l’échelle actuelle des LLMs : ordinateur portable pendant <strong>3 h</strong> ≈ <strong>96 Wh</strong>, ordinateur portable pendant <strong>5 h</strong> ≈ <strong>160 Wh</strong>, bouilloire électrique pendant <strong>7 min</strong> ≈ <strong>210 Wh</strong>, et radiateur électrique pendant <strong>10 min</strong> ≈ <strong>250 Wh</strong>. Pour le carbone, le graphique utilise un repère de voiture essence moyenne dérivé du facteur ICCT (2025) retenu par le projet (235 gCO2e/km), montré ici à la fois pour <strong>430 m</strong> ≈ <strong>101,1 gCO2e</strong> et pour <strong>1 km</strong> ≈ <strong>235 gCO2e</strong>. Les valeurs exactes retenues pour ces repères sont listées dans l’annexe.'],
       ['Average gasoline car for 0.17 km', 'Voiture essence moyenne sur 0,17 km'],
       ['Trade-off', 'Arbitrage'],
       ['Inference model landscape', 'Paysage des modèles en inférence'],
@@ -5263,19 +5522,18 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
       ['Fluorescent lamp 1 h', 'Lampe fluorescente 1 h'],
       ['Laptop 1 h', 'Ordinateur portable 1 h'],
       ['Laptop 3 h', 'Ordinateur portable 3 h'],
-      ['Microwave oven 6 min', 'Four à micro-ondes 6 min'],
-      ['Electric kettle 3.5 min', 'Bouilloire électrique 3,5 min'],
-      ['Electric heater 4.1 min', 'Radiateur électrique 4,1 min'],
-      ['Average gasoline car 170 m', 'Voiture essence moyenne 170 m'],
+      ['Laptop 5 h', 'Ordinateur portable 5 h'],
+      ['Electric kettle 7 min', 'Bouilloire électrique 7 min'],
+      ['Electric heater 10 min', 'Radiateur électrique 10 min'],
+      ['Average gasoline car 430 m', 'Voiture essence moyenne 430 m'],
       ['Average gasoline car 1 km', 'Voiture essence moyenne 1 km'],
-      ['Electric heater 10 min (US mix)', 'Radiateur électrique 10 min (mix US)'],
       ['Fluorescent lamp for 1 hour', 'Lampe fluorescente pendant 1 heure'],
       ['Laptop for 1 hour', 'Ordinateur portable pendant 1 heure'],
       ['Laptop for 3 hours', 'Ordinateur portable pendant 3 heures'],
-      ['Microwave oven for 6 minutes', 'Four à micro-ondes pendant 6 minutes'],
-      ['Electric kettle for 3.5 minutes', 'Bouilloire électrique pendant 3,5 minutes'],
-      ['Electric space heater for 4.1 minutes', 'Radiateur électrique pendant 4,1 minutes'],
-      ['Average gasoline car for 170 m', 'Voiture essence moyenne sur 170 m'],
+      ['Laptop for 5 hours', 'Ordinateur portable pendant 5 heures'],
+      ['Electric kettle for 7 minutes', 'Bouilloire électrique pendant 7 minutes'],
+      ['Electric space heater for 10 minutes', 'Radiateur électrique pendant 10 minutes'],
+      ['Average gasoline car for 430 m', 'Voiture essence moyenne sur 430 m'],
       ['Average gasoline car for 1 km', 'Voiture essence moyenne sur 1 km'],
       ['2,760,139 households (annual domestic use)', '2 760 139 foyers (usage domestique annuel)'],
       ['292,210 full commercial flights', '292 210 vols commerciaux complets'],
@@ -5297,6 +5555,7 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
       ['[data-i18n-html="method-bound-body"]', 'methodBoundBody'],
       ['[data-i18n-html="method-carbon-body"]', 'methodCarbonBody'],
       ['[data-i18n-html="method-research-body"]', 'methodResearchBody'],
+      ['[data-i18n-html="training-screening-asterisk-note"]', 'trainingScreeningAsteriskNote'],
     ];
     const benchmarkLabelMap = {{
       'Lampe fluorescente 1 h': 'Fluorescent lamp 1 h',
@@ -5305,17 +5564,16 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
       'Laptop 1 h': 'Laptop 1 h',
       'Ordinateur portable 3 h': 'Laptop 3 h',
       'Laptop 3 h': 'Laptop 3 h',
-      'Four à micro-ondes 6 min': 'Microwave oven 6 min',
-      'Microwave oven 6 min': 'Microwave oven 6 min',
-      'Bouilloire électrique 3,5 min': 'Electric kettle 3.5 min',
-      'Electric kettle 3.5 min': 'Electric kettle 3.5 min',
-      'Electric heater 4.1 min': 'Electric heater 4.1 min',
-      'Radiateur électrique 4,1 min': 'Electric heater 4.1 min',
-      'Voiture essence moyenne 170 m': 'Average gasoline car 170 m',
-      'Average gasoline car 170 m': 'Average gasoline car 170 m',
+      'Ordinateur portable 5 h': 'Laptop 5 h',
+      'Laptop 5 h': 'Laptop 5 h',
+      'Bouilloire électrique 7 min': 'Electric kettle 7 min',
+      'Electric kettle 7 min': 'Electric kettle 7 min',
+      'Electric heater 10 min': 'Electric heater 10 min',
+      'Radiateur électrique 10 min': 'Electric heater 10 min',
+      'Voiture essence moyenne 430 m': 'Average gasoline car 430 m',
+      'Average gasoline car 430 m': 'Average gasoline car 430 m',
       'Voiture essence moyenne 1 km': 'Average gasoline car 1 km',
       'Average gasoline car 1 km': 'Average gasoline car 1 km',
-      'Electric heater 10 min (US mix)': 'Electric heater 10 min (US mix)',
       '2,760,139 households (annual domestic use)': '2,760,139 households (annual domestic use)',
       '292,210 full commercial flights': '292,210 full commercial flights',
     }};
@@ -6411,6 +6669,8 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
             training: 'Entraînement',
             method: 'Méthode et hypothèses',
             sources: 'Sources',
+            benchmark: 'Benchmark',
+            benchmarkNote: 'Note de quantification',
             status: 'Statut',
             release: 'Sortie',
             country: 'Pays retenu',
@@ -6441,6 +6701,8 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
             training: 'Training',
             method: 'Method and assumptions',
             sources: 'Sources',
+            benchmark: 'Benchmark',
+            benchmarkNote: 'Quantification note',
             status: 'Status',
             release: 'Release',
             country: 'Retained country',
@@ -6477,6 +6739,7 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
         <div class="model-detail-pillbar">
           <span class="model-detail-pill">${{escapeHtml(detail.market_status || 'n.d.')}}</span>
           <span class="model-detail-pill">${{escapeHtml(detail.serving_mode || 'n.d.')}}</span>
+          <span class="model-detail-pill">${{escapeHtml(detail.benchmark_status || 'n.d.')}}</span>
           <span class="model-detail-pill">${{escapeHtml(detail.parameter_status || 'n.d.')}}</span>
         </div>
         <section class="model-detail-section">
@@ -6485,17 +6748,20 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
             <div class="model-detail-card">
               <h4>${{text.overview}}</h4>
               <div class="model-detail-list">
+                ${{renderModelDetailRow(text.benchmark, detail.benchmark_status)}}
                 ${{renderModelDetailRow(text.release, detail.release_date)}}
                 ${{renderModelDetailRow(text.country, `${{detail.retained_country}} (${{detail.retained_country_status}})`)}}
                 ${{renderModelDetailRow(text.serverCountry, detail.server_country)}}
                 ${{renderModelDetailRow(text.parameters, detail.parameter_display)}}
-                ${{renderModelDetailRow(text.effectiveParameters, `${{detail.effective_active_parameters_billion}}B`)}}
+                ${{renderModelDetailRow(text.effectiveParameters, detail.effective_active_parameters_billion === 'n.d.' ? 'n.d.' : `${{detail.effective_active_parameters_billion}}B`)}}
                 ${{renderModelDetailRow(text.context, detail.context_window_tokens === 'n.d.' ? 'n.d.' : `${{detail.context_window_tokens}} tokens`)}}
               </div>
             </div>
             <div class="model-detail-card">
               <h4>${{text.overview}}</h4>
               <div class="model-detail-list">
+                ${{renderModelDetailRow(text.status, detail.parameter_source_audit)}}
+                ${{renderModelDetailRow(text.benchmarkNote, detail.benchmark_note || 'n.d.')}}
                 ${{renderModelDetailRow(text.vision, detail.vision_support)}}
                 ${{renderModelDetailRow(text.inputs, detail.input_modalities)}}
                 ${{renderModelDetailRow(text.outputs, detail.output_modalities)}}

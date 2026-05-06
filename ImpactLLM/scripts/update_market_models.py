@@ -2,12 +2,22 @@
 """Upsert the latest market-model and calculator reference profiles."""
 
 import csv
+import sys
 from decimal import Decimal
 from pathlib import Path
 from urllib.parse import urlparse
 
 
 ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from core.market_catalog import (
+    THIRD_PARTY_ESTIMATE_DOMAINS,
+    annotate_market_catalog,
+    is_market_model_quantified,
+)
+
 MARKET_MODELS_PATH = ROOT / "data" / "market_models.csv"
 MODELS_PATH = ROOT / "data" / "models.csv"
 
@@ -26,34 +36,9 @@ DEFAULT_TRAINING_ANCHOR = (
     "BLOOM 176B (luccioni2023_bloom_extended)"
 )
 DEFAULT_ESTIMATION_SOURCE = "Project screening proxy when exact serving country is not publicly specified"
-THIRD_PARTY_ESTIMATE_DOMAINS = {
-    "artificialanalysis.ai",
-    "explodingtopics.com",
-    "lifearchitect.ai",
-    "nexos.ai",
-}
-ANTHROPIC_FAMILY_PROXY_OVERRIDES = {
-    "claude-opus-4.1": (
-        "Project screening family proxy for Claude Opus 4.x",
-        "Conservative Opus-family proxy retained for comparability across the Claude Opus 4.x line. Anthropic does not publish parameter counts, and current third-party estimates vary substantially across revisions.",
-    ),
-    "claude-opus-4.6": (
-        "Project screening family proxy for Claude Opus 4.x",
-        "Conservative Opus-family proxy retained for comparability across the Claude Opus 4.x line. Anthropic does not publish parameter counts, and current third-party estimates vary substantially across revisions.",
-    ),
-    "claude-opus-4.7": (
-        "Project screening family proxy for Claude Opus 4.x",
-        "Conservative Opus-family proxy retained for comparability across the Claude Opus 4.x line. Anthropic does not publish parameter counts, and current third-party estimates vary substantially across revisions.",
-    ),
-    "claude-sonnet-4": (
-        "Project screening family proxy for Claude Sonnet 4.x",
-        "Conservative Sonnet-family proxy retained for comparability across the Claude Sonnet 4.x line. Anthropic does not publish parameter counts for these revisions.",
-    ),
-    "claude-sonnet-4.6": (
-        "Project screening family proxy for Claude Sonnet 4.x",
-        "Conservative Sonnet-family proxy retained for comparability across the Claude Sonnet 4.x line. Anthropic does not publish parameter counts for these revisions.",
-    ),
-}
+ALAN_MODELS_TABLE_URL = "https://lifearchitect.ai/models-table/"
+ALAN_METHODOLOGY_URL = "https://lifearchitect.ai/models-table-methodology/"
+ANTHROPIC_FAMILY_PROXY_OVERRIDES = {}
 OFFICIAL_PROVIDER_DOMAINS = {
     "openai": {
         "cdn.openai.com",
@@ -132,6 +117,10 @@ def normalize_parameter_source_fields(row):
     source_domain = url_domain(source_url)
     lower_source = source.lower()
     lower_notes = notes.lower()
+
+    if source.startswith("Partial-data donor prior"):
+        row["parameter_source_url"] = ""
+        return row
 
     if model_id == "lamda-1":
         row["parameter_source"] = "LaMDA research paper / Google Research summary"
@@ -356,6 +345,7 @@ def google_row(
     context_window_tokens="1048576",
     max_output_tokens="65536",
     reference_aliases="",
+    parameter_source_url="",
     input_modalities="text,image,audio,video,pdf",
     output_modalities="text",
     vision_support="yes",
@@ -382,7 +372,7 @@ def google_row(
         parameter_value_status="estimated",
         parameter_confidence="low",
         parameter_source=parameter_source,
-        parameter_source_url=doc_url or release_url or catalog_url,
+        parameter_source_url=parameter_source_url or doc_url or release_url or catalog_url,
         notes=notes,
         input_modalities=input_modalities,
         output_modalities=output_modalities,
@@ -719,13 +709,14 @@ MARKET_MODEL_UPDATES = [
         "2024-05-13",
         "https://openai.com/index/gpt-4o-and-more-tools-to-chatgpt-free/",
         "https://developers.openai.com/api/docs/models/gpt-4o",
-        "220",
-        "880",
-        "Project screening family proxy anchored to the GPT-4o release line",
-        "Family proxy retained because OpenAI documents GPT-4o capabilities and token limits but does not publish a parameter count.",
+        "200",
+        "200",
+        "Third-party screening estimate from Alan D. Thompson methodology note",
+        "Alan D. Thompson's public methodology note lists GPT-4o among small models circa 2024 at 200B total parameters; OpenAI documents capabilities and token limits but not a parameter count.",
         context_window_tokens="128000",
         max_output_tokens="16384",
         reference_aliases="gpt4o",
+        parameter_source_url=ALAN_METHODOLOGY_URL,
     ),
     openai_row(
         "o1-preview",
@@ -899,17 +890,29 @@ MARKET_MODEL_UPDATES = [
         "release_source": "Introducing DeepSeek-V3 | DeepSeek",
         "release_source_url": "https://api-docs.deepseek.com/news/news1226",
     },
+    {
+        "model_id": "claude-opus-4.1",
+        "active_parameters_billion": "2000",
+        "total_parameters_billion": "2000",
+        "parameter_value_status": "estimated",
+        "parameter_confidence": "low",
+        "parameter_source": "Third-party screening estimate from Alan D. Thompson Models Table",
+        "parameter_source_url": ALAN_MODELS_TABLE_URL,
+        "notes": "Alan D. Thompson's public Models Table currently lists Claude Opus 4.1 at 2T parameters; Anthropic does not publish an official parameter count.",
+        "reference_aliases": "claude opus 4.1|opus4.1",
+    },
     openai_row(
         "gpt-5.2",
         "GPT-5.2",
         "2025-12-11",
         "https://openai.com/index/introducing-gpt-5-2/",
         "https://developers.openai.com/api/docs/models/gpt-5.2",
-        "300",
-        "300",
-        "Project screening family proxy anchored to the GPT-5.2 release line",
-        "Family-level proxy retained for GPT-5.2 because OpenAI documents capabilities but does not publish a separate parameter count for this revision.",
+        "3000",
+        "3000",
+        "Third-party screening estimate from Alan D. Thompson Models Table",
+        "Alan D. Thompson's public Models Table currently lists GPT-5.2 at 3T parameters; OpenAI documents capabilities but not an official parameter count.",
         reference_aliases="gpt52",
+        parameter_source_url=ALAN_MODELS_TABLE_URL,
     ),
     openai_row(
         "gpt-5.2-pro",
@@ -929,10 +932,11 @@ MARKET_MODEL_UPDATES = [
         "2026-03-05",
         "https://openai.com/index/introducing-gpt-5-4/",
         "https://developers.openai.com/api/docs/models/gpt-5.4",
-        "1800",
-        "1800",
-        "Project screening frontier-family proxy for GPT-5.x closed models",
-        "Closed-model family proxy retained because OpenAI does not publish a parameter count for GPT-5.4.",
+        "3000",
+        "3000",
+        "Third-party screening estimate from Alan D. Thompson Models Table",
+        "Alan D. Thompson's public Models Table currently lists GPT-5.4 at 3T parameters; OpenAI does not publish an official parameter count.",
+        parameter_source_url=ALAN_MODELS_TABLE_URL,
     ),
     openai_row(
         "gpt-5.4-pro",
@@ -1003,8 +1007,9 @@ MARKET_MODEL_UPDATES = [
         "https://www.anthropic.com/news/claude-sonnet-4-6",
         "400",
         "400",
-        "Project screening family proxy for Claude Sonnet 4.x",
-        "Family proxy retained because Anthropic does not publish a parameter count for Claude Sonnet 4.6.",
+        "Third-party screening estimate from Alan D. Thompson Models Table",
+        "Alan D. Thompson's public Models Table currently lists Claude Sonnet 4.6 at 400B parameters; Anthropic does not publish an official parameter count.",
+        parameter_source_url=ALAN_MODELS_TABLE_URL,
         reference_aliases="claude sonnet 4.6|sonnet4.6",
     ),
     anthropic_row(
@@ -1012,10 +1017,11 @@ MARKET_MODEL_UPDATES = [
         "Claude Opus 4.6",
         "2026-02-05",
         "https://www.anthropic.com/news/claude-opus-4-6",
-        "2000",
-        "2000",
-        "Project screening family proxy for Claude Opus 4.x",
-        "Family proxy retained because Anthropic does not publish a parameter count for Claude Opus 4.6.",
+        "5000",
+        "5000",
+        "Third-party screening estimate from Alan D. Thompson Models Table",
+        "Alan D. Thompson's public Models Table currently lists Claude Opus 4.6 at 5T parameters; Anthropic does not publish an official parameter count.",
+        parameter_source_url=ALAN_MODELS_TABLE_URL,
         max_output_tokens="32000",
         reference_aliases="claude opus 4.6|opus4.6",
     ),
@@ -1024,10 +1030,11 @@ MARKET_MODEL_UPDATES = [
         "Claude Opus 4.7",
         "2026-04-16",
         "https://www.anthropic.com/news/claude-opus-4-7",
-        "2000",
-        "2000",
-        "Project screening family proxy for Claude Opus 4.x",
-        "Family proxy retained because Anthropic does not publish a parameter count for Claude Opus 4.7.",
+        "4000",
+        "4000",
+        "Third-party screening estimate reproduced in Alan D. Thompson methodology note",
+        "Alan D. Thompson's public methodology note reproduces Pine AI's public knowledge-probe estimate of Claude Opus 4.7 at roughly 4.0T parameters; Anthropic does not publish an official parameter count.",
+        parameter_source_url=ALAN_METHODOLOGY_URL,
         max_output_tokens="32000",
         reference_aliases="claude opus 4.7|opus4.7",
     ),
@@ -1039,7 +1046,7 @@ MARKET_MODEL_UPDATES = [
         "2600",
         "2600",
         "Project frontier proxy for the Claude Mythos preview line; no public parameter count found",
-        "Restricted-preview research row retained for frontier benchmarking; the Glasswing page documents the model's existence and preview status, but not a 2600B parameter count.",
+        "Restricted-preview research row tracked in the market catalog; the Glasswing page documents the model's existence and preview status, but not a 2600B parameter count.",
         market_status="research",
         serving_mode="research",
         reference_aliases="claude mythos|mythos|mythos preview",
@@ -1051,10 +1058,11 @@ MARKET_MODEL_UPDATES = [
         "2025-11-18",
         "https://ai.google.dev/gemini-api/docs/changelog",
         "https://ai.google.dev/gemini-api/docs/models/gemini-3-pro-preview",
-        "220",
-        "220",
-        "Project screening family proxy for Gemini 3 Pro Preview",
-        "Historical Gemini 3 preview row retained for comparability. Google documents the Gemini 3 Pro Preview capabilities but not the parameter count, and the endpoint was shut down on 2026-03-09 in favor of Gemini 3.1 Pro Preview.",
+        "3000",
+        "3000",
+        "Third-party screening estimate from Alan D. Thompson Models Table",
+        "Alan D. Thompson's public Models Table currently lists Gemini 3 Pro at 3T parameters; Google documents the preview endpoint but not an official parameter count.",
+        parameter_source_url=ALAN_MODELS_TABLE_URL,
         reference_aliases="gemini 3 pro|gemini 3 pro preview|gemini3pro|gemini3propreview|gemini-3-pro-preview",
     ),
     google_row(
@@ -1075,10 +1083,11 @@ MARKET_MODEL_UPDATES = [
         "2026-02-19",
         "https://ai.google.dev/gemini-api/docs/changelog",
         "https://ai.google.dev/gemini-api/docs/models/gemini-3.1-pro-preview",
-        "240",
-        "240",
-        "Project screening family proxy for Gemini 3.1 Pro Preview",
-        "Family proxy retained because Google documents Gemini 3.1 Pro Preview capabilities but not the parameter count.",
+        "3000",
+        "3000",
+        "Third-party screening estimate from Alan D. Thompson Models Table",
+        "Alan D. Thompson's public Models Table currently lists Gemini 3.1 Pro at 3T parameters; Google documents the preview endpoint but not an official parameter count.",
+        parameter_source_url=ALAN_MODELS_TABLE_URL,
         reference_aliases="gemini 3.1 pro|gemini 3.1 pro preview|gemini31pro|gemini31propreview|gemini-3.1-pro-preview",
     ),
     google_row(
@@ -1385,25 +1394,6 @@ MARKET_MODEL_UPDATES = [
     ),
 ]
 
-
-REFERENCE_MODEL_UPDATES = [
-    {
-        "model_id": row["model_id"],
-        "provider": row["provider"],
-        "aliases": build_alias_string(row),
-        "active_parameters_billion": row["active_parameters_billion"],
-        "total_parameters_billion": row["total_parameters_billion"],
-        "parameter_value_status": row["parameter_value_status"],
-        "parameter_confidence": row["parameter_confidence"],
-        "parameter_source": row["parameter_source"],
-        "parameter_source_url": row["parameter_source_url"],
-        "notes": row["notes"],
-    }
-    for row in MARKET_MODEL_UPDATES
-    if row.get("provider")
-]
-
-
 def normalize_row(row, header):
     return {column: stringify(row.get(column, "")) for column in header}
 
@@ -1443,6 +1433,18 @@ def upsert_rows(path, updates):
             writer.writerow(normalize_row(row, header))
 
 
+def remove_rows_by_model_id(path, model_ids):
+    if not model_ids:
+        return
+    header, rows = load_csv_rows(path)
+    retained_rows = [row for row in rows if row.get("model_id") not in model_ids]
+    with path.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=header)
+        writer.writeheader()
+        for row in retained_rows:
+            writer.writerow(normalize_row(row, header))
+
+
 def normalize_existing_parameter_sources(path):
     header, rows = load_csv_rows(path)
     for row in rows:
@@ -1455,15 +1457,67 @@ def normalize_existing_parameter_sources(path):
             writer.writerow(normalize_row(row, header))
 
 
+def apply_catalog_quantification(path):
+    header, rows = load_csv_rows(path)
+    annotated_by_id = {
+        row["model_id"]: row
+        for row in annotate_market_catalog(rows)
+        if row.get("model_id")
+    }
+    for row in rows:
+        annotated = annotated_by_id.get(row.get("model_id"))
+        if not annotated:
+            continue
+        for field in (
+            "active_parameters_billion",
+            "total_parameters_billion",
+            "parameter_value_status",
+            "parameter_confidence",
+            "parameter_source",
+            "parameter_source_url",
+            "notes",
+        ):
+            if field in header:
+                row[field] = stringify(annotated.get(field))
+
+    with path.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=header)
+        writer.writeheader()
+        for row in rows:
+            writer.writerow(normalize_row(row, header))
+
+
 def main():
     upsert_rows(MARKET_MODELS_PATH, MARKET_MODEL_UPDATES)
-    upsert_rows(MODELS_PATH, REFERENCE_MODEL_UPDATES)
     normalize_existing_parameter_sources(MARKET_MODELS_PATH)
+    apply_catalog_quantification(MARKET_MODELS_PATH)
+    _, current_market_rows = load_csv_rows(MARKET_MODELS_PATH)
+    annotated_market_rows = annotate_market_catalog(current_market_rows)
+    current_reference_updates = [
+        {
+            "model_id": row["model_id"],
+            "provider": row["provider"],
+            "aliases": build_alias_string(row),
+            "active_parameters_billion": row["active_parameters_billion"],
+            "total_parameters_billion": row["total_parameters_billion"],
+            "parameter_value_status": row["parameter_value_status"],
+            "parameter_confidence": row["parameter_confidence"],
+            "parameter_source": row["parameter_source"],
+            "parameter_source_url": row["parameter_source_url"],
+            "notes": row["notes"],
+        }
+        for row in annotated_market_rows
+        if row.get("provider") and is_market_model_quantified(row)
+    ]
+    market_model_ids = {row["model_id"] for row in current_market_rows}
+    benchmark_reference_ids = {row["model_id"] for row in current_reference_updates}
+    remove_rows_by_model_id(MODELS_PATH, market_model_ids - benchmark_reference_ids)
+    upsert_rows(MODELS_PATH, current_reference_updates)
     normalize_existing_parameter_sources(MODELS_PATH)
     print(
         "Updated "
         f"{len(MARKET_MODEL_UPDATES)} market-model profiles and "
-        f"{len(REFERENCE_MODEL_UPDATES)} calculator reference profiles."
+        f"{len(current_reference_updates)} calculator reference profiles."
     )
 
 
