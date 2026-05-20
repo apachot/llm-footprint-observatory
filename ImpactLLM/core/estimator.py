@@ -2,6 +2,7 @@
 import csv
 import math
 import statistics
+from functools import lru_cache
 from pathlib import Path
 
 try:
@@ -45,26 +46,31 @@ MARKET_REFERENCE_REQUESTS_PER_HOUR = round(
 TRAINING_REFERENCE_TOKENS_PER_PARAMETER = 20.0
 
 
+@lru_cache(maxsize=1)
 def load_records():
     metadata = load_record_metadata()
     with DATASET_PATH.open("r", encoding="utf-8", newline="") as handle:
         return [normalize_record(record, metadata.get(record["record_id"], {})) for record in csv.DictReader(handle)]
 
+@lru_cache(maxsize=1)
 def load_record_metadata():
     with METADATA_PATH.open("r", encoding="utf-8", newline="") as handle:
         return {row["record_id"]: row for row in csv.DictReader(handle)}
 
 
+@lru_cache(maxsize=1)
 def load_models():
     with MODELS_PATH.open("r", encoding="utf-8", newline="") as handle:
         return [row for row in csv.DictReader(handle)]
 
 
+@lru_cache(maxsize=1)
 def load_country_energy_mix():
     with COUNTRY_MIX_PATH.open("r", encoding="utf-8", newline="") as handle:
         return [row for row in csv.DictReader(handle)]
 
 
+@lru_cache(maxsize=1)
 def load_market_models():
     with MARKET_MODELS_PATH.open("r", encoding="utf-8", newline="") as handle:
         return annotate_market_catalog(list(csv.DictReader(handle)))
@@ -77,6 +83,7 @@ def load_quantified_market_models(scope="partial"):
     return [row for row in rows if is_market_model_quantified(row)]
 
 
+@lru_cache(maxsize=1)
 def load_extrapolation_rules():
     with EXTRAPOLATION_RULES_PATH.open("r", encoding="utf-8", newline="") as handle:
         return [row for row in csv.DictReader(handle)]

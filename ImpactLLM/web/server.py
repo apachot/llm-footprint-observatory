@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 from datetime import datetime
+import gzip
 import json
 import os
 import re
@@ -7,7 +8,7 @@ import sys
 from email.utils import formatdate
 from functools import lru_cache
 from html import escape
-from http.server import BaseHTTPRequestHandler, HTTPServer
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
 
@@ -52,6 +53,14 @@ LOGO_PATH = ROOT / "web" / "impactllm-logo.svg"
 LOGO_MARK_PATH = ROOT / "web" / "impactllm-mark.svg"
 REFERENCE_PAGE_TOKENS = 750.0
 DEFAULT_PROMPT_TOKENS = 1550.0
+COMPRESSIBLE_CONTENT_TYPES = (
+    "text/",
+    "application/json",
+    "application/javascript",
+    "application/x-bibtex",
+    "image/svg+xml",
+)
+COMPRESSIBLE_MIN_BYTES = 1024
 PROJECT_PAPER_BIBTEX = """@misc{impactllm_screening_2026,
   title = {Transparent Screening for LLM Inference and Training Impacts},
   author = {Pachot, Arnault and Petit, Thierry},
@@ -3601,6 +3610,36 @@ def persist_analysis_run(description, parsed_payload, parser_notes, parser_meta,
     )
 
 
+@lru_cache(maxsize=1)
+def cached_model_detail_index():
+    return build_model_detail_index(load_records())
+
+
+@lru_cache(maxsize=1)
+def cached_market_models_chart_block():
+    return render_market_models_charts(load_records())
+
+
+@lru_cache(maxsize=1)
+def cached_market_models_table_block():
+    return render_market_models_table(load_records())
+
+
+@lru_cache(maxsize=1)
+def cached_training_models_chart_block():
+    return render_training_models_charts(load_records())
+
+
+@lru_cache(maxsize=1)
+def cached_training_models_table_block():
+    return render_training_models_table(load_records())
+
+
+@lru_cache(maxsize=1)
+def cached_bibliography_tab():
+    return render_bibliography_tab()
+
+
 def render_page(result=None, description="", parsed_payload=None, parser_notes=None, parser_meta=None, factor_rows=None, error_message=None, method_comparisons=None):
     error_block = ""
     if error_message:
@@ -3612,13 +3651,12 @@ def render_page(result=None, description="", parsed_payload=None, parser_notes=N
         </section>
         """
 
-    all_records = load_records()
-    model_detail_index = build_model_detail_index(all_records)
-    market_models_chart_block = render_market_models_charts(all_records)
-    market_models_table_block = render_market_models_table(all_records)
-    training_models_chart_block = render_training_models_charts(all_records)
-    training_models_table_block = render_training_models_table(all_records)
-    bibliography_tab = render_bibliography_tab()
+    model_detail_index = cached_model_detail_index()
+    market_models_chart_block = cached_market_models_chart_block()
+    market_models_table_block = cached_market_models_table_block()
+    training_models_chart_block = cached_training_models_chart_block()
+    training_models_table_block = cached_training_models_table_block()
+    bibliography_tab = cached_bibliography_tab()
     method_tab = f"""
     <section class="tab-panel" id="tab-method-panel" data-tab-panel="method">
       <section class="panel reference-panel">
@@ -7855,26 +7893,48 @@ class Handler(BaseHTTPRequestHandler):
             return None
         return request_path
 
-    def _write_bytes(self, body, content_type, filename=None, status=200, send_body=True):
+    def _maybe_compress(self, body, content_type):
+        accepted = self.headers.get("Accept-Encoding", "")
+        if "gzip" not in accepted.lower():
+            return body, None
+        if len(body) < COMPRESSIBLE_MIN_BYTES:
+            return body, None
+        if not any(content_type.startswith(prefix) for prefix in COMPRESSIBLE_CONTENT_TYPES):
+            return body, None
+        compressed = gzip.compress(body, compresslevel=6)
+        if len(compressed) >= len(body):
+            return body, None
+        return compressed, "gzip"
+
+    def _write_bytes(self, body, content_type, filename=None, status=200, send_body=True, cache_control="no-store"):
+        payload, content_encoding = self._maybe_compress(body, content_type)
         self.send_response(status)
         self.send_header("Content-Type", content_type)
-        self.send_header("Content-Length", str(len(body)))
-        self.send_header("Cache-Control", "no-store")
+        self.send_header("Content-Length", str(len(payload)))
+        self.send_header("Cache-Control", cache_control)
         self.send_header("Last-Modified", formatdate(usegmt=True))
+        self.send_header("Vary", "Accept-Encoding")
+        if content_encoding:
+            self.send_header("Content-Encoding", content_encoding)
         if filename:
             self.send_header("Content-Disposition", f'attachment; filename="{filename}"')
         self.end_headers()
         if send_body:
-            self.wfile.write(body)
+            self.wfile.write(payload)
 
     def _write_html(self, html, status=200, send_body=True):
         body = html.encode("utf-8")
+        payload, content_encoding = self._maybe_compress(body, "text/html; charset=utf-8")
         self.send_response(status)
         self.send_header("Content-Type", "text/html; charset=utf-8")
-        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Content-Length", str(len(payload)))
+        self.send_header("Cache-Control", "no-store")
+        self.send_header("Vary", "Accept-Encoding")
+        if content_encoding:
+            self.send_header("Content-Encoding", content_encoding)
         self.end_headers()
         if send_body:
-            self.wfile.write(body)
+            self.wfile.write(payload)
 
     def _handle_get_like(self, send_body=True):
         normalized_path = self._normalized_path()
@@ -7887,6 +7947,7 @@ class Handler(BaseHTTPRequestHandler):
                     LOGO_MARK_PATH.read_bytes(),
                     "image/svg+xml",
                     send_body=send_body,
+                    cache_control="public, max-age=3600",
                 )
                 return
             self._write_html(render_page(error_message="Favicon not found."), status=404, send_body=send_body)
@@ -7898,6 +7959,7 @@ class Handler(BaseHTTPRequestHandler):
                     "application/pdf",
                     filename="ImpactLLM_paper.pdf",
                     send_body=send_body,
+                    cache_control="public, max-age=3600",
                 )
                 return
             self._write_html(render_page(error_message="Publication PDF not found."), status=404, send_body=send_body)
@@ -7908,6 +7970,7 @@ class Handler(BaseHTTPRequestHandler):
                 "application/x-bibtex; charset=utf-8",
                 filename="ImpactLLM_paper.bib",
                 send_body=send_body,
+                cache_control="public, max-age=3600",
             )
             return
         if normalized_path in {"/downloads/ImpactLLM_paper_preview.png", "/downloads/llm_environment_opendata_paper_preview.png"}:
@@ -7916,6 +7979,7 @@ class Handler(BaseHTTPRequestHandler):
                     PAPER_PREVIEW_PATH.read_bytes(),
                     "image/png",
                     send_body=send_body,
+                    cache_control="public, max-age=3600",
                 )
                 return
             self._write_html(render_page(error_message="Publication preview not found."), status=404, send_body=send_body)
@@ -7926,6 +7990,7 @@ class Handler(BaseHTTPRequestHandler):
                     TRAINING_DOUBLING_FIGURE_PATH.read_bytes(),
                     "image/png",
                     send_body=send_body,
+                    cache_control="public, max-age=3600",
                 )
                 return
             self._write_html(render_page(error_message="Training doubling figure not found."), status=404, send_body=send_body)
@@ -7936,6 +8001,7 @@ class Handler(BaseHTTPRequestHandler):
                     INFERENCE_DOUBLING_FIGURE_PATH.read_bytes(),
                     "image/png",
                     send_body=send_body,
+                    cache_control="public, max-age=3600",
                 )
                 return
             self._write_html(render_page(error_message="Inference doubling figure not found."), status=404, send_body=send_body)
@@ -7987,6 +8053,6 @@ def apply_overrides(payload, form):
 if __name__ == "__main__":
     host = os.environ.get("LLM_WEB_HOST", "127.0.0.1")
     port = int(os.environ.get("LLM_WEB_PORT", "8080"))
-    server = HTTPServer((host, port), Handler)
+    server = ThreadingHTTPServer((host, port), Handler)
     print(f"{PROJECT_NAME} web app running on http://{host}:{port}")
     server.serve_forever()
